@@ -1,0 +1,59 @@
+services:
+  sftp_lear_cable:
+    image: lscr.io/linuxserver/openssh-server:latest
+    container_name: sftp_lear_cable
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Europe/Madrid
+
+      # SSH key-only access
+      - USER_NAME=lear_cable
+      - PASSWORD_ACCESS=false
+      - PUBLIC_KEY_FILE=/keys/lear_cable.pub
+
+      - SUDO_ACCESS=false
+    volumes:
+      # Data root for this utility (host bind mount)
+      - ./data/lear_cable:/data
+      # Public key mounted read-only
+      - ./services/sftp/lear_cable/authorized_keys:/keys:ro
+      # Internal config persisted for the container (host folder)
+      - ./services/sftp/lear_cable/config:/config
+    ports:
+      - "${SFTP_LEAR_CABLE_PORT:-2222}:2222"
+    restart: unless-stopped
+
+  processor_lear_cable:
+    build:
+      context: ./services/processor
+    container_name: processor_lear_cable
+    environment:
+      # Folder layout (aligned to /data bind mount above)
+      - SERVICE_ROOT=/data
+      - INBOX_DIR=/data/inbox
+      - PROCESSING_DIR=/data/processing
+      - OUT_DIR=/data/out
+      - PROCESSED_DIR=/data/processed
+      - ERROR_DIR=/data/error
+
+      - DONE_MARKER=${DONE_MARKER:-_DONE}
+      - POLL_SECONDS=${POLL_SECONDS:-3}
+
+      # Extractor entrypoint
+      - EXTRACTOR_PATH=/app/extractor/extract_lear_fields.py
+      - EXTRACTOR_OUT_MODE=same_folder
+
+      # Email (optional; watcher will no-op if not configured)
+      - SMTP_HOST=${SMTP_HOST:-}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_USER=${SMTP_USER:-}
+      - SMTP_PASS=${SMTP_PASS:-}
+      - MAIL_FROM=${MAIL_FROM:-}
+      - MAIL_TO=${MAIL_TO:-}
+    volumes:
+      - ./data/lear_cable:/data
+      - ./apps/lear_cable/extractor:/app/extractor:ro
+    restart: unless-stopped
+    depends_on:
+      - sftp_lear_cable
