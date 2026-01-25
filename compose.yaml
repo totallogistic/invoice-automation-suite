@@ -1,58 +1,48 @@
 services:
   sftp_lear_cable:
-    image: lscr.io/linuxserver/openssh-server:latest
+    image: drakkan/sftpgo:latest
     container_name: sftp_lear_cable
-    environment:
-      - PUID=1000
-      - PGID=1000
-      - TZ=Europe/Madrid
-
-      # SSH key-only access
-      - USER_NAME=lear_cable
-      - PASSWORD_ACCESS=false
-      - PUBLIC_KEY_FILE=/keys/lear_cable.pub
-
-      - SUDO_ACCESS=false
-    volumes:
-      # Data root for this utility (host bind mount)
-      - ./data/lear_cable:/data
-      # Public key mounted read-only
-      - ./services/sftp/lear_cable/authorized_keys:/keys:ro
-      # Internal config persisted for the container (host folder)
-      - ./services/sftp/lear_cable/config:/config
-    ports:
-      - "${SFTP_LEAR_CABLE_PORT:-2222}:2222"
     restart: unless-stopped
+    ports:
+      - "2222:2022"
+      - "8080:8080"
+    environment:
+      - SFTPGO_SFTPD__BINDINGS__0__ADDRESS=0.0.0.0
+      - SFTPGO_SFTPD__BINDINGS__0__PORT=2022
+      - SFTPGO_HTTPD__BINDINGS__0__ADDRESS=0.0.0.0
+      - SFTPGO_HTTPD__BINDINGS__0__PORT=8080
+      - SFTPGO_DATA_PROVIDER__DRIVER=sqlite
+      - SFTPGO_DATA_PROVIDER__NAME=/var/lib/sftpgo/sftpgo.db
+      - SFTPGO_DEFAULT_ADMIN_USERNAME=admin
+      - SFTPGO_DEFAULT_ADMIN_PASSWORD=CHANGEME_STRONG
+    volumes:
+      - /srv/sftpgo/lear_cable:/srv/sftpgo
+      - /srv/sftpgo/lear_cable_var:/var/lib/sftpgo
 
   processor_lear_cable:
     build:
       context: ./services/processor
     container_name: processor_lear_cable
     environment:
-      # Folder layout (aligned to /data bind mount above)
       - SERVICE_ROOT=/data
       - INBOX_DIR=/data/inbox
       - PROCESSING_DIR=/data/processing
       - OUT_DIR=/data/out
       - PROCESSED_DIR=/data/processed
       - ERROR_DIR=/data/error
-
       - DONE_MARKER=${DONE_MARKER:-_DONE}
       - POLL_SECONDS=${POLL_SECONDS:-3}
-
-      # Extractor entrypoint
       - EXTRACTOR_PATH=/app/extractor/extract_lear_fields.py
-      - EXTRACTOR_OUT_MODE=same_folder
-
-      # Email (optional; watcher will no-op if not configured)
+      - EMAIL_MODE=${EMAIL_MODE:-BATCH_ONLY}
       - SMTP_HOST=${SMTP_HOST:-}
       - SMTP_PORT=${SMTP_PORT:-587}
       - SMTP_USER=${SMTP_USER:-}
       - SMTP_PASS=${SMTP_PASS:-}
       - MAIL_FROM=${MAIL_FROM:-}
       - MAIL_TO=${MAIL_TO:-}
+      - BATCH_QUIET_SECONDS=180
     volumes:
-      - ./data/lear_cable:/data
+      - /srv/sftpgo/lear_cable/data:/data
       - ./apps/lear_cable/extractor:/app/extractor:ro
     restart: unless-stopped
     depends_on:

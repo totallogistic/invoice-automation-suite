@@ -1,0 +1,22 @@
+2026-01-24 17:23:08.697747785  Server listening on 0.0.0.0 port 2222.
+2026-01-24 17:23:08.697874413  Server listening on :: port 2222.
+2026-01-24 17:23:09.692322735  Connection to localhost (::1) 2222 port [tcp/*] succeeded!
+2026-01-24 17:23:09.706026402  Connection closed by ::1 port 41682
+2026-01-24 17:30:31.743635137  Accepted publickey for lear_cable from 192.168.1.121 port 63697 ssh2: ED25519 SHA256:hNvpPb9bPtLmnC2vVCclqenXUZDOL/hRiB5JB4a8XlQ
+2026-01-24 17:52:55.829236889  Received signal 15; terminating.
+2026-01-24 17:53:00.449844362  Server listening on 0.0.0.0 port 2222.
+2026-01-24 17:53:00.449911880  Server listening on :: port 2222.
+2026-01-24 17:53:01.445099349  Connection to localhost (::1) 2222 port [tcp/*] succeeded!
+2026-01-24 17:53:01.458957513  Connection closed by ::1 port 50476
+2026-01-24 17:53:41.002377349  Accepted publickey for lear_cable from 192.168.1.121 port 64300 ssh2: ED25519 SHA256:hNvpPb9bPtLmnC2vVCclqenXUZDOL/hRiB5JB4a8XlQ
+2026-01-24 17:53:41.021728639  server lacks privileges to chroot to ChrootDirectory
+2026-01-24 17:53:55.855525474  Accepted publickey for lear_cable from 192.168.1.121 port 64305 ssh2: ED25519 SHA256:hNvpPb9bPtLmnC2vVCclqenXUZDOL/hRiB5JB4a8XlQ
+2026-01-24 17:53:55.873738795  server lacks privileges to chroot to ChrootDirectory
+2026-01-24 18:20:53.541881210  Received signal 15; terminating.
+2026-01-24 18:20:58.584499970  Server listening on 0.0.0.0 port 2222.
+2026-01-24 18:20:58.584607506  Server listening on :: port 2222.
+2026-01-24 18:20:59.581332913  Connection to localhost (::1) 2222 port [tcp/*] succeeded!
+2026-01-24 18:20:59.592318206  Connection closed by ::1 port 50540
+2026-01-24 18:44:16.636894268  Accepted publickey for lear_cable from 192.168.1.121 port 65483 ssh2: ED25519 SHA256:hNvpPb9bPtLmnC2vVCclqenXUZDOL/hRiB5JB4a8XlQ
+2026-01-24 18:44:16.651749880  server lacks privileges to chroot to ChrootDirectory
+2026-01-25 13:20:55.248682621  Received signal 15; terminating.

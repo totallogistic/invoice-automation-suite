@@ -29,6 +29,7 @@ ERROR_DIR = Path(os.environ.get("ERROR_DIR", str(SERVICE_ROOT / "error")))
 
 DONE_MARKER = os.environ.get("DONE_MARKER", "_DONE")
 POLL_SECONDS = int(os.environ.get("POLL_SECONDS", "3"))
+BATCH_QUIET_SECONDS = int(os.getenv("BATCH_QUIET_SECONDS", "0"))  # 0 = desactivado
 
 # EMAIL_MODE:
 #   - BATCH_ONLY (por defecto): solo email al cerrar lote
@@ -234,6 +235,16 @@ def process_ready_batches() -> None:
 
         logger.info("[ OK ] Lote procesado: %s", batch_name)
 
+
+def latest_mtime_in_dir(path: Path) -> float:
+    latest = 0.0
+    for p in path.rglob("*"):
+        if p.is_file():
+            try:
+                latest = max(latest, p.stat().st_mtime)
+            except FileNotFoundError:
+                pass
+    return latest
 
 def main() -> None:
     ensure_dirs()
