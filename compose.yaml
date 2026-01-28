@@ -40,7 +40,7 @@ services:
       - SMTP_PASS=${SMTP_PASS:-}
       - MAIL_FROM=${MAIL_FROM:-}
       - MAIL_TO=${MAIL_TO:-}
-      - BATCH_QUIET_SECONDS=${BATCH_QUIET_SECONDS:-30}
+      - BATCH_QUIET_SECONDS=${BATCH_QUIET_SECONDS:-1}
     volumes:
       - /srv/sftpgo/lear_cable/data:/data
       - ./apps/lear_cable/extractor:/app/extractor:ro
