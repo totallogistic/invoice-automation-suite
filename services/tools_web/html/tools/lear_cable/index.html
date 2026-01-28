@@ -1,0 +1,160 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Lear Cable — Totallogistic Tools</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; padding: 24px; max-width: 860px; margin: 0 auto; }
+      .card { border: 1px solid #ddd; border-radius: 10px; padding: 16px; margin-top: 16px; }
+      .row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+      .bar { height: 18px; background: #eee; border-radius: 999px; overflow: hidden; }
+      .bar > div { height: 100%; width: 0%; background: #111; transition: width .3s ease; }
+      .muted { color: #666; }
+      code { background: #f6f6f6; padding: 2px 6px; border-radius: 6px; }
+      button { padding: 10px 14px; border-radius: 8px; border: 1px solid #111; background: #111; color: #fff; cursor: pointer; }
+      button:disabled { opacity: .5; cursor: not-allowed; }
+    </style>
+  </head>
+  <body>
+    <h1>Lear Cable</h1>
+    <p class="muted">Sube un <b>ZIP</b> con PDFs. Esta pantalla no navega; solo muestra progreso.</p>
+
+    <div class="card">
+      <div class="row">
+        <input id="zip" type="file" accept=".zip" />
+        <button id="btn">Upload & Start</button>
+      </div>
+      <p id="uploadMsg" class="muted"></p>
+    </div>
+
+    <div class="card">
+      <div class="row">
+        <div><b>Batch</b>: <span id="batch">—</span></div>
+        <div><b>Estado</b>: <span id="state">—</span></div>
+        <div><b>Etapa</b>: <span id="stage">—</span></div>
+      </div>
+
+      <div style="margin-top: 12px;">
+        <div class="bar"><div id="barInner"></div></div>
+        <div class="row" style="margin-top: 8px;">
+          <div><b>Progreso</b>: <span id="progress">0%</span></div>
+          <div><b>Archivos</b>: <span id="files">0 / 0</span></div>
+        </div>
+      </div>
+
+      <p id="msg" class="muted"></p>
+
+      <div id="doneBox" style="display:none; margin-top: 12px;">
+        <p><b>Emails</b> enviados a:</p>
+        <ul id="recipients"></ul>
+      </div>
+    </div>
+
+    <script>
+      const $ = (id) => document.getElementById(id);
+
+      let pollTimer = null;
+      let currentBatch = null;
+
+      function setProgress(processed, total, stage, state, message, recipients) {
+        let pct = 0;
+        if (total > 0) pct = Math.round((processed / total) * 100);
+
+        // Si tu watcher usa progreso por etapas sin processed_files, puedes mapear stage->pct aquí
+        // Ej:
+        // if (total === 0) pct = ({WAITING: 10, EXTRACTING: 50, EMAILING: 80, FINALIZING: 95, DONE: 100}[stage] || 0);
+
+        $("files").textContent = `${processed} / ${total}`;
+        $("progress").textContent = `${pct}%`;
+        $("barInner").style.width = `${pct}%`;
+
+        $("stage").textContent = stage || "—";
+        $("state").textContent = state || "—";
+        $("msg").textContent = message || "";
+
+        const done = (state === "DONE");
+        const err  = (state === "ERROR");
+
+        if (done) {
+          $("doneBox").style.display = "block";
+          $("recipients").innerHTML = "";
+          (recipients || []).forEach(r => {
+            const li = document.createElement("li");
+            li.textContent = r;
+            $("recipients").appendChild(li);
+          });
+        } else {
+          $("doneBox").style.display = "none";
+        }
+
+        if (done || err) {
+          if (pollTimer) clearInterval(pollTimer);
+          pollTimer = null;
+        }
+      }
+
+      async function pollStatus(batchId) {
+        const res = await fetch(`/api/lear_cable/batches/${batchId}/status`, { cache: "no-store" });
+        if (!res.ok) throw new Error(`status ${res.status}`);
+        return await res.json();
+      }
+
+      async function startPolling(batchId) {
+        // primer poll inmediato
+        try {
+          const s = await pollStatus(batchId);
+          setProgress(s.processed_files || 0, s.total_files || 0, s.stage, s.state, s.message, s.recipients);
+        } catch (e) {
+          $("msg").textContent = `Error leyendo status: ${e.message}`;
+        }
+
+        pollTimer = setInterval(async () => {
+          try {
+            const s = await pollStatus(batchId);
+            setProgress(s.processed_files || 0, s.total_files || 0, s.stage, s.state, s.message, s.recipients);
+          } catch (e) {
+            $("msg").textContent = `Error leyendo status: ${e.message}`;
+          }
+        }, 1500);
+      }
+
+      $("btn").addEventListener("click", async () => {
+        const f = $("zip").files[0];
+        if (!f) {
+          $("uploadMsg").textContent = "Selecciona un ZIP.";
+          return;
+        }
+
+        $("btn").disabled = true;
+        $("uploadMsg").textContent = "Subiendo ZIP…";
+        $("batch").textContent = "—";
+        $("state").textContent = "—";
+        $("stage").textContent = "—";
+        $("msg").textContent = "";
+        setProgress(0, 0, "WAITING", "UPLOADING", "Subiendo…", []);
+
+        const form = new FormData();
+        form.append("file", f);
+
+        try {
+          const res = await fetch("/api/lear_cable/batches", { method: "POST", body: form });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.detail || `upload ${res.status}`);
+
+          currentBatch = data.batch_id;
+          $("batch").textContent = currentBatch;
+          $("uploadMsg").textContent = `OK. Batch: ${currentBatch}. PDFs: ${data.extracted_pdfs}`;
+
+          if (pollTimer) clearInterval(pollTimer);
+          await startPolling(currentBatch);
+        } catch (e) {
+          $("uploadMsg").textContent = `Error: ${e.message}`;
+          setProgress(0, 0, "WAITING", "ERROR", e.message, []);
+        } finally {
+          $("btn").disabled = false;
+        }
+      });
+    </script>
+  </body>
+</html>

@@ -23,7 +23,7 @@ try:
 except ImportError:
     Workbook = None  # type: ignore
 
-SCRIPT_VERSION = "2026-01-23.v15"
+SCRIPT_VERSION = "2026-01-23.v17"
 SCRIPT_DESCRIPTION = "Extract core invoice fields from text-based PDFs (no OCR). Exports JSON + CSV + XLSX with a fixed schema."
 
 # Output schema (CSV/XLSX columns)
@@ -76,17 +76,54 @@ def pdf_text_no_ocr(pdf_path: Path) -> str:
 
 
 def find_invoice_no(text: str, filename_stem: str | None = None) -> Optional[str]:
-    """Busca Invoice No tipo DM######. Prioriza el stem del filename si coincide."""
-    matches = re.findall(r"DM\d{6}", text)
-    if not matches:
-        return None
+    """Extrae invoice_no de forma robusta.
+
+    Soporta:
+      - Clásico: DM###### (en texto o filename)
+      - Numérico: ######## (p.ej. 02348016) si viene en filename
+      - "inv-######" (p.ej. inv-211125)
+      - Variantes con label: "Invoice Number:", "Invoice No:", "Invoice:" ...
+    """
+    # 0) filename (más fiable)
     if filename_stem:
-        for m in matches:
-            if m == filename_stem:
-                return m
-    return matches[0]
+        stem = filename_stem.strip()
+        if re.fullmatch(r"DM\d{6}", stem, flags=re.IGNORECASE):
+            return stem.upper()
+        if re.fullmatch(r"inv-\d{3,}", stem, flags=re.IGNORECASE):
+            return stem.lower()
+        if re.fullmatch(r"\d{8}", stem):
+            return stem
 
+    # 1) Patrones con label
+    label_patterns = [
+        r"\bInvoice\s*Number\s*[:#]?\s*([A-Za-z0-9][A-Za-z0-9\-_/]{2,})\b",
+        r"\bInvoice\s*No\.?\s*[:#]?\s*([A-Za-z0-9][A-Za-z0-9\-_/]{2,})\b",
+        r"\bInvoice\b[\s\S]{0,60}?\bNumber\s*[:#]?\s*(\d{6,})\b",
+        # Invoice : Date : \n inv-211125 21-Nov
+        r"\bInvoice\s*:\s*Date\s*:\s*\n\s*([A-Za-z0-9][A-Za-z0-9\-_/]{2,})\b",
+        r"\bInvoice\s*:\s*([A-Za-z0-9][A-Za-z0-9\-_/]{2,})\b",
+        r"\bN\s*(?:º|°|o)?\s*Facture\s*[:#]?\s*([A-Za-z0-9][A-Za-z0-9\-_/]{2,})\b",
+        r"\bNum(?:e|é)ro\s*Facture\s*[:#]?\s*([A-Za-z0-9][A-Za-z0-9\-_/]{2,})\b",
+    ]
+    for pat in label_patterns:
+        m = re.search(pat, text, flags=re.IGNORECASE)
+        if m:
+            cand = m.group(1).strip()
+            if cand.lower() in {"invoice", "date", "number"}:
+                continue
+            return cand
 
+    # 2) DM###### en texto
+    m = re.search(r"\bDM\d{6}\b", text, flags=re.IGNORECASE)
+    if m:
+        return m.group(0).upper()
+
+    # 3) inv-##### en texto
+    m = re.search(r"\binv-\d{3,}\b", text, flags=re.IGNORECASE)
+    if m:
+        return m.group(0).lower()
+
+    return None
 def find_float_before_marker(text: str, marker_regex: str) -> Optional[float]:
     """Encuentra un float inmediatamente antes de un marcador regex (p.ej. 'Vat %')."""
     m = re.search(rf"([0-9][0-9.]+)\s*{marker_regex}", text, flags=re.IGNORECASE)
@@ -100,17 +137,41 @@ def find_float_before_marker(text: str, marker_regex: str) -> Optional[float]:
 
 
 def find_int_after_label(text: str, label: str) -> Optional[int]:
-    """Encuentra un int en formato 'Label: 123'."""
-    m = re.search(rf"{re.escape(label)}\s*:\s*([0-9]+)", text, flags=re.IGNORECASE)
-    if not m:
-        return None
-    tok = reduce_repetition(m.group(1))
-    try:
-        return int(tok)
-    except ValueError:
-        return None
+    """Find integer after a label like 'Pallets:' or 'Boxes:'.
 
+    Robust against duplicated text layers, e.g.:
+      'Pallets:Pallets:Pallets:Pallets: 11111111'  -> 11
+    """
+    label_esc = re.escape(label)
+    label_re = re.compile(label_esc, flags=re.IGNORECASE)
 
+    # Robust case: label repeated N times then a (possibly repeated) digit chunk
+    m = re.search(rf"((?:{label_esc}\s*:\s*)+)([0-9]+)", text, flags=re.IGNORECASE)
+    if m:
+        prefix = m.group(1)
+        raw = m.group(2)
+
+        repeat_n = len(label_re.findall(prefix)) or 1
+        if repeat_n > 1 and len(raw) % repeat_n == 0:
+            raw = raw[: len(raw) // repeat_n]
+        else:
+            raw = reduce_repetition(raw)
+
+        try:
+            return int(raw)
+        except ValueError:
+            pass
+
+    # Simple fallback: single label occurrence
+    m = re.search(rf"{label_esc}\s*:\s*([0-9]+)", text, flags=re.IGNORECASE)
+    if m:
+        raw = reduce_repetition(m.group(1))
+        try:
+            return int(raw)
+        except ValueError:
+            return None
+
+    return None
 def find_float_after_label(text: str, label: str) -> Optional[float]:
     """Encuentra un float en formato 'Label: 123.45'."""
     m = re.search(rf"{re.escape(label)}\s*:\s*([0-9.]+)", text, flags=re.IGNORECASE)
@@ -142,6 +203,26 @@ def parse_amount(token: str) -> Optional[float]:
         return None
 
 
+
+def find_max_eur_amount(text: str) -> Optional[float]:
+    """Devuelve el mayor importe en EUR encontrado en el texto (heurística).
+
+    Se usa SOLO como fallback cuando no hay marcadores estándar (VAT/Total Invoices),
+    típicamente en formatos simplificados donde aparece un único total tipo '808.88€'.
+    """
+    patterns = [
+        r"\b(\d{1,3}(?:[\s.,]\d{3})*(?:[\.,]\d{2}))\s*€",
+        r"€\s*(\d{1,3}(?:[\s.,]\d{3})*(?:[\.,]\d{2}))\b",
+    ]
+    vals: list[float] = []
+    for pat in patterns:
+        for m in re.finditer(pat, text):
+            v = parse_amount(m.group(1))
+            if v is not None:
+                vals.append(v)
+    if not vals:
+        return None
+    return max(vals)
 def find_total_invoice(text: str) -> Optional[float]:
     """Encuentra Total Invoice (varios formatos)."""
     m = re.search(r"TOTAL\s+INVOICE\s*[: ]\s*([0-9][0-9.,]+)", text, flags=re.IGNORECASE)
@@ -162,14 +243,40 @@ def extract_one(pdf_path: Path) -> InvoiceExtract:
     invoice_no = find_invoice_no(text, filename_stem=stem)
 
     pallets = find_int_after_label(text, "Pallets")
+    if pallets is None:
+        pallets = find_int_after_label(text, "Nombre de Palettes")
     boxes = find_int_after_label(text, "Boxes")
+    if boxes is None:
+        boxes = find_int_after_label(text, "Nombre de Colis")
 
     gross_weight = find_float_after_label(text, "Gross Weight")
+    if gross_weight is None:
+        gross_weight = find_float_after_label(text, "Poid brute")
+    if gross_weight is None:
+        gross_weight = find_float_after_label(text, "Poids brut")
 
     # Taxable Amount: en estos PDFs suele aparecer justo antes de 'Vat %'
     taxable_amount = find_float_before_marker(text, r"Vat\s*%")
+    if taxable_amount is None:
+        taxable_amount = find_float_after_label(text, "Taxable Amount")
+    if taxable_amount is None:
+        taxable_amount = find_float_after_label(text, "Total HT")
+    if taxable_amount is None and ("Total Facture" in text or (invoice_no or "").startswith("inv-")):
+        taxable_amount = find_max_eur_amount(text)
 
     total_invoice = find_total_invoice(text)
+    if total_invoice is None:
+        total_invoice = find_float_after_label(text, "Total Facture en Euro")
+    if total_invoice is None:
+        total_invoice = find_float_after_label(text, "Total TTC")
+    if total_invoice is None and taxable_amount is not None and ("Total Facture" in text or (invoice_no or "").startswith("inv-")):
+        total_invoice = taxable_amount
+    if total_invoice is None:
+        total_invoice = find_float_after_label(text, "Total Facture en Euro")
+    if total_invoice is None:
+        total_invoice = find_float_after_label(text, "Total TTC")
+    if total_invoice is None and taxable_amount is not None and ("Total Facture" in text or (invoice_no or "").startswith("inv-")):
+        total_invoice = taxable_amount
 
 
     return InvoiceExtract(
@@ -270,7 +377,7 @@ def main() -> int:
 
     rows: list[InvoiceExtract] = []
     for pdf in iter_pdfs(args.inputs):
-        if pdf.suffix.lower() != ".pdf":
+        if pdf.suffix.lower() != ".pdf" or pdf.name.startswith("CMR"):
             continue
         try:
             rows.append(extract_one(pdf))
@@ -315,3 +422,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+

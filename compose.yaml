@@ -13,8 +13,8 @@ services:
       - SFTPGO_HTTPD__BINDINGS__0__PORT=8080
       - SFTPGO_DATA_PROVIDER__DRIVER=sqlite
       - SFTPGO_DATA_PROVIDER__NAME=/var/lib/sftpgo/sftpgo.db
-      - SFTPGO_DEFAULT_ADMIN_USERNAME=admin
-      - SFTPGO_DEFAULT_ADMIN_PASSWORD=CHANGEME_STRONG
+      - SFTPGO_DEFAULT_ADMIN_USERNAME=${SFTPGO_DEFAULT_ADMIN_USERNAME:-admin}
+      - SFTPGO_DEFAULT_ADMIN_PASSWORD=${SFTPGO_DEFAULT_ADMIN_PASSWORD:-CHANGE_ME}
     volumes:
       - /srv/sftpgo/lear_cable:/srv/sftpgo
       - /srv/sftpgo/lear_cable_var:/var/lib/sftpgo
@@ -40,10 +40,37 @@ services:
       - SMTP_PASS=${SMTP_PASS:-}
       - MAIL_FROM=${MAIL_FROM:-}
       - MAIL_TO=${MAIL_TO:-}
-      - BATCH_QUIET_SECONDS=180
+      - BATCH_QUIET_SECONDS=${BATCH_QUIET_SECONDS:-30}
     volumes:
       - /srv/sftpgo/lear_cable/data:/data
       - ./apps/lear_cable/extractor:/app/extractor:ro
     restart: unless-stopped
     depends_on:
       - sftp_lear_cable
+
+  web:
+    image: nginx:alpine
+    container_name: tools_web
+    restart: unless-stopped
+    ports:
+      - "8081:80"
+    volumes:
+      - ./services/web/site:/usr/share/nginx/html:ro
+      - ./services/web/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - api_lear_cable
+
+  api_lear_cable:
+    build:
+      context: ./services/api_lear_cable
+    container_name: api_lear_cable
+    restart: unless-stopped
+    environment:
+      - INBOX_DIR=/data/inbox
+      - PROCESSING_DIR=/data/processing
+      - OUT_DIR=/data/out
+      - PROCESSED_DIR=/data/processed
+      - ERROR_DIR=/data/error
+      - MAX_ZIP_MB=200
+    volumes:
+      - /srv/sftpgo/lear_cable/data:/data
