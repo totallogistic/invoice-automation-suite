@@ -5,3 +5,9 @@ services/sftp/lear_cable/config/logs/
 services/sftp/lear_cable/config/openssh/
 services/sftp/lear_cable/config/ssh_host_keys/*_key
 services/sftp/lear_cable/config/ssh_host_keys/*_key.pub
+.venv/
+services/processor/__pycache__/
+*.bkp
+*.bak
+*.old
+*.log
