@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+
+import ssl
 import logging
 import os
 import shutil
@@ -30,10 +32,16 @@ EXTRACTOR_PATH = os.getenv("EXTRACTOR_PATH", "/app/extractor/extract_lear_fields
 EMAIL_MODE = os.getenv("EMAIL_MODE", "BATCH_ONLY").strip().upper()
 SMTP_HOST = os.getenv("SMTP_HOST", "").strip()
 SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
+SMTP_TIMEOUT = int(os.getenv("SMTP_TIMEOUT", "30"))
 SMTP_USER = os.getenv("SMTP_USER", "").strip()
 SMTP_PASS = os.getenv("SMTP_PASS", "").strip()
 MAIL_FROM = os.getenv("MAIL_FROM", "").strip()
 MAIL_TO = os.getenv("MAIL_TO", "").strip()
+
+
+
+def parse_recipients(mail_to: str) -> list[str]:
+    return [x.strip() for x in (mail_to or "").split(",") if x.strip()]
 
 # ----------------------------
 # Logging
@@ -187,6 +195,10 @@ def send_email(subject: str, body: str, attachments: list[Path], recipients: lis
         logger.info("[processor] Email no configurado (SMTP_HOST/MAIL_FROM/MAIL_TO), se omite.")
         return
 
+    if not recipients:
+        logger.info("[processor] Sin destinatarios, se omite envío.")
+        return
+
     msg = EmailMessage()
     msg["Subject"] = subject
     msg["From"] = MAIL_FROM
@@ -212,12 +224,20 @@ def send_email(subject: str, body: str, attachments: list[Path], recipients: lis
         Path("/tmp/last_email.eml").write_bytes(bytes(msg))
     except Exception:
         pass
-
     import smtplib
 
-    with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=30) as smtp:
+    ctx = ssl.create_default_context()
+    if SMTP_PORT == 465:
+        smtp = smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT, timeout=SMTP_TIMEOUT, context=ctx)
+    else:
+        smtp = smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=SMTP_TIMEOUT)
+    with smtp:
         smtp.ehlo()
-        smtp.starttls()
+        if SMTP_PORT != 465:
+            smtp.starttls(context=ctx)
+            smtp.ehlo()
+        smtp.login(SMTP_USER, SMTP_PASS)
+        smtp.send_message(msg, from_addr=MAIL_FROM, to_addrs=recipients)
         smtp.login(SMTP_USER, SMTP_PASS)
         smtp.send_message(msg)
 
@@ -231,7 +251,7 @@ def process_batch(batch_id: str, processing_path: Path):
         stage="RUNNING_EXTRACTOR",
         total_files=pdf_count,
         processed_files=0,
-        recipients=[MAIL_TO] if MAIL_TO else [],
+        recipients=parse_recipients(MAIL_TO),
         message="Procesando lote...",
     )
 
@@ -249,11 +269,11 @@ def process_batch(batch_id: str, processing_path: Path):
         stage="SENDING_EMAIL",
         total_files=pdf_count,
         processed_files=pdf_count,
-        recipients=[MAIL_TO] if MAIL_TO else [],
+        recipients=parse_recipients(MAIL_TO),
         message="Extractor OK. Enviando email...",
     )
 
-    recipients = [MAIL_TO] if MAIL_TO else []
+    recipients = parse_recipients(MAIL_TO)
     if recipients:
         logger.info("[processor] Enviando email a %s con %d adjuntos...", recipients, len(attachments))
     send_email(
@@ -278,7 +298,7 @@ def process_batch(batch_id: str, processing_path: Path):
 
 def watcher_loop():
     ensure_structure()
-    logger.info("EMAIL_MODE=%s | RECIPIENTS=%s", EMAIL_MODE, [MAIL_TO] if MAIL_TO else [])
+    logger.info("EMAIL_MODE=%s | RECIPIENTS=%s", EMAIL_MODE, parse_recipients(MAIL_TO))
 
     poll_seconds = POLL_SECONDS
 
@@ -300,7 +320,7 @@ def watcher_loop():
                         stage="WAITING",
                         total_files=pdf_count,
                         processed_files=0,
-                        recipients=[MAIL_TO] if MAIL_TO else [],
+                        recipients=parse_recipients(MAIL_TO),
                         message="Lote subido. En espera de procesamiento.",
                     )
 
@@ -324,7 +344,7 @@ def watcher_loop():
                         stage="ERROR",
                         total_files=pdf_count,
                         processed_files=0,
-                        recipients=[MAIL_TO] if MAIL_TO else [],
+                        recipients=parse_recipients(MAIL_TO),
                         message=f"Error procesando lote: {e}",
                     )
                     move_to_error(batch_id, processing_path)
