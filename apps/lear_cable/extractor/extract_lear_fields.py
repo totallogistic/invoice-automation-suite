@@ -389,7 +389,6 @@ def main() -> int:
         None,
         total_pallets,
         total_boxes,
-        None,
         float(total_gross_weight_r),
         float(total_net_weight_r),
         float(total_total_invoice_r),
