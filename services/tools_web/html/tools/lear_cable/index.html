@@ -18,11 +18,11 @@
   </head>
   <body>
     <h1>Lear Cable</h1>
-    <p class="muted">Sube un archivo <b>PDF</b> individual o un <b>ZIP</b> con múltiples PDFs. Esta pantalla no navega; solo muestra progreso.</p>
+    <p class="muted">Sube uno o varios archivos <b>PDF</b>, o un <b>ZIP</b> con múltiples PDFs. Esta pantalla no navega; solo muestra progreso.</p>
 
     <div class="card">
       <div class="row">
-        <input id="zip" type="file" accept=".pdf,.zip,application/pdf,application/zip" />
+        <input id="zip" type="file" accept=".pdf,.zip,application/pdf,application/zip" multiple />
         <button id="btn">Upload & Start</button>
       </div>
       <p id="uploadMsg" class="muted"></p>
@@ -120,23 +120,37 @@
       }
 
       $("btn").addEventListener("click", async () => {
-        const f = $("zip").files[0];
-        if (!f) {
-          $("uploadMsg").textContent = "Selecciona un archivo PDF o ZIP.";
+        const fileInput = $("zip");
+        const selectedFiles = Array.from(fileInput.files);
+        
+        if (selectedFiles.length === 0) {
+          $("uploadMsg").textContent = "Selecciona uno o más archivos PDF, o un archivo ZIP.";
           return;
         }
 
-        // Validate file type
+        // Validate file types
         const validExtensions = ['.pdf', '.zip'];
-        const fileName = f.name.toLowerCase();
-        const isValid = validExtensions.some(ext => fileName.endsWith(ext));
-        if (!isValid) {
-          $("uploadMsg").textContent = "Solo se aceptan archivos .pdf o .zip";
+        const hasZip = selectedFiles.some(f => f.name.toLowerCase().endsWith('.zip'));
+        const hasPdf = selectedFiles.some(f => f.name.toLowerCase().endsWith('.pdf'));
+        
+        // If multiple files selected, none can be ZIP
+        if (selectedFiles.length > 1 && hasZip) {
+          $("uploadMsg").textContent = "Cuando subes múltiples archivos, no puedes incluir ZIP. Sube solo PDFs o un único ZIP.";
           return;
+        }
+        
+        // Validate all files
+        for (const file of selectedFiles) {
+          const fileName = file.name.toLowerCase();
+          const isValid = validExtensions.some(ext => fileName.endsWith(ext));
+          if (!isValid) {
+            $("uploadMsg").textContent = `Archivo no permitido: ${file.name}. Solo se aceptan .pdf o .zip`;
+            return;
+          }
         }
 
         $("btn").disabled = true;
-        $("uploadMsg").textContent = "Subiendo archivo…";
+        $("uploadMsg").textContent = `Subiendo ${selectedFiles.length} archivo(s)…`;
         $("batch").textContent = "—";
         $("state").textContent = "—";
         $("stage").textContent = "—";
@@ -144,7 +158,10 @@
         setProgress(0, 0, "WAITING", "UPLOADING", "Subiendo…", []);
 
         const form = new FormData();
-        form.append("file", f);
+        // Append all selected files
+        selectedFiles.forEach(file => {
+          form.append("files", file);
+        });
 
         try {
           const res = await fetch("/api/lear_cable/batches", { method: "POST", body: form });
