@@ -22,12 +22,12 @@
   </head>
   <body>
     <h1>Lear Cable</h1>
-    <p class="muted">Sube un ZIP con PDFs. La página se queda aquí y muestra progreso/estado.</p>
+    <p class="muted">Sube un archivo PDF individual o un ZIP con múltiples PDFs. La página se queda aquí y muestra progreso/estado.</p>
 
     <div class="card">
       <div class="row">
-        <input id="zip" type="file" accept=".zip,application/zip" />
-        <button id="btnUpload">Subir ZIP</button>
+        <input id="zip" type="file" accept=".pdf,.zip,application/pdf,application/zip" />
+        <button id="btnUpload">Subir Archivo</button>
         <span id="uploadMsg" class="muted"></span>
       </div>
       <p class="muted" style="margin:10px 0 0">
@@ -153,7 +153,15 @@
 
       $("btnUpload").addEventListener("click", async () => {
         const f = $("zip").files[0];
-        if (!f) return setUploadMsg("Selecciona un ZIP primero.", true);
+        if (!f) return setUploadMsg("Selecciona un archivo PDF o ZIP primero.", true);
+
+        // Validate file type
+        const validExtensions = ['.pdf', '.zip'];
+        const fileName = f.name.toLowerCase();
+        const isValid = validExtensions.some(ext => fileName.endsWith(ext));
+        if (!isValid) {
+          return setUploadMsg("Solo se aceptan archivos .pdf o .zip", true);
+        }
 
         setUploadMsg("Subiendo…");
         $("statusCard").style.display = "none";

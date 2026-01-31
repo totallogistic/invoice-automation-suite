@@ -99,24 +99,48 @@ def health():
 @app.post("/api/lear_cable/batches")
 async def create_batch(file: UploadFile = File(...)):
     """
-    Sube un ZIP, lo descomprime en /data/inbox/<batch_id>/ y deja status inicial en /data/status/<batch_id>/status.json
+    Sube un PDF o ZIP con PDFs, lo procesa en /data/inbox/<batch_id>/ y deja status inicial en /data/status/<batch_id>/status.json
     """
     batch_id = new_batch_id()
     batch_inbox = INBOX_DIR / batch_id
     status_file = STATUS_DIR / batch_id / "status.json"
 
-    # Guarda ZIP a disco (temporal)
-    tmp_zip = Path("/tmp") / f"{batch_id}.zip"
-    try:
-        with open(tmp_zip, "wb") as f:
-            content = await file.read()
-            if not content:
-                raise HTTPException(status_code=400, detail="ZIP vacío.")
-            f.write(content)
+    # Read file content
+    content = await file.read()
+    if not content:
+        raise HTTPException(status_code=400, detail="Archivo vacío.")
 
-        extracted = safe_extract_zip(tmp_zip, batch_inbox)
-        if extracted == 0:
-            raise HTTPException(status_code=400, detail="No se encontraron PDFs en el ZIP.")
+    # Determine file type based on filename
+    filename = file.filename or ""
+    file_ext = Path(filename).suffix.lower()
+
+    extracted = 0
+    tmp_file = None
+
+    try:
+        if file_ext == ".zip":
+            # Handle ZIP file
+            tmp_file = Path("/tmp") / f"{batch_id}.zip"
+            with open(tmp_file, "wb") as f:
+                f.write(content)
+
+            extracted = safe_extract_zip(tmp_file, batch_inbox)
+            if extracted == 0:
+                raise HTTPException(status_code=400, detail="No se encontraron PDFs en el ZIP.")
+
+        elif file_ext == ".pdf":
+            # Handle individual PDF file
+            batch_inbox.mkdir(parents=True, exist_ok=True)
+            pdf_path = batch_inbox / filename
+            with open(pdf_path, "wb") as f:
+                f.write(content)
+            extracted = 1
+
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Tipo de archivo no permitido: {file_ext}. Solo se aceptan .pdf o .zip"
+            )
 
         # status inicial (el watcher lo irá actualizando)
         status = {
@@ -140,10 +164,11 @@ async def create_batch(file: UploadFile = File(...)):
             }
         )
     finally:
-        try:
-            tmp_zip.unlink(missing_ok=True)
-        except Exception:
-            pass
+        if tmp_file:
+            try:
+                tmp_file.unlink(missing_ok=True)
+            except Exception:
+                pass
 
 
 @app.get("/api/lear_cable/batches/{batch_id}/status")
