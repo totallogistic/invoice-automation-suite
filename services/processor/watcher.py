@@ -257,7 +257,7 @@ def process_batch(batch_id: str, processing_path: Path):
 
     out_batch = run_extractor(batch_id, processing_path)
 
-    artefacts = ["invoices_extracted.json", "invoices_extracted.csv", "invoices_extracted.xlsx"]
+    artefacts = ["invoices_extracted.xlsx"]
     attachments = [out_batch / a for a in artefacts if (out_batch / a).exists()]
 
     logger.info("[processor] Extractor OK, artefactos: %s", ", ".join([p.name for p in attachments]))
