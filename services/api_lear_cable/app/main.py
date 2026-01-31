@@ -153,10 +153,14 @@ async def create_batch(files: List[UploadFile] = File(...)):
             
             for file in files:
                 content = await file.read()
-                if not content:
-                    continue  # Skip empty files
-                
                 filename = file.filename or ""
+                
+                if not content:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"Archivo vacío detectado: {filename}"
+                    )
+                
                 file_ext = Path(filename).suffix.lower()
                 
                 if file_ext != ".pdf":
