@@ -7,6 +7,9 @@ services/sftp/lear_cable/config/ssh_host_keys/*_key
 services/sftp/lear_cable/config/ssh_host_keys/*_key.pub
 .venv/
 services/processor/__pycache__/
+__pycache__/
+*.pyc
+*.pyo
 *.bkp
 *.bak
 *.old

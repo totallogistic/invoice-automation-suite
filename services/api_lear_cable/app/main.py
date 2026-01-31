@@ -131,7 +131,9 @@ async def create_batch(file: UploadFile = File(...)):
         elif file_ext == ".pdf":
             # Handle individual PDF file
             batch_inbox.mkdir(parents=True, exist_ok=True)
-            pdf_path = batch_inbox / filename
+            # Sanitize filename to prevent directory traversal
+            safe_filename = Path(filename).name
+            pdf_path = batch_inbox / safe_filename
             with open(pdf_path, "wb") as f:
                 f.write(content)
             extracted = 1
