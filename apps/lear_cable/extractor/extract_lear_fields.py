@@ -17,6 +17,12 @@ except ImportError:
     print("ERROR: falta dependencia. Instala con: pip install pypdf", file=sys.stderr)
     raise
 
+try:
+    from openpyxl import Workbook
+except ImportError:
+    print("ERROR: falta dependencia. Instala con: pip install openpyxl", file=sys.stderr)
+    raise
+
 
 @dataclass
 class InvoiceExtract:
@@ -299,6 +305,8 @@ def main() -> int:
             print(f"[WARN] Fallo {pdf.name}: {e}", file=sys.stderr)
 
     # Totales (solo redondeamos el TOTAL, no las facturas)
+    total_pallets = sum(r.pallets for r in rows if r.pallets is not None)
+    total_boxes = sum(r.boxes for r in rows if r.boxes is not None)
     total_gross_weight = sum_optional_decimal(r.gross_weight for r in rows)
     total_net_weight = sum_optional_decimal(r.net_weight for r in rows)
     total_total_invoice = sum_optional_decimal(r.total_invoice for r in rows)
@@ -348,11 +356,10 @@ def main() -> int:
             {
                 "file": "TOTAL",
                 "invoice_no": None,
-                "pallets": None,
-                "boxes": None,
+                "pallets": total_pallets,
+                "boxes": total_boxes,
                 "nr_of_pack_pallets": None,
                 "gross_weight": f"{total_gross_weight_r:.4f}",
-                "net_weight": f"{total_net_weight_r:.4f}",
                 "net_weight": f"{total_net_weight_r:.4f}",
                 "total_invoice": f"{total_total_invoice_r:.2f}",
             }
@@ -361,6 +368,48 @@ def main() -> int:
     print(f"OK -> {json_path}")
     print(f"OK -> {summary_path}")
     print(f"OK -> {csv_path}")
+    
+    # XLSX con la misma estructura que CSV
+    xlsx_path = out_dir / "invoices_extracted.xlsx"
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Invoices"
+    
+    # Header
+    ws.append(fieldnames)
+    
+    # Data rows
+    for r in rows:
+        row_data = [
+            r.file,
+            r.invoice_no,
+            r.pallets,
+            r.boxes,
+            r.nr_of_pack_pallets,
+            r.gross_weight,
+            r.net_weight,
+            r.total_invoice,
+        ]
+        ws.append(row_data)
+    
+    # TOTAL row
+    total_row = [
+        "TOTAL",
+        None,
+        total_pallets,
+        total_boxes,
+        None,
+        float(total_gross_weight_r),
+        float(total_net_weight_r),
+        float(total_total_invoice_r),
+    ]
+    ws.append(total_row)
+    
+    wb.save(str(xlsx_path))
+    print(f"OK -> {xlsx_path}")
+    
+    print(f"SUM pallets: {total_pallets}")
+    print(f"SUM boxes: {total_boxes}")
     print(f"SUM gross_weight: {total_gross_weight_r:.4f}")
     print(f"SUM net_weight: {total_net_weight_r:.4f}")
     print(f"SUM total_invoice: {total_total_invoice_r:.2f}")
