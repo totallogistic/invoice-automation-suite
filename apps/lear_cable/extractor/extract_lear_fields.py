@@ -30,7 +30,6 @@ class InvoiceExtract:
     invoice_no: Optional[str]
     pallets: Optional[int]
     boxes: Optional[int]
-    nr_of_pack_pallets: Optional[int]  # si hay pallets usa pallets, si no boxes
     gross_weight: Optional[float]
     net_weight: Optional[float]
     total_invoice: Optional[float]
@@ -259,18 +258,13 @@ def extract_one(pdf_path: Path) -> InvoiceExtract:
 
     total_invoice = find_total_invoice(text)
 
-    nr_of_pack_pallets = None
-    if pallets is not None and pallets > 0:
-        nr_of_pack_pallets = pallets
-    elif boxes is not None and boxes > 0:
-        nr_of_pack_pallets = boxes
+
 
     return InvoiceExtract(
         file=pdf_path.name,
         invoice_no=invoice_no,
         pallets=pallets,
         boxes=boxes,
-        nr_of_pack_pallets=nr_of_pack_pallets,
         gross_weight=gross_weight,
         net_weight=net_weight,
         total_invoice=total_invoice,
@@ -340,7 +334,6 @@ def main() -> int:
         "invoice_no",
         "pallets",
         "boxes",
-        "nr_of_pack_pallets",
         "gross_weight",
         "net_weight",
         "total_invoice",
@@ -358,7 +351,6 @@ def main() -> int:
                 "invoice_no": None,
                 "pallets": total_pallets,
                 "boxes": total_boxes,
-                "nr_of_pack_pallets": None,
                 "gross_weight": f"{total_gross_weight_r:.4f}",
                 "net_weight": f"{total_net_weight_r:.4f}",
                 "total_invoice": f"{total_total_invoice_r:.2f}",
@@ -385,7 +377,6 @@ def main() -> int:
             r.invoice_no,
             r.pallets,
             r.boxes,
-            r.nr_of_pack_pallets,
             r.gross_weight,
             r.net_weight,
             r.total_invoice,
