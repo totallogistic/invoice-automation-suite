@@ -1,5 +1,12 @@
 # Usage — Lear Cable (CLI / SFTP / API / UI)
 
+> **Note:** This guide assumes a single-stack deployment. For multi-stack deployments (pre, prod, dev on the same host), see [MULTI_STACK_DEPLOYMENT.md](MULTI_STACK_DEPLOYMENT.md) for details on using environment-specific configuration files.
+>
+> All `docker compose` commands in this guide should include the environment files:
+> ```bash
+> docker compose --env-file env/common.env --env-file env/prod.env [command]
+> ```
+
 Este stack soporta 4 modos de entrada:
 1) UI Web (upload ZIP)
 2) API (upload ZIP)

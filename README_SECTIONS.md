@@ -19,8 +19,12 @@ Copia/pega estas secciones en tu `README.md` principal.
    - (opcional) puertos publicados
 
 ### 3) Levantar stack
+
+> **Multi-stack deployment:** For running multiple environments (pre, prod, etc.) on the same host, see [MULTI_STACK_DEPLOYMENT.md](MULTI_STACK_DEPLOYMENT.md)
+
+Production deployment:
 ```bash
-docker compose up -d --build
+docker compose --env-file env/common.env --env-file env/prod.env up -d --build
 docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
 ```
 
@@ -40,21 +44,24 @@ curl -sS http://localhost:8081/tools/lear_cable/ | head
 ## Operator Guide
 
 ### Logs
+
+> **Note:** For multi-stack deployments, add `--env-file env/common.env --env-file env/{environment}.env` to all docker compose commands.
+
 ```bash
-docker compose logs --tail 200 tools_web
-docker compose logs --tail 200 api_lear_cable
-docker compose logs --tail 200 processor_lear_cable
-docker compose logs --tail 200 sftp_lear_cable
+docker compose --env-file env/common.env --env-file env/prod.env logs --tail 200 tools_web
+docker compose --env-file env/common.env --env-file env/prod.env logs --tail 200 api_lear_cable
+docker compose --env-file env/common.env --env-file env/prod.env logs --tail 200 processor_lear_cable
+docker compose --env-file env/common.env --env-file env/prod.env logs --tail 200 sftp_lear_cable
 ```
 
 ### Restart / Recreate
 - Si cambiaste código (Dockerfile + COPY):
 ```bash
-docker compose up -d --build --force-recreate api_lear_cable processor_lear_cable
+docker compose --env-file env/common.env --env-file env/prod.env up -d --build --force-recreate api_lear_cable processor_lear_cable
 ```
 - Si cambiaste solo nginx/html (bind-mounted):
 ```bash
-docker compose up -d --force-recreate tools_web
+docker compose --env-file env/common.env --env-file env/prod.env up -d --force-recreate tools_web
 ```
 
 ### Datos persistentes (backup recomendado)
@@ -74,7 +81,7 @@ client_max_body_size 200m;
 ```
 Luego:
 ```bash
-docker compose up -d --build --force-recreate tools_web
+docker compose --env-file env/common.env --env-file env/prod.env up -d --build --force-recreate tools_web
 ```
 
 ### Verificación de mounts
