@@ -47,7 +47,35 @@ Rutas en disco (host):
 
 ## Quickstart (LAN)
 
-1) Crea tu `.env` (NO se commitea):
+### Single Environment Deployment
+
+1) Deploy production environment:
 ```bash
-cp env.example .env
-# edita .env con tus credenciales SMTP y settings
+docker compose --env-file env/common.env --env-file env/prod.env up -d --build
+```
+
+2) Verify:
+```bash
+docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+curl http://localhost:8081/api/lear_cable/health
+```
+
+### Multi-Environment Deployment (Pre + Prod on same host)
+
+See [MULTI_STACK_DEPLOYMENT.md](MULTI_STACK_DEPLOYMENT.md) for detailed guide.
+
+**Quick example:**
+```bash
+# Deploy production (ports 8080-8081)
+docker compose --env-file env/common.env --env-file env/prod.env up -d
+
+# Deploy pre-production (ports 8082-8083)
+docker compose --env-file env/common.env --env-file env/pre.env up -d
+```
+
+### Configuration Files
+
+- `env/common.env` - Shared settings (SMTP, polling behavior, etc.)
+- `env/prod.env` - Production-specific (ports, paths, project name)
+- `env/pre.env` - Pre-production-specific
+- See `.env.example` for creating new environments

@@ -1,5 +1,11 @@
 # Troubleshooting — Invoice Automation Suite (Lear Cable)
 
+> **Note:** For multi-stack deployments (pre, prod, dev on the same host), all `docker compose` commands must include the environment files:
+> ```bash
+> docker compose --env-file env/common.env --env-file env/prod.env [command]
+> ```
+> Replace `env/prod.env` with the appropriate environment file for your stack. See [MULTI_STACK_DEPLOYMENT.md](MULTI_STACK_DEPLOYMENT.md) for details.
+
 Este documento cubre troubleshooting del stack Docker:
 - `tools_web` (nginx static + reverse proxy `/api/`)
 - `api_lear_cable` (FastAPI/Uvicorn)
