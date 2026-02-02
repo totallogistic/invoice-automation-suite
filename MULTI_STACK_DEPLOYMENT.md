@@ -2,6 +2,8 @@
 
 This guide explains how to deploy multiple independent stacks of the Invoice Automation Suite on the same host.
 
+> **⚠️ Security Note:** The current `env/common.env` contains credentials. For production use, consider securing credentials using Docker Secrets or separate credential files. See [SECURITY.md](SECURITY.md) for detailed recommendations.
+
 ## Architecture Overview
 
 The refactored configuration system separates concerns into two types of files:
