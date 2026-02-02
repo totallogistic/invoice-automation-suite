@@ -130,16 +130,15 @@ Consider using:
 
 The following sensitive information is currently in `env/common.env`:
 
-1. **SMTP Password:** `Machaco2$`
-2. **SMTP User:** `procesos@tlseng.es`
-3. **Email addresses:** Various recipients
+1. **SMTP Credentials:** Username and password are in plaintext
+2. **Email addresses:** Various recipients
 
 **Recommended actions:**
 
-1. **Rotate the SMTP password** - Current password is exposed in repository
+1. **Rotate the SMTP password** - Current password should be changed
 2. **Remove credentials from env files** - Use one of the approaches above
 3. **Review repository access** - Ensure only authorized users have access
-4. **Audit who has cloned the repository** - Current password is in git history
+4. **Audit who has cloned the repository** - Anyone with access has seen the credentials
 
 ## Git History Cleanup
 
@@ -198,8 +197,8 @@ If you need to secure credentials immediately:
    ```bash
    # Create credentials.env (add to .gitignore)
    cat > env/credentials.env <<EOF
-   SMTP_USER=procesos@tlseng.es
-   SMTP_PASS=Machaco2$
+   SMTP_USER=your-smtp-user@example.com
+   SMTP_PASS=YourSecurePassword123
    EOF
    ```
 
@@ -211,8 +210,8 @@ If you need to secure credentials immediately:
 3. **Remove credentials from env/common.env:**
    ```bash
    # In env/common.env, replace:
-   SMTP_USER=procesos@tlseng.es
-   SMTP_PASS=Machaco2$
+   SMTP_USER=your-smtp-user@example.com
+   SMTP_PASS=YourSecurePassword123
    
    # With comments:
    # SMTP_USER and SMTP_PASS are in env/credentials.env (not committed)
