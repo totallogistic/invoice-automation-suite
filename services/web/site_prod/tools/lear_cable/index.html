@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>[Prod] Totallogistic Tools — Lear Cable</title>
+    <title>[PROD] Totallogistic Tools — Lear Cable</title>
     <style>
       body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; margin: 24px; max-width: 900px; }
       h1 { margin: 0 0 12px; }
@@ -22,12 +22,12 @@
   </head>
   <body>
     <h1>[PROD] Lear Cable</h1>
-    <p class="muted">Sube el ZIP completo tal cual se descarga del email.</p>
+    <p class="muted">Sube uno o varios archivos PDF, o un ZIP con múltiples PDFs. La página se queda aquí y muestra progreso/estado.</p>
 
     <div class="card">
       <div class="row">
-        <input id="zip" type="file" accept=".zip,application/zip" />
-        <button id="btnUpload">Subir ZIP</button>
+        <input id="zip" type="file" accept=".pdf,.zip,application/pdf,application/zip" multiple />
+        <button id="btnUpload">Subir Archivo(s)</button>
         <span id="uploadMsg" class="muted"></span>
       </div>
       <p class="muted" style="margin:10px 0 0">
@@ -152,8 +152,31 @@
       }
 
       $("btnUpload").addEventListener("click", async () => {
-        const f = $("zip").files[0];
-        if (!f) return setUploadMsg("Selecciona un ZIP primero.", true);
+        const fileInput = $("zip");
+        const selectedFiles = Array.from(fileInput.files);
+        
+        if (selectedFiles.length === 0) {
+          return setUploadMsg("Selecciona uno o más archivos PDF, o un archivo ZIP.", true);
+        }
+
+        // Validate file types
+        const validExtensions = ['.pdf', '.zip'];
+        const hasZip = selectedFiles.some(f => f.name.toLowerCase().endsWith('.zip'));
+        const hasPdf = selectedFiles.some(f => f.name.toLowerCase().endsWith('.pdf'));
+        
+        // If multiple files selected, none can be ZIP
+        if (selectedFiles.length > 1 && hasZip) {
+          return setUploadMsg("Cuando subes múltiples archivos, no puedes incluir ZIP. Sube solo PDFs o un único ZIP.", true);
+        }
+        
+        // Validate all files have valid extensions
+        for (const file of selectedFiles) {
+          const fileName = file.name.toLowerCase();
+          const isValid = validExtensions.some(ext => fileName.endsWith(ext));
+          if (!isValid) {
+            return setUploadMsg(`Archivo no permitido: ${file.name}. Solo se aceptan .pdf o .zip`, true);
+          }
+        }
 
         setUploadMsg("Subiendo…");
         $("statusCard").style.display = "none";
@@ -162,7 +185,10 @@
 
         try {
           const fd = new FormData();
-          fd.append("file", f, f.name);
+          // Append all selected files
+          selectedFiles.forEach(file => {
+            fd.append("files", file, file.name);
+          });
 
           const r = await fetch("/api/lear_cable/batches", { method: "POST", body: fd });
           if (!r.ok) {
@@ -172,7 +198,7 @@
           const data = await r.json();
           const batchId = data.batch_id;
           showStatusCard(batchId);
-          setUploadMsg(`OK. Batch creado: ${batchId}`);
+          setUploadMsg(`OK. Batch creado: ${batchId} con ${data.extracted_pdfs} PDF(s)`);
           await startPolling(batchId);
         } catch (e) {
           setUploadMsg(e.message, true);

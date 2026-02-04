@@ -1,35 +1,9 @@
 services:
-  sftp_lear_cable:
-    image: drakkan/sftpgo:latest
-    restart: unless-stopped
-    ports:
-      - "${SFTP_PORT:-2222}:2022"
-      - "${SFTPGO_WEB_PORT:-8080}:8080"
-
-    environment:
-      - SFTPGO_SFTPD__BINDINGS__0__ADDRESS=0.0.0.0
-      - SFTPGO_SFTPD__BINDINGS__0__PORT=2022
-      - SFTPGO_HTTPD__BINDINGS__0__ADDRESS=0.0.0.0
-      - SFTPGO_HTTPD__BINDINGS__0__PORT=8080
-      - SFTPGO_DATA_PROVIDER__DRIVER=sqlite
-      - SFTPGO_DATA_PROVIDER__NAME=/var/lib/sftpgo/sftpgo.db
-      - SFTPGO_DEFAULT_ADMIN_USERNAME=${SFTPGO_DEFAULT_ADMIN_USERNAME:-admin}
-      - SFTPGO_DEFAULT_ADMIN_PASSWORD=${SFTPGO_DEFAULT_ADMIN_PASSWORD:-CHANGE_ME}
-
-    # IMPORTANT:
-    # Cada stack debe tener STORAGE ROOT distinto, o se pisan datos / locks / estados
-    volumes:
-      - ${SFTPGO_ROOT:-${STACK_ROOT:-/data/ias_prod}/sftpgo}:/srv/sftpgo
-      - ${SFTPGO_VAR:-${STACK_ROOT:-/data/ias_prod}/sftpgo_var}:/var/lib/sftpgo
-
 
   processor_lear_cable:
     build:
       context: ./services/processor
     restart: unless-stopped
-    depends_on:
-      - sftp_lear_cable
-
     environment:
       - SERVICE_ROOT=/data
       - INBOX_DIR=/data/inbox
@@ -40,7 +14,7 @@ services:
 
       - DONE_MARKER=${DONE_MARKER:-_DONE}
       - POLL_SECONDS=${POLL_SECONDS:-3}
-      - BATCH_QUIET_SECONDS=${BATCH_QUIET_SECONDS:-30}
+      - BATCH_QUIET_SECONDS=${BATCH_QUIET_SECONDS}
 
       - EXTRACTOR_PATH=/app/extractor/extract_lear_fields.py
 
