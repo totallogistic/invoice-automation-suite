@@ -238,8 +238,6 @@ def send_email(subject: str, body: str, attachments: list[Path], recipients: lis
             smtp.ehlo()
         smtp.login(SMTP_USER, SMTP_PASS)
         smtp.send_message(msg, from_addr=MAIL_FROM, to_addrs=recipients)
-        smtp.login(SMTP_USER, SMTP_PASS)
-        smtp.send_message(msg)
 
 
 def process_batch(batch_id: str, processing_path: Path):
