@@ -12,7 +12,7 @@ Incluye:
 
 ## 🚀 Despliegue en Nueva Máquina
 
-¿Necesitas desplegar este stack en una nueva Ubuntu? Tenemos dos opciones:
+¿Necesitas desplegar este stack en una nueva Ubuntu? **[Ver QUICKSTART.md](./QUICKSTART.md)** ⭐
 
 ### Opción 1: Despliegue Automático (Recomendado)
 ```bash
@@ -25,8 +25,16 @@ sudo ./deploy.sh
 ### Opción 2: Despliegue Manual
 Consulta la **[Guía de Despliegue Completa (DEPLOYMENT.md)](./DEPLOYMENT.md)** con instrucciones paso a paso.
 
-### Guía Rápida
-Ver **[QUICKSTART.md](./QUICKSTART.md)** para un resumen de comandos esenciales.
+---
+
+## 📚 Documentación
+
+- **[DOCS_INDEX.md](./DOCS_INDEX.md)** - Índice completo de toda la documentación
+- **[QUICKSTART.md](./QUICKSTART.md)** - Guía rápida de instalación ⭐
+- **[DEPLOYMENT.md](./DEPLOYMENT.md)** - Instalación detallada paso a paso
+- **[USAGE.md](./USAGE.md)** - Cómo usar el sistema
+- **[TROUBLESHOOTING.md](./TROUBLESHOOTING.md)** - Solución de problemas
+- **[MULTI_ENVIRONMENT.md](./MULTI_ENVIRONMENT.md)** - Configuración de múltiples entornos
 
 ---
 
