@@ -1,13 +1,32 @@
-# invoice-automation-suite (staging-lab)
+# invoice-automation-suite
 
 Suite Docker para automatizar la extracción de datos de facturas (Lear Cable) y entregar resultados por email.
+
 Incluye:
 - **API** (FastAPI) para subir ZIPs y consultar estado.
 - **Processor** (watcher) que procesa lotes (extractor) y envía emails.
 - **Web/UI** (nginx estático) + reverse proxy a la API.
 - **SFTPGo** (opcional) para entradas por SFTP / administración web.
 
-> Stack pensado para LAN primero. Luego se expondrá externamente desde un servidor dedicado.
+---
+
+## 🚀 Despliegue en Nueva Máquina
+
+¿Necesitas desplegar este stack en una nueva Ubuntu? Tenemos dos opciones:
+
+### Opción 1: Despliegue Automático (Recomendado)
+```bash
+git clone https://github.com/totallogistic/invoice-automation-suite.git
+cd invoice-automation-suite
+chmod +x deploy.sh
+sudo ./deploy.sh
+```
+
+### Opción 2: Despliegue Manual
+Consulta la **[Guía de Despliegue Completa (DEPLOYMENT.md)](./DEPLOYMENT.md)** con instrucciones paso a paso.
+
+### Guía Rápida
+Ver **[QUICKSTART.md](./QUICKSTART.md)** para un resumen de comandos esenciales.
 
 ---
 
@@ -23,7 +42,7 @@ Servidor:
   actualiza status y envía email con adjuntos.
 
 Rutas en disco (host):
-- Data root: `/srv/sftpgo/lear_cable/data`
+- Data root: `/data/ias_prod/data` (configurable)
   - `inbox/`, `processing/`, `out/`, `processed/`, `error/`, `status/`
 
 ---
@@ -41,6 +60,7 @@ Rutas en disco (host):
 ## Requisitos
 
 - Docker + Docker Compose
+- Ubuntu 20.04+ (recomendado)
 - (Recomendado) `jq` para ver JSON bonito en CLI
 
 ---
@@ -49,5 +69,6 @@ Rutas en disco (host):
 
 1) Crea tu `.env` (NO se commitea):
 ```bash
-cp env.example .env
+cp .env.example .env
 # edita .env con tus credenciales SMTP y settings
+nano .env
