@@ -13,6 +13,7 @@
 #   --stack-root  Directorio raíz para datos (por defecto: /data/ias_prod)
 #   --skip-docker Saltar instalación de Docker/Docker Compose
 #   --help        Mostrar esta ayuda
+# --- END HELP ---
 #############################################################################
 
 set -e  # Salir si hay error
@@ -74,7 +75,7 @@ while [[ $# -gt 0 ]]; do
             shift
             ;;
         --help)
-            head -n 15 "$0" | tail -n +2 | sed 's/^# //'
+            sed -n '/^# Invoice Automation Suite/,/^# --- END HELP ---/p' "$0" | sed 's/^# //'
             exit 0
             ;;
         *)
@@ -264,8 +265,17 @@ if [ ! -f "$ENV_FILE" ]; then
         
         # Actualizar STACK_ROOT en .env si es diferente del default
         if [ "$STACK_ROOT" != "/data/ias_prod" ]; then
-            sed -i "s|STACK_ROOT=.*|STACK_ROOT=$STACK_ROOT|g" "$ENV_FILE" || true
-            sed -i "s|DATA_ROOT=.*|DATA_ROOT=$STACK_ROOT/data|g" "$ENV_FILE" || true
+            if grep -q "STACK_ROOT=" "$ENV_FILE" 2>/dev/null; then
+                sed -i "s|STACK_ROOT=.*|STACK_ROOT=$STACK_ROOT|g" "$ENV_FILE"
+            else
+                print_warning "No se encontró STACK_ROOT en $ENV_FILE para actualizar"
+            fi
+            
+            if grep -q "DATA_ROOT=" "$ENV_FILE" 2>/dev/null; then
+                sed -i "s|DATA_ROOT=.*|DATA_ROOT=$STACK_ROOT/data|g" "$ENV_FILE"
+            else
+                print_warning "No se encontró DATA_ROOT en $ENV_FILE para actualizar"
+            fi
         fi
         
         chown "$REAL_USER:$REAL_USER" "$ENV_FILE"
@@ -289,8 +299,9 @@ else
     print_info "Archivo $ENV_FILE ya existe"
     
     # Verificar variables críticas
-    if grep -q "CHANGE_ME" "$ENV_FILE" 2>/dev/null; then
-        print_warning "⚠️  El archivo .env contiene valores 'CHANGE_ME' que deben ser actualizados"
+    if grep -q "CHANGE_ME\|INSECURE" "$ENV_FILE" 2>/dev/null; then
+        print_warning "⚠️  El archivo .env contiene valores inseguros o por defecto que DEBEN ser actualizados:"
+        grep -n "CHANGE_ME\|INSECURE" "$ENV_FILE" || true
     fi
     
     if grep -q "YOUR_USER" "$ENV_FILE" 2>/dev/null; then
