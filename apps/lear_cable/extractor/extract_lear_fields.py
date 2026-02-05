@@ -136,6 +136,24 @@ def pdf_text_no_ocr(pdf_path: Path) -> str:
 # Finders
 # ----------------------------
 
+def _find_export_invoice_number(text: str) -> Optional[str]:
+    """
+    Nuevo modelo: 'EXPORT INVOICE' y en las líneas siguientes aparece:
+      Number: S122412
+
+    Para evitar falsos positivos (p.ej. 'Number of ...'), exigimos el contexto
+    'EXPORT INVOICE' cerca de 'Number:'.
+    """
+    m = re.search(
+        r"EXPORT\s+INVOICE[\s\S]{0,200}?\bNumber\s*[:#]\s*([A-Z]\d{5,10})\b",
+        text,
+        flags=re.IGNORECASE,
+    )
+    if m:
+        return m.group(1).strip().upper()
+    return None
+
+
 def find_invoice_no(text: str, filename_stem: str | None = None) -> Optional[str]:
     # 1) Common: DMxxxxxx dentro del PDF
     matches = re.findall(r"DM\d{6}", text)
@@ -146,23 +164,10 @@ def find_invoice_no(text: str, filename_stem: str | None = None) -> Optional[str
                     return m
         return matches[0]
 
-    # 1b) Nuevo modelo: "Invoice Number: DS307212"
-    ds_matches = re.findall(r"Invoice\s+Number\s*:\s*(DS\d{6,})", text, flags=re.IGNORECASE)
-    if ds_matches:
-        if filename_stem:
-            for d in ds_matches:
-                if d == filename_stem:
-                    return d
-        return ds_matches[0]
-
-    # 1c) FR: "Numéro Facture: DS307212" (puede venir duplicado)
-    ds_matches = re.findall(r"Num\w*\s*Facture\s*:\s*(DS\d{6,})", text, flags=re.IGNORECASE)
-    if ds_matches:
-        if filename_stem:
-            for d in ds_matches:
-                if d == filename_stem:
-                    return d
-        return ds_matches[0]
+    # 1.1) Nuevo: EXPORT INVOICE -> Number: Sxxxxxx
+    export_no = _find_export_invoice_number(text)
+    if export_no:
+        return export_no
 
     # 2) Rare: linea tipo "Invoice : inv-211125" (a veces aparece como "Invoice : Date :" -> ignorar)
     m = re.search(r"\bInvoice\b\s*[:]?(?:\s+)?([A-Za-z0-9][A-Za-z0-9_-]+)", text, flags=re.IGNORECASE)
