@@ -147,7 +147,35 @@ def find_invoice_no(text: str, filename_stem: str | None = None) -> Optional[str
     return None
 
 def find_int_after_label_variants(text: str, labels: list[str]) -> Optional[int]:
+    """Find integer after any of the label regex variants like 'Pallets' / 'Nombre de Palettes'.
+
+    Robust against duplicated text layers, e.g.:
+      'Pallets:Pallets:Pallets:Pallets: 11111111'  -> 11
+
+    Strategy (from v16):
+      - If the label itself is repeated N times in the matched prefix, and the digit chunk
+        length is divisible by N, assume the digits are repeated N times too and shrink.
+      - Otherwise fall back to reduce_repetition().
+    """
     for label in labels:
+        # Robust case: label repeated N times then a (possibly repeated) digit chunk
+        m = re.search(rf"((?:{label}\s*:\s*)+)([0-9]+)", text, flags=re.IGNORECASE)
+        if m:
+            prefix = m.group(1)
+            raw = m.group(2)
+
+            repeat_n = len(re.findall(label, prefix, flags=re.IGNORECASE)) or 1
+            if repeat_n > 1 and len(raw) % repeat_n == 0:
+                raw = raw[: len(raw) // repeat_n]
+            else:
+                raw = reduce_repetition(raw)
+
+            try:
+                return int(raw)
+            except ValueError:
+                pass
+
+        # Simple fallback: single label occurrence
         m = re.search(rf"{label}\s*:\s*([0-9]+)", text, flags=re.IGNORECASE)
         if not m:
             continue
