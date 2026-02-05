@@ -54,11 +54,28 @@ def reduce_repetition(token: str) -> str:
 
 
 def parse_number_token(token: str) -> Optional[float]:
-    """Parser numerico robusto (miles/decimales EU/US) + repeticion."""
+    """Parser numerico robusto (miles/decimales EU/US) + repeticion.
+
+    Algunas extracciones (pypdf) devuelven el mismo numero varias veces
+    separado por espacios o concatenado. En esos casos nos quedamos con
+    el candidato numerico mas razonable antes de normalizar.
+    """
     if token is None:
         return None
 
-    tok = reduce_repetition(str(token)).strip()
+    raw = str(token)
+
+    # Si vienen varios numeros (p.ej. "6734.73 6734.736734.73 6734.73"),
+    # suele ser el mismo valor repetido. Elegimos el candidato mas largo.
+    parts = re.findall(r"[0-9][0-9.,]*", raw)
+    if parts:
+        # si todos son iguales, usa uno
+        if all(p == parts[0] for p in parts):
+            raw = parts[0]
+        else:
+            raw = max(parts, key=len)
+
+    tok = reduce_repetition(raw).strip()
     if not tok:
         return None
 
@@ -85,7 +102,6 @@ def parse_number_token(token: str) -> Optional[float]:
         return float(tok)
     except ValueError:
         return None
-
 
 def sum_optional_decimal(values: Iterable[Optional[float]]) -> Decimal:
     total = Decimal("0")
@@ -130,6 +146,24 @@ def find_invoice_no(text: str, filename_stem: str | None = None) -> Optional[str
                     return m
         return matches[0]
 
+    # 1b) Nuevo modelo: "Invoice Number: DS307212"
+    ds_matches = re.findall(r"Invoice\s+Number\s*:\s*(DS\d{6,})", text, flags=re.IGNORECASE)
+    if ds_matches:
+        if filename_stem:
+            for d in ds_matches:
+                if d == filename_stem:
+                    return d
+        return ds_matches[0]
+
+    # 1c) FR: "Numéro Facture: DS307212" (puede venir duplicado)
+    ds_matches = re.findall(r"Num\w*\s*Facture\s*:\s*(DS\d{6,})", text, flags=re.IGNORECASE)
+    if ds_matches:
+        if filename_stem:
+            for d in ds_matches:
+                if d == filename_stem:
+                    return d
+        return ds_matches[0]
+
     # 2) Rare: linea tipo "Invoice : inv-211125" (a veces aparece como "Invoice : Date :" -> ignorar)
     m = re.search(r"\bInvoice\b\s*[:]?(?:\s+)?([A-Za-z0-9][A-Za-z0-9_-]+)", text, flags=re.IGNORECASE)
     if m:
@@ -145,7 +179,6 @@ def find_invoice_no(text: str, filename_stem: str | None = None) -> Optional[str
         if re.fullmatch(r"\d{6,10}", filename_stem):
             return filename_stem
     return None
-
 def find_int_after_label_variants(text: str, labels: list[str]) -> Optional[int]:
     """Find integer after any of the label regex variants like 'Pallets' / 'Nombre de Palettes'.
 
