@@ -136,54 +136,21 @@ def pdf_text_no_ocr(pdf_path: Path) -> str:
 # Finders
 # ----------------------------
 
-def _find_export_invoice_number(text: str) -> Optional[str]:
-    """
-    Nuevo modelo: 'EXPORT INVOICE' y en las líneas siguientes aparece:
-      Number: S122412
-
-    Para evitar falsos positivos (p.ej. 'Number of ...'), exigimos el contexto
-    'EXPORT INVOICE' cerca de 'Number:'.
-    """
-    m = re.search(
-        r"EXPORT\s+INVOICE[\s\S]{0,200}?\bNumber\s*[:#]\s*([A-Z]\d{5,10})\b",
-        text,
-        flags=re.IGNORECASE,
-    )
-    if m:
-        return m.group(1).strip().upper()
-    return None
-
-
 def find_invoice_no(text: str, filename_stem: str | None = None) -> Optional[str]:
-    # 1) Common: DMxxxxxx dentro del PDF
-    matches = re.findall(r"DM\d{6}", text)
-    if matches:
-        if filename_stem:
-            for m in matches:
-                if m == filename_stem:
-                    return m
-        return matches[0]
+    """Return invoice number from filename only.
 
-    # 1.1) Nuevo: EXPORT INVOICE -> Number: Sxxxxxx
-    export_no = _find_export_invoice_number(text)
-    if export_no:
-        return export_no
+    We intentionally avoid extracting invoice number from PDF text because some
+    invoice layouts yield false positives like 'NUMBER'. The filename (stem)
+    is the source of truth and is expected to match the invoice id.
+    """
+    if not filename_stem:
+        return None
+    stem = filename_stem.strip()
+    stem = re.sub(r"[^A-Za-z0-9_-]+", "", stem)
+    if not stem:
+        return None
+    return stem.upper()
 
-    # 2) Rare: linea tipo "Invoice : inv-211125" (a veces aparece como "Invoice : Date :" -> ignorar)
-    m = re.search(r"\bInvoice\b\s*[:]?(?:\s+)?([A-Za-z0-9][A-Za-z0-9_-]+)", text, flags=re.IGNORECASE)
-    if m:
-        cand = m.group(1).strip()
-        # En algunos PDFs el extractor devuelve "Invoice : Date :"; eso NO es un numero de factura
-        if cand and cand.casefold() not in {"date"}:
-            return cand
-
-    # 3) Fallback: usa el nombre del fichero si parece un identificador
-    if filename_stem:
-        if re.fullmatch(r"inv-\d+", filename_stem, flags=re.IGNORECASE):
-            return filename_stem
-        if re.fullmatch(r"\d{6,10}", filename_stem):
-            return filename_stem
-    return None
 def find_int_after_label_variants(text: str, labels: list[str]) -> Optional[int]:
     """Find integer after any of the label regex variants like 'Pallets' / 'Nombre de Palettes'.
 
@@ -236,6 +203,68 @@ def find_float_after_label_variants(text: str, labels: list[str]) -> Optional[fl
     return None
 
 
+
+
+def parse_weight_token(token: str) -> Optional[float]:
+    """Parse de pesos (gross/net) evitando colapsar '444' -> '4'.
+
+    Algunos PDFs devuelven pesos como repeticiones del mismo dígito (p.ej. '444444444').
+    Para pesos, si el número son dígitos repetidos, usamos el chunk plausible (normalmente 3 dígitos)
+    y NO aplicamos reduce_repetition.
+    """
+    if token is None:
+        return None
+    raw = str(token)
+
+    # Extrae candidatos numéricos
+    parts = re.findall(r"[0-9][0-9.,]*", raw)
+    cand = None
+    if parts:
+        if all(p == parts[0] for p in parts):
+            cand = parts[0]
+        else:
+            cand = max(parts, key=len)
+    else:
+        cand = raw
+
+    cand = cand.strip().replace("\u00A0", "").replace(" ", "")
+    cand = re.sub(r"(?i)(kg|kgs|g)$", "", cand).strip()
+
+    # Caso especial: solo dígitos y todos iguales (p.ej. '444' o '444444444')
+    if re.fullmatch(r"\d{2,}", cand) and len(set(cand)) == 1:
+        # Si ya es un número razonable (2-5 dígitos), úsalo tal cual
+        if len(cand) <= 5:
+            try:
+                return float(int(cand))
+            except ValueError:
+                return None
+        # Si es largo, intenta chunk de 3 (preferido) o 2 si encaja
+        for k in (3, 2, 4):
+            if len(cand) % k == 0:
+                chunk = cand[:k]
+                try:
+                    return float(int(chunk))
+                except ValueError:
+                    pass
+        # Fallback: primeros 3 dígitos
+        try:
+            return float(int(cand[:3]))
+        except ValueError:
+            return None
+
+    # Para el resto, usa el parser general existente
+    return parse_number_token(cand)
+
+
+def find_weight_after_label_variants(text: str, labels: list[str]) -> Optional[float]:
+    for label in labels:
+        m = re.search(rf"{label}\s*:\s*([0-9][0-9.,\s]*)(?:\s*(?:kg|kgs))?\b", text, flags=re.IGNORECASE)
+        if not m:
+            continue
+        v = parse_weight_token(m.group(1))
+        if v is not None:
+            return v
+    return None
 def find_float_before_marker(text: str, marker_regex: str) -> Optional[float]:
     # admite , . y espacios
     m = re.search(rf"([0-9][0-9.,\s]+)\s*{marker_regex}", text, flags=re.IGNORECASE)
@@ -319,8 +348,8 @@ def extract_one(pdf_path: Path) -> InvoiceExtract:
     pallets = find_int_after_label_variants(text, [r"Pallets", r"Nombre\s+de\s+Palettes"])
     boxes = find_int_after_label_variants(text, [r"Boxes"])
 
-    gross_weight = find_float_after_label_variants(text, [r"Gross\s+Weight", r"Poid\s+brute", r"Poids\s+brut", r"Poids\s+brute"])
-    net_weight = find_float_after_label_variants(text, [r"Net\s+Weight", r"NetWeight", r"Poids\s+net", r"Poid\s+net"])
+    gross_weight = find_weight_after_label_variants(text, [r"Gross\s+Weight", r"Poid\s+brute", r"Poids\s+brut", r"Poids\s+brute"])
+    net_weight = find_weight_after_label_variants(text, [r"Net\s+Weight", r"NetWeight", r"Poids\s+net", r"Poid\s+net"])
 
     total_invoice = find_total_invoice(text)
 
@@ -474,4 +503,5 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
 
