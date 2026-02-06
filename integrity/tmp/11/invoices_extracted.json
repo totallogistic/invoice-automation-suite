@@ -1,0 +1,101 @@
+[
+  {
+    "file": "02347338.pdf",
+    "invoice_no": "Number",
+    "pallets": 7,
+    "boxes": 0,
+    "gross_weight": 874.744,
+    "net_weight": 791.98,
+    "total_invoice": 23123.8
+  },
+  {
+    "file": "02347667.pdf",
+    "invoice_no": "Number",
+    "pallets": 2,
+    "boxes": 0,
+    "gross_weight": 409.347,
+    "net_weight": 390.275,
+    "total_invoice": 16765.0
+  },
+  {
+    "file": "02347668.pdf",
+    "invoice_no": "Number",
+    "pallets": 12,
+    "boxes": 0,
+    "gross_weight": 1136.394,
+    "net_weight": 978.39,
+    "total_invoice": 28702.34
+  },
+  {
+    "file": "02347669.pdf",
+    "invoice_no": "Number",
+    "pallets": 11,
+    "boxes": 0,
+    "gross_weight": 879.27,
+    "net_weight": 737.15,
+    "total_invoice": 19484.41
+  },
+  {
+    "file": "02347729.pdf",
+    "invoice_no": "Number",
+    "pallets": 31,
+    "boxes": 0,
+    "gross_weight": 5450.94,
+    "net_weight": 4136.38,
+    "total_invoice": 263112.17
+  },
+  {
+    "file": "02347838.pdf",
+    "invoice_no": "Number",
+    "pallets": 8,
+    "boxes": 0,
+    "gross_weight": 1472.104,
+    "net_weight": 1164.304,
+    "total_invoice": 37298.39
+  },
+  {
+    "file": "02348010.pdf",
+    "invoice_no": "Number",
+    "pallets": 2,
+    "boxes": 0,
+    "gross_weight": 216.23,
+    "net_weight": 201.358,
+    "total_invoice": 7673.8
+  },
+  {
+    "file": "02348013.pdf",
+    "invoice_no": "Number",
+    "pallets": 1,
+    "boxes": 0,
+    "gross_weight": 32.7428,
+    "net_weight": 1.1628,
+    "total_invoice": 51.09
+  },
+  {
+    "file": "02348015.pdf",
+    "invoice_no": "Number",
+    "pallets": 1,
+    "boxes": 0,
+    "gross_weight": 153.081732,
+    "net_weight": 110.54173,
+    "total_invoice": 3184.0
+  },
+  {
+    "file": "02348016.pdf",
+    "invoice_no": "Number",
+    "pallets": 1,
+    "boxes": 0,
+    "gross_weight": 169.34,
+    "net_weight": 126.8,
+    "total_invoice": 4854.8
+  },
+  {
+    "file": "inv-211125.pdf",
+    "invoice_no": "inv-211125",
+    "pallets": 1,
+    "boxes": null,
+    "gross_weight": 191.0,
+    "net_weight": 180.0,
+    "total_invoice": 808.88
+  }
+]
