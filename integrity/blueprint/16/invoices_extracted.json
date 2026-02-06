@@ -1,14 +1,5 @@
 [
   {
-    "file": "CMR.pdf",
-    "invoice_no": "CMR",
-    "pallets": null,
-    "boxes": null,
-    "gross_weight": null,
-    "net_weight": null,
-    "total_invoice": null
-  },
-  {
     "file": "DM044772.pdf",
     "invoice_no": "DM044772",
     "pallets": 0,
