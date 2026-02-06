@@ -1,0 +1,51 @@
+name: Integrity Check
+
+on:
+  pull_request:
+    paths:
+      - "apps/lear_cable/extractor/extract_lear_fields.py"
+      - "integrity/**"
+      - "run_extract_all.sh"
+      - "compare_invoices_csv.sh"
+      - "integrity_check.sh"
+  push:
+    branches: [ "main" ]
+    paths:
+      - "apps/lear_cable/extractor/extract_lear_fields.py"
+      - "integrity/**"
+      - "run_extract_all.sh"
+      - "compare_invoices_csv.sh"
+      - "integrity_check.sh"
+
+jobs:
+  integrity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          # Instala deps del extractor (elige la que exista en tu repo)
+          if [ -f "apps/lear_cable/extractor/requirements.txt" ]; then
+            pip install -r apps/lear_cable/extractor/requirements.txt
+          elif [ -f "services/processor/requirements.txt" ]; then
+            pip install -r services/processor/requirements.txt
+          elif [ -f "requirements.txt" ]; then
+            pip install -r requirements.txt
+          else
+            echo "No requirements.txt found; continuing (may fail if deps are missing)"
+          fi
+
+      - name: Run integrity check
+        run: |
+          chmod +x integrity_check.sh run_extract_all.sh compare_invoices_csv.sh
+          ./integrity_check.sh

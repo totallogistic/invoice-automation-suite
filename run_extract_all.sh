@@ -6,9 +6,10 @@ usage() {
   cat >&2 <<'EOF'
 Usage:
   run_extract_all.sh <root_folder> [path_to_extract_lear_fields.py] [--merge] [--merge-only] [--merge-out <file_base>]
+                     [--versioned-run] [--runs-root <dir>] [--no-clean]
 
 Examples:
-  # 1) Extract en cada subfolder (1 nivel), outputs en el MISMO subfolder
+  # 1) Extract en cada subfolder (1 nivel), outputs en el MISMO subfolder (modo actual)
   ./run_extract_all.sh /ruta/a/root
 
   # 2) Extract + merge (1 item por lote a partir de invoices_extracted_summary.json)
@@ -20,9 +21,16 @@ Examples:
   # 4) Extract + merge con output base custom (crea .json y .csv)
   ./run_extract_all.sh /ruta/a/root --merge --merge-out /ruta/a/root/merged/lotes
 
+  # 5) Integrity run versionado: inputs desde blueprint, outputs en integrity/runs/<SCRIPT_VERSION>/<lote>/
+  ./run_extract_all.sh integrity/blueprint apps/lear_cable/extractor/extract_lear_fields.py --versioned-run
+
 Notes:
   - El merge genera: <file_base>.json y <file_base>.csv
-  - Si no das --merge-out, usa: <root_folder>/merged_lot_summaries
+  - Si no das --merge-out, usa: <root_efectivo>/merged_lot_summaries
+  - Con --versioned-run:
+      - root_folder es el blueprint (inputs)
+      - outputs van a runs-root/SCRIPT_VERSION/<lote>/
+      - si ya existe esa carpeta, se borra salvo que uses --no-clean
 EOF
 }
 
@@ -34,6 +42,10 @@ PY_EXTRACT="extract_lear_fields.py"
 DO_MERGE=0
 MERGE_ONLY=0
 MERGE_BASE=""
+
+VERSIONED_RUN=0
+RUNS_ROOT="integrity/runs"
+CLEAN_EXISTING=1
 
 # Segundo argumento opcional: ruta al extractor (si no empieza por -)
 if [[ $# -gt 0 && "${1:0:1}" != "-" ]]; then
@@ -57,6 +69,19 @@ while [[ $# -gt 0 ]]; do
       [[ $# -ge 2 ]] || { echo "ERROR: --merge-out requiere un valor" >&2; exit 2; }
       MERGE_BASE="$2"
       shift 2
+      ;;
+    --versioned-run)
+      VERSIONED_RUN=1
+      shift
+      ;;
+    --runs-root)
+      [[ $# -ge 2 ]] || { echo "ERROR: --runs-root requiere un valor" >&2; exit 2; }
+      RUNS_ROOT="$2"
+      shift 2
+      ;;
+    --no-clean)
+      CLEAN_EXISTING=0
+      shift
       ;;
     -h|--help)
       usage
@@ -82,14 +107,58 @@ if (( MERGE_ONLY == 0 )); then
   fi
 fi
 
-if [[ -z "${MERGE_BASE}" ]]; then
-  MERGE_BASE="${ROOT_DIR%/}/merged_lot_summaries"
+# Resolve SCRIPT_VERSION if needed
+SCRIPT_VERSION=""
+RUN_ROOT=""
+
+if (( VERSIONED_RUN == 1 )); then
+  if (( MERGE_ONLY == 1 )); then
+    echo "ERROR: --versioned-run con --merge-only no tiene sentido (no hay outputs a comparar/generar)." >&2
+    exit 2
+  fi
+
+  SCRIPT_VERSION="$(python3 - <<PY
+import re, sys
+p = r"${PY_EXTRACT}"
+s = open(p, "r", encoding="utf-8").read()
+m = re.search(r'^SCRIPT_VERSION\\s*=\\s*"([^"]+)"', s, re.M)
+print(m.group(1) if m else "")
+PY
+)"
+  if [[ -z "${SCRIPT_VERSION}" ]]; then
+    echo "ERROR: Could not read SCRIPT_VERSION from: ${PY_EXTRACT}" >&2
+    exit 2
+  fi
+
+  RUN_ROOT="${RUNS_ROOT%/}/${SCRIPT_VERSION}"
+  if [[ -d "${RUN_ROOT}" && "${CLEAN_EXISTING}" -eq 1 ]]; then
+    echo "[INFO] Removing existing run folder (same version): ${RUN_ROOT}"
+    rm -rf "${RUN_ROOT}"
+  fi
+  mkdir -p "${RUN_ROOT}"
 fi
 
-echo "[INFO] Root: ${ROOT_DIR}"
+# Effective root for merge defaults
+EFFECTIVE_ROOT="${ROOT_DIR%/}"
+if (( VERSIONED_RUN == 1 )); then
+  EFFECTIVE_ROOT="${RUN_ROOT}"
+fi
+
+if [[ -z "${MERGE_BASE}" ]]; then
+  MERGE_BASE="${EFFECTIVE_ROOT%/}/merged_lot_summaries"
+fi
+
+echo "[INFO] Input root: ${ROOT_DIR}"
 echo "[INFO] Extractor: ${PY_EXTRACT}"
+echo "[INFO] Versioned-run: ${VERSIONED_RUN}"
+if (( VERSIONED_RUN == 1 )); then
+  echo "[INFO] SCRIPT_VERSION: ${SCRIPT_VERSION}"
+  echo "[INFO] Runs root: ${RUNS_ROOT}"
+  echo "[INFO] Run folder: ${RUN_ROOT}"
+fi
 echo "[INFO] Merge: ${DO_MERGE}"
 echo "[INFO] Merge-only: ${MERGE_ONLY}"
+echo "[INFO] Merge base: ${MERGE_BASE}"
 echo
 
 # 1) Extract por subcarpeta (1 nivel)
@@ -103,11 +172,22 @@ if (( MERGE_ONLY == 0 )); then
       continue
     fi
 
-    echo "[RUN ] ${dir} (pdfs=${#pdfs[@]})"
-    # outputs en el MISMO subfolder
-    python3 "${PY_EXTRACT}" "${dir}" -o "${dir}"
-    echo "[ OK ] ${dir}"
-    echo
+    if (( VERSIONED_RUN == 1 )); then
+      lot="$(basename "${dir%/}")"
+      out_dir="${RUN_ROOT%/}/${lot}/"
+      mkdir -p "${out_dir}"
+
+      echo "[RUN ] ${dir} -> ${out_dir} (pdfs=${#pdfs[@]})"
+      python3 "${PY_EXTRACT}" "${dir}" -o "${out_dir}"
+      echo "[ OK ] ${lot}"
+      echo
+    else
+      echo "[RUN ] ${dir} (pdfs=${#pdfs[@]})"
+      # outputs en el MISMO subfolder
+      python3 "${PY_EXTRACT}" "${dir}" -o "${dir}"
+      echo "[ OK ] ${dir}"
+      echo
+    fi
   done
 else
   echo "[INFO] --merge-only: skipping extraction step."
@@ -122,7 +202,7 @@ if (( DO_MERGE == 1 )); then
 import csv, json
 from pathlib import Path
 
-root = Path(r"${ROOT_DIR}").resolve()
+root = Path(r"${EFFECTIVE_ROOT}").resolve()
 merge_base = Path(r"${MERGE_BASE}").resolve()
 merge_base.parent.mkdir(parents=True, exist_ok=True)
 

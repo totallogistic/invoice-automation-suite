@@ -33,15 +33,16 @@ normalize_csv() {
   src="$1"
   dst="$2"
 
+  # Normaliza CRLF -> LF para evitar diffs "invisibles"
   lines="$(wc -l < "$src" | tr -d ' ')"
   if [[ "$lines" -le 1 ]]; then
-    cp -f "$src" "$dst"
+    tr -d '\r' < "$src" > "$dst"
     return
   fi
 
   {
-    head -n 1 "$src"
-    tail -n +2 "$src" | LC_ALL=C sort
+    head -n 1 "$src" | tr -d '\r'
+    tail -n +2 "$src" | tr -d '\r' | LC_ALL=C sort
   } > "$dst"
 }
 
