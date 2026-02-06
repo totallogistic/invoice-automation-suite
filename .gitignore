@@ -14,3 +14,6 @@ __pycache__/
 *.bak
 *.old
 *.log
+*bkp*
+*copy*
+.DS_Store
