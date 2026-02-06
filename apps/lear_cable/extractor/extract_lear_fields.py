@@ -11,7 +11,7 @@ from decimal import Decimal, ROUND_HALF_UP
 from pathlib import Path
 from typing import Iterable, Optional
 
-SCRIPT_VERSION = "2026-02-6.v20"
+SCRIPT_VERSION = "2026-02-6.v21"
 
 try:
     from pypdf import PdfReader
