@@ -2,6 +2,7 @@ name: Integrity Check
 
 on:
   pull_request:
+    branches: [ "main", "Multienv_refactor" ]
     paths:
       - "apps/lear_cable/extractor/extract_lear_fields.py"
       - "integrity/**"
@@ -9,7 +10,7 @@ on:
       - "compare_invoices_csv.sh"
       - "integrity_check.sh"
   push:
-    branches: [ "main" ]
+    branches: [ "main", "Multienv_refactor" ]
     paths:
       - "apps/lear_cable/extractor/extract_lear_fields.py"
       - "integrity/**"
