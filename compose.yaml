@@ -32,6 +32,18 @@ services:
       - ${DATA_ROOT:-${STACK_ROOT:-/data/ias_prod}/data}:/data
       - ./apps/lear_cable/extractor:/app/extractor:ro
 
+  processor_import_partida:
+    build:
+      context: services/processor
+    command: ["python3", "/app/watcher_import_partida.py"]
+    environment:
+      SERVICE_ROOT: /data
+      INBOX_DIR: /data/import_partida/inbox
+      STATUS_DIR: /data/import_partida/status
+      POLL_SECONDS: ${POLL_SECONDS:-3}
+      BATCH_QUIET_SECONDS: ${BATCH_QUIET_SECONDS:-5}
+    volumes:
+      - ${DATA_ROOT}/import_partida:/data/import_partida
 
   api_lear_cable:
     build:
