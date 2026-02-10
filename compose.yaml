@@ -51,6 +51,16 @@ services:
     volumes:
       - ${DATA_ROOT:-${STACK_ROOT:-/data/ias_prod}/data}:/data
 
+  api_import_partida:
+    build:
+      context: ./services/api_import_partida
+    restart: unless-stopped
+    environment:
+      - SERVICE_ROOT=/data
+      - INBOX_DIR=/data/inbox
+      - STATUS_DIR=/data/status
+    volumes:
+      - ${DATA_ROOT:-${STACK_ROOT:-/data/ias_prod}/data}/import_partida:/data
 
   tools_web:
     image: nginx:alpine
