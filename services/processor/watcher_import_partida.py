@@ -201,7 +201,7 @@ def main() -> int:
                 if not is_batch_quiet(batch_dir, quiet_seconds):
                     continue
 
-                # Import Partida: exactamente 1 PDF
+                # Partida: exactamente 1 PDF
                 pdfs = sorted([p for p in batch_dir.glob("*.pdf") if p.is_file()])
                 if len(pdfs) != 1:
                     st.update(
@@ -265,7 +265,7 @@ def main() -> int:
 
                     # Email (si hay SMTP)
                     if smtp_cfg:
-                        subject = f"[DEV] Import Partida - {batch_id}"
+                        subject = f"[DEV] Partida - {batch_id}"
                         body = (
                             f"Se ha generado el XLSX para el batch {batch_id}.\n\n"
                             f"PDF: {pdf_path.name}\n"

@@ -48,7 +48,7 @@ def health():
 @app.post("/api/import_partida/batches")
 async def create_batch(files: List[UploadFile] = File(...)):
     """
-    Import Partida: acepta EXACTAMENTE 1 PDF.
+    Partida: acepta EXACTAMENTE 1 PDF.
     Lo deja en /data/inbox/<batch_id>/ y crea status inicial en /data/status/<batch_id>/status.json
     """
     if not files or len(files) != 1:

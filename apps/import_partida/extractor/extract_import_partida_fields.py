@@ -131,7 +131,7 @@ def is_batch_quiet(batch_dir: Path, quiet_seconds: int) -> bool:
 
 def pick_single_csv(out_dir: Path) -> Path:
     """
-    Para Import Partida esperamos un único CSV de salida llamado 'import_partida.csv'
+    Para Partida esperamos un único CSV de salida llamado 'import_partida.csv'
     (si quieres permitir nombres variables, lo ampliamos, pero por ahora lo dejamos estricto).
     """
     expected = out_dir / "import_partida.csv"
@@ -201,7 +201,7 @@ def main() -> int:
                 if not is_batch_quiet(batch_dir, quiet_seconds):
                     continue
 
-                # Import Partida: exactamente 1 PDF
+                # Partida: exactamente 1 PDF
                 pdfs = sorted([p for p in batch_dir.glob("*.pdf") if p.is_file()])
                 if len(pdfs) != 1:
                     st.update(
@@ -267,7 +267,7 @@ def main() -> int:
                     atomic_write_json(st_file, st)
 
                     if smtp_cfg:
-                        subject = f"Import Partida - {batch_id}"
+                        subject = f"Partida - {batch_id}"
                         body = (
                             f"Se ha generado el CSV para el batch {batch_id}.\n\n"
                             f"PDF: {pdf_path.name}\n"
