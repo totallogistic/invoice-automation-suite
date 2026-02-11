@@ -100,7 +100,11 @@ def block_after_label(text: str, label: str, stop_labels: list[str], first_line_
 
 
 def extract_fields(text: str) -> Dict[str, Any]:
-    bl_no = first_match(text, r"\b(NPOS\d{4,})\b") or ""
+    # Try to extract B/L No from "B/L No:" label first
+    bl_no = first_match(text, r"(?im)B/L\s+No\.?\s*:?\s*([A-Z0-9\-]+)") or ""
+    # Fallback to NPOS pattern if not found
+    if not bl_no:
+        bl_no = first_match(text, r"\b(NPOS\d{4,})\b") or ""
 
     shipper = block_after_label(
         text,
