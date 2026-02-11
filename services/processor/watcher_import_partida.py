@@ -47,9 +47,6 @@ class SmtpCfg:
 
 
 def load_smtp_cfg() -> SmtpCfg:
-    """
-    Reusa el mismo set de env vars que ya tienes para Lear.
-    """
     host = os.getenv("SMTP_HOST", "").strip()
     port = int((os.getenv("SMTP_PORT", "") or "0").strip() or "0")
     user = os.getenv("SMTP_USER", "").strip()
@@ -64,7 +61,7 @@ def load_smtp_cfg() -> SmtpCfg:
 
     if not host or not port or not recipients:
         raise RuntimeError(
-            f"SMTP config incompleta. Requiere SMTP_HOST/SMTP_PORT/MAIL_TO. "
+            "SMTP config incompleta. Requiere SMTP_HOST/SMTP_PORT/MAIL_TO. "
             f"Actualmente: host={host!r} port={port!r} recipients={recipients!r}"
         )
 
@@ -80,14 +77,14 @@ def load_smtp_cfg() -> SmtpCfg:
     )
 
 
-def send_email_with_attachment(
+def send_email_with_csv(
     cfg: SmtpCfg,
     subject: str,
     body: str,
-    attachment_path: Path,
+    csv_path: Path,
 ) -> None:
-    if not attachment_path.exists():
-        raise RuntimeError(f"Adjunto no existe: {attachment_path}")
+    if not csv_path.exists():
+        raise RuntimeError(f"Adjunto no existe: {csv_path}")
 
     msg = EmailMessage()
     msg["From"] = cfg.mail_from
@@ -95,12 +92,13 @@ def send_email_with_attachment(
     msg["Subject"] = subject
     msg.set_content(body)
 
-    data = attachment_path.read_bytes()
+    data = csv_path.read_bytes()
+    # CSV
     msg.add_attachment(
         data,
-        maintype="application",
-        subtype="vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        filename=attachment_path.name,
+        maintype="text",
+        subtype="csv",
+        filename=csv_path.name,
     )
 
     if cfg.use_ssl:
@@ -120,9 +118,6 @@ def send_email_with_attachment(
 
 
 def is_batch_quiet(batch_dir: Path, quiet_seconds: int) -> bool:
-    """
-    Considera el batch “estable” si no hay cambios en los ficheros en quiet_seconds.
-    """
     if quiet_seconds <= 0:
         return True
     latest_mtime = 0.0
@@ -134,21 +129,24 @@ def is_batch_quiet(batch_dir: Path, quiet_seconds: int) -> bool:
     return (time.time() - latest_mtime) >= quiet_seconds
 
 
-def pick_single_xlsx(out_dir: Path) -> Path:
+def pick_single_csv(out_dir: Path) -> Path:
     """
-    Devuelve el XLSX generado en out_dir.
-    - Si hay 0 -> error
-    - Si hay >1 -> el más reciente (y log warning)
+    Para Import Partida esperamos un único CSV de salida llamado 'import_partida.csv'
+    (si quieres permitir nombres variables, lo ampliamos, pero por ahora lo dejamos estricto).
     """
-    xlsx = sorted(out_dir.glob("*.xlsx"))
-    if not xlsx:
-        raise RuntimeError(f"Extractor terminó OK pero no generó XLSX en: {out_dir}")
-    if len(xlsx) == 1:
-        return xlsx[0]
-    # Si hay varios, cogemos el más nuevo (por seguridad)
-    xlsx.sort(key=lambda p: p.stat().st_mtime, reverse=True)
-    log(f"[WARN] [import_partida] múltiples XLSX en {out_dir}, usando el más reciente: {xlsx[0].name}")
-    return xlsx[0]
+    expected = out_dir / "import_partida.csv"
+    if expected.exists() and expected.is_file():
+        return expected
+
+    # Fallback suave: si el extractor lo generase con otro nombre pero único
+    csvs = sorted([p for p in out_dir.glob("*.csv") if p.is_file()])
+    if len(csvs) == 1:
+        return csvs[0]
+
+    raise RuntimeError(
+        f"Extractor terminó OK pero no generó CSV esperado en: {out_dir} "
+        f"(busqué import_partida.csv y/o único *.csv, encontrados={len(csvs)})"
+    )
 
 
 def main() -> int:
@@ -160,13 +158,15 @@ def main() -> int:
     poll_seconds = int((os.getenv("POLL_SECONDS", "3") or "3").strip())
     quiet_seconds = int((os.getenv("BATCH_QUIET_SECONDS", "30") or "30").strip())
 
+    extractor_timeout = int((os.getenv("EXTRACTOR_TIMEOUT_SECONDS", "120") or "120").strip())
+
     extractor = Path("/apps/import_partida/extractor/extract_import_partida_fields.py")
 
     log(f"[INFO] [import_partida] SERVICE_ROOT={service_root}")
     log(f"[INFO] [import_partida] INBOX_DIR={inbox_dir}")
     log(f"[INFO] [import_partida] STATUS_DIR={status_dir}")
     log(f"[INFO] [import_partida] OUT_DIR={out_root}")
-    log(f"[INFO] [import_partida] POLL_SECONDS={poll_seconds} | BATCH_QUIET_SECONDS={quiet_seconds}")
+    log(f"[INFO] [import_partida] POLL_SECONDS={poll_seconds} | BATCH_QUIET_SECONDS={quiet_seconds} | EXTRACTOR_TIMEOUT_SECONDS={extractor_timeout}")
 
     smtp_cfg: Optional[SmtpCfg] = None
     try:
@@ -179,7 +179,7 @@ def main() -> int:
     status_dir.mkdir(parents=True, exist_ok=True)
     out_root.mkdir(parents=True, exist_ok=True)
 
-    processed_done: set[str] = set()
+    processed_done = set()
 
     while True:
         try:
@@ -201,7 +201,7 @@ def main() -> int:
                 if not is_batch_quiet(batch_dir, quiet_seconds):
                     continue
 
-                # Partida: exactamente 1 PDF
+                # Import Partida: exactamente 1 PDF
                 pdfs = sorted([p for p in batch_dir.glob("*.pdf") if p.is_file()])
                 if len(pdfs) != 1:
                     st.update(
@@ -227,12 +227,11 @@ def main() -> int:
                         "stage": "EXTRACTING",
                         "updated_at": _now_iso(),
                         "processed_files": 0,
-                        "message": "Extrayendo campos y generando XLSX...",
+                        "message": "Extrayendo campos y generando CSV...",
                     }
                 )
                 atomic_write_json(st_file, st)
 
-                # Ejecutar extractor (con args correctos)
                 try:
                     if not extractor.exists():
                         raise RuntimeError(f"Extractor no existe en {extractor} (¿mount /apps en el container?)")
@@ -240,7 +239,11 @@ def main() -> int:
                     cmd = [sys.executable, str(extractor), str(pdf_path), str(out_dir)]
                     log(f"[INFO] [import_partida] run: {' '.join(cmd)}")
 
-                    r = subprocess.run(cmd, capture_output=True, text=True)
+                    try:
+                        r = subprocess.run(cmd, capture_output=True, text=True, timeout=extractor_timeout)
+                    except subprocess.TimeoutExpired:
+                        raise RuntimeError(f"extractor timeout después de {extractor_timeout}s")
+
                     if r.stdout:
                         log(f"[INFO] [import_partida] extractor stdout:\n{r.stdout.strip()}")
                     if r.stderr:
@@ -249,8 +252,8 @@ def main() -> int:
                     if r.returncode != 0:
                         raise RuntimeError(f"extractor devolvió rc={r.returncode}")
 
-                    # Validar salida
-                    xlsx_path = pick_single_xlsx(out_dir)
+                    # Validar salida CSV
+                    csv_path = pick_single_csv(out_dir)
 
                     st.update(
                         {
@@ -258,20 +261,19 @@ def main() -> int:
                             "stage": "EMAILING" if smtp_cfg else "DONE",
                             "updated_at": _now_iso(),
                             "processed_files": 1,
-                            "message": "XLSX generado. Enviando email..." if smtp_cfg else "XLSX generado (email deshabilitado).",
+                            "message": "CSV generado. Enviando email..." if smtp_cfg else "CSV generado (email deshabilitado).",
                         }
                     )
                     atomic_write_json(st_file, st)
 
-                    # Email (si hay SMTP)
                     if smtp_cfg:
-                        subject = f"[DEV] Partida - {batch_id}"
+                        subject = f"Import Partida - {batch_id}"
                         body = (
-                            f"Se ha generado el XLSX para el batch {batch_id}.\n\n"
+                            f"Se ha generado el CSV para el batch {batch_id}.\n\n"
                             f"PDF: {pdf_path.name}\n"
-                            f"XLSX: {xlsx_path.name}\n"
+                            f"CSV: {csv_path.name}\n"
                         )
-                        send_email_with_attachment(smtp_cfg, subject, body, xlsx_path)
+                        send_email_with_csv(smtp_cfg, subject, body, csv_path)
 
                         st.update(
                             {
@@ -282,7 +284,6 @@ def main() -> int:
                         )
                         atomic_write_json(st_file, st)
 
-                    # DONE
                     st.update(
                         {
                             "state": "DONE",
