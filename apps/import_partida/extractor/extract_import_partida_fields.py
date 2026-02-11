@@ -133,25 +133,25 @@ def extract_fields(text: str) -> Dict[str, Any]:
         labels=["Port of Loading", "PORT OF LOADING", "P.O.L.", "POL"],
     ) or ""
     port_loading = clean_one_line(port_loading)
-    # 👇 lo quieres con punto final SIEMPRE
-    if port_loading and not port_loading.endswith("."):
-        port_loading = port_loading + "."
 
     port_discharge = line_value_after_label(
         text,
         labels=["Port of Discharge", "PORT OF DISCHARGE", "P.O.D.", "POD"],
     ) or ""
-    # 👇 lo quieres sin ':' ni '.' al final
-    port_discharge = strip_trailing_punct(clean_one_line(port_discharge))
+    port_discharge = clean_one_line(port_discharge)
 
     container_no = first_match(text, r"\b(MRSU\d{7,})\b") or ""
 
-    packages = first_match(text, r"(?im)Said to Contain\s+(\d+)\s+PACKAGES") or ""
+    # Extract packages with "PACKAGES" suffix
+    packages = first_match(text, r"(?im)Said to Contain\s+([\d,]+\s+PACKAGES)") or ""
     if not packages:
-        packages = first_match(text, r"(?im)\b(\d+)\s+PACKAGES\b") or ""
+        packages = first_match(text, r"(?im)\b([\d,]+\s+PACKAGES)\b") or ""
 
-    weight_kgs = first_match(text, r"(?im)\b(\d+(?:[.,]\d+)?)\s*KGS\b") or ""
-    measurement_cbm = first_match(text, r"(?im)\b(\d+(?:[.,]\d+)?)\s*CBM\b") or ""
+    # Extract weight with "KGS" suffix
+    weight_kgs = first_match(text, r"(?im)\b([\d,.]+\s*KGS)\b") or ""
+    
+    # Extract measurement with "CBM" suffix
+    measurement_cbm = first_match(text, r"(?im)\b([\d,.]+\s*CBM)\b") or ""
 
     return {
         "bl_no": bl_no,
@@ -170,16 +170,16 @@ def extract_fields(text: str) -> Dict[str, Any]:
 def get_headers_and_values(fields: Dict[str, Any]) -> tuple[list[str], list[str]]:
     """Returns the headers and values for output files."""
     headers = [
-        "B/L No.",
-        "Shipper",
-        "Consignee",
-        "Vessel",
-        "Port of Loading",
-        "Port of Discharge",
-        "Contain",
-        "Weight",
-        "Measurement",
-        "MRSU",
+        "bl_no",
+        "shipper",
+        "consignee",
+        "vessel",
+        "port_of_loading",
+        "port_of_discharge",
+        "contain",
+        "weight",
+        "measurement",
+        "mrsu",
     ]
     values = [
         fields.get("bl_no", ""),
@@ -202,8 +202,16 @@ def write_csv(out_path: Path, fields: Dict[str, Any]) -> None:
     
     with open(out_path, "w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
+        # Write headers without quotes
         writer.writerow(headers)
-        writer.writerow(values)
+        # Write values with selective quoting
+        # Build the row manually to control quoting
+        formatted_row = values[0]  # bl_no without quotes
+        for val in values[1:-1]:  # middle values with quotes
+            formatted_row += ',"' + str(val) + '"'
+        formatted_row += ',' + values[-1]  # mrsu without quotes
+        # Use the writer to ensure consistent line endings
+        f.write(formatted_row + '\r\n')
 
 
 def write_xlsx(out_path: Path, fields: Dict[str, Any]) -> None:

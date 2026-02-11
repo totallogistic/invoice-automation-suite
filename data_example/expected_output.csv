@@ -1,2 +1,2 @@
-B/L No.,Shipper,Consignee,Vessel,Port of Loading,Port of Discharge,Contain,Weight,Measurement,MRSU
-26XH009BL,ABC SHIPPING CO LTD 123 MAIN STREET CITY COUNTRY,XYZ IMPORTS INC,MSC MEDITERRANEAN,SHANGHAI CHINA.,LONG BEACH USA,100,15000,25.5,MRSU1234567
+bl_no,shipper,consignee,vessel,port_of_loading,port_of_discharge,contain,weight,measurement,mrsu
+NPOS56802,"NINGBO YINZHOU SUNEVER FASHION","ALVARO MORENO RETAIL S.L.U.","BERLIN MAERSK 603W","NINGBO, CHINA","Valencia,Spain","4245 PACKAGES","3310,000 KGS","58,0000 CBM",MRSU5144291
