@@ -1,0 +1,226 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+
+import json
+import re
+import sys
+from pathlib import Path
+from typing import Any, Dict, Optional
+
+import pdfplumber
+from openpyxl import Workbook
+
+
+def die(msg: str, rc: int = 2) -> int:
+    print(msg, file=sys.stderr)
+    return rc
+
+
+def norm(s: str) -> str:
+    s = s.replace("\r", "\n")
+    s = re.sub(r"[ \t]+", " ", s)
+    s = re.sub(r"\n{3,}", "\n\n", s)
+    return s.strip()
+
+
+def read_pdf_text(pdf_path: Path) -> str:
+    chunks = []
+    with pdfplumber.open(str(pdf_path)) as pdf:
+        for page in pdf.pages:
+            chunks.append(page.extract_text() or "")
+    return norm("\n".join(chunks))
+
+
+def first_match(text: str, pattern: str, flags: int = re.IGNORECASE | re.MULTILINE) -> Optional[str]:
+    m = re.search(pattern, text, flags)
+    if not m:
+        return None
+    return (m.group(1) or "").strip()
+
+
+def clean_one_line(s: str) -> str:
+    s = s.strip()
+    s = re.sub(r"\s+", " ", s)
+    return s.strip(" :")  # NO quitamos '.' aquí a propósito
+
+
+def strip_trailing_punct(s: str) -> str:
+    # para Port of Discharge: quitamos ':' y '.' al final
+    return re.sub(r"[.:]+\s*$", "", s.strip())
+
+
+def line_value_after_label(text: str, labels: list[str]) -> Optional[str]:
+    for lab in labels:
+        lab_re = re.escape(lab)
+
+        # mismo renglón: "LABEL: value" o "LABEL value"
+        m = re.search(rf"(?im)^\s*{lab_re}\s*[:\-]?\s*(.+?)\s*$", text)
+        if m:
+            val = clean_one_line(m.group(1))
+            if val and val.lower() != lab.lower():
+                return val
+
+        # valor en la línea siguiente
+        m2 = re.search(rf"(?im)^\s*{lab_re}\s*$\n\s*(.+?)\s*$", text)
+        if m2:
+            val = clean_one_line(m2.group(1))
+            if val:
+                return val
+
+    return None
+
+
+def block_after_label(text: str, label: str, stop_labels: list[str], first_line_only: bool = False) -> Optional[str]:
+    """
+    Extrae bloque tras etiqueta hasta la siguiente etiqueta de parada.
+    Si first_line_only=True, devuelve SOLO la primera línea no vacía del bloque.
+    """
+    stop_re = "|".join([re.escape(x) for x in stop_labels])
+
+    pat = rf"(?is){re.escape(label)}\s*(?:\([^)]*\))?\s*:?\s*\n(.*?)(?:\n(?:{stop_re})\b)"
+    m = re.search(pat, text)
+    if not m:
+        return None
+
+    block_raw = m.group(1)
+
+    # Normaliza líneas (sin destruir estructura antes de sacar primera línea)
+    lines = [ln.strip() for ln in block_raw.splitlines()]
+    lines = [ln for ln in lines if ln]  # quita vacías
+    if not lines:
+        return None
+
+    if first_line_only:
+        return clean_one_line(lines[0])
+
+    # bloque completo en una línea
+    block = " ".join(lines)
+    return clean_one_line(block)
+
+
+def extract_fields(text: str) -> Dict[str, Any]:
+    bl_no = first_match(text, r"\b(NPOS\d{4,})\b") or ""
+
+    shipper = block_after_label(
+        text,
+        "Shipper",
+        stop_labels=["Consignee", "Notify party", "Booking No.", "Export references", "Voyage No.", "Vessel"],
+        first_line_only=False,
+    ) or ""
+
+    # 👇 Consignee: SOLO razón social (primera línea)
+    consignee = block_after_label(
+        text,
+        "Consignee",
+        stop_labels=["Notify party", "Voyage No.", "Vessel", "Port of Loading", "Port of Discharge", "Place of Receipt"],
+        first_line_only=True,
+    ) or ""
+
+    vessel = (
+        first_match(text, r"(?im)^\s*Vessel\s*(?:\([^)]*\))?\s*:?\s*\n\s*([^\n]+)")
+        or first_match(text, r"(?im)^\s*Vessel\s*(?:\([^)]*\))?\s*:?\s*([^\n]+)")
+        or ""
+    )
+    vessel = clean_one_line(vessel)
+
+    port_loading = line_value_after_label(
+        text,
+        labels=["Port of Loading", "PORT OF LOADING", "P.O.L.", "POL"],
+    ) or ""
+    port_loading = clean_one_line(port_loading)
+    # 👇 lo quieres con punto final SIEMPRE
+    if port_loading and not port_loading.endswith("."):
+        port_loading = port_loading + "."
+
+    port_discharge = line_value_after_label(
+        text,
+        labels=["Port of Discharge", "PORT OF DISCHARGE", "P.O.D.", "POD"],
+    ) or ""
+    # 👇 lo quieres sin ':' ni '.' al final
+    port_discharge = strip_trailing_punct(clean_one_line(port_discharge))
+
+    container_no = first_match(text, r"\b(MRSU\d{7,})\b") or ""
+
+    packages = first_match(text, r"(?im)Said to Contain\s+(\d+)\s+PACKAGES") or ""
+    if not packages:
+        packages = first_match(text, r"(?im)\b(\d+)\s+PACKAGES\b") or ""
+
+    weight_kgs = first_match(text, r"(?im)\b(\d+(?:[.,]\d+)?)\s*KGS\b") or ""
+    measurement_cbm = first_match(text, r"(?im)\b(\d+(?:[.,]\d+)?)\s*CBM\b") or ""
+
+    return {
+        "bl_no": bl_no,
+        "shipper": shipper,
+        "consignee": consignee,
+        "vessel": vessel,
+        "port_of_loading": port_loading,
+        "port_of_discharge": port_discharge,
+        "packages": packages,
+        "weight_kgs": weight_kgs,
+        "measurement_cbm": measurement_cbm,
+        "container_no": container_no,
+    }
+
+
+def write_xlsx(out_path: Path, fields: Dict[str, Any]) -> None:
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "import_partida"
+
+    headers = [
+        "B/L No",
+        "Shipper",
+        "Consignee",
+        "Vessel",
+        "Port of Loading",
+        "Port of Discharge",
+        "Packages",
+        "Weight (KGS)",
+        "Measurement (CBM)",
+        "Container (MRSU)",
+    ]
+    ws.append(headers)
+    ws.append(
+        [
+            fields.get("bl_no", ""),
+            fields.get("shipper", ""),
+            fields.get("consignee", ""),
+            fields.get("vessel", ""),
+            fields.get("port_of_loading", ""),
+            fields.get("port_of_discharge", ""),
+            fields.get("packages", ""),
+            fields.get("weight_kgs", ""),
+            fields.get("measurement_cbm", ""),
+            fields.get("container_no", ""),
+        ]
+    )
+    wb.save(str(out_path))
+
+
+def main(argv: list[str]) -> int:
+    if len(argv) != 3:
+        return die("Uso: extract_import_partida_fields.py <input.pdf> <out_dir>")
+
+    pdf_path = Path(argv[1]).expanduser().resolve()
+    out_dir = Path(argv[2]).expanduser().resolve()
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    if not pdf_path.exists():
+        return die(f"ERROR: no existe el PDF: {pdf_path}")
+    if pdf_path.suffix.lower() != ".pdf":
+        return die("ERROR: input no es .pdf")
+
+    text = read_pdf_text(pdf_path)
+    fields = extract_fields(text)
+
+    (out_dir / "extracted.json").write_text(
+        json.dumps(fields, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    write_xlsx(out_dir / "import_partida.xlsx", fields)
+
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main(sys.argv))

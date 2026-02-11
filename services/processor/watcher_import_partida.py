@@ -1,29 +1,22 @@
+#!/usr/bin/env python3
 from __future__ import annotations
 
 import json
 import os
+import smtplib
+import subprocess
+import sys
 import time
+import traceback
+from dataclasses import dataclass
 from datetime import datetime, timezone
+from email.message import EmailMessage
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, List, Optional
 
 
-SERVICE_ROOT = Path(os.getenv("SERVICE_ROOT", "/data"))
-INBOX_DIR = Path(os.getenv("INBOX_DIR", str(SERVICE_ROOT / "import_partida" / "inbox")))
-STATUS_DIR = Path(os.getenv("STATUS_DIR", str(SERVICE_ROOT / "import_partida" / "status")))
-
-POLL_SECONDS = int(os.getenv("POLL_SECONDS", "3"))
-BATCH_QUIET_SECONDS = int(os.getenv("BATCH_QUIET_SECONDS", "5"))  # corto para dev
-
-ALLOWED_EXT = {".pdf"}
-
-
-def now_iso() -> str:
+def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
-
-
-def read_json(path: Path) -> Dict[str, Any]:
-    return json.loads(path.read_text(encoding="utf-8"))
 
 
 def atomic_write_json(path: Path, data: Dict[str, Any]) -> None:
@@ -33,92 +26,297 @@ def atomic_write_json(path: Path, data: Dict[str, Any]) -> None:
     tmp.replace(path)
 
 
-def update_status(batch_id: str, **fields: Any) -> None:
-    status_file = STATUS_DIR / batch_id / "status.json"
-    st: Dict[str, Any]
-    if status_file.exists():
-        st = read_json(status_file)
+def read_json(path: Path) -> Dict[str, Any]:
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def log(msg: str) -> None:
+    print(msg, flush=True)
+
+
+@dataclass
+class SmtpCfg:
+    host: str
+    port: int
+    user: str
+    password: str
+    mail_from: str
+    recipients: List[str]
+    use_ssl: bool
+    starttls: bool
+
+
+def load_smtp_cfg() -> SmtpCfg:
+    """
+    Reusa el mismo set de env vars que ya tienes para Lear.
+    """
+    host = os.getenv("SMTP_HOST", "").strip()
+    port = int((os.getenv("SMTP_PORT", "") or "0").strip() or "0")
+    user = os.getenv("SMTP_USER", "").strip()
+    password = os.getenv("SMTP_PASS", "").strip()
+    mail_from = (os.getenv("MAIL_FROM", "") or user).strip()
+
+    mail_to_raw = os.getenv("MAIL_TO", "").strip()
+    recipients = [x.strip() for x in mail_to_raw.replace(";", ",").split(",") if x.strip()]
+
+    use_ssl = (os.getenv("SMTP_SSL", "true").strip().lower() in ("1", "true", "yes", "on"))
+    starttls = (os.getenv("SMTP_STARTTLS", "false").strip().lower() in ("1", "true", "yes", "on"))
+
+    if not host or not port or not recipients:
+        raise RuntimeError(
+            f"SMTP config incompleta. Requiere SMTP_HOST/SMTP_PORT/MAIL_TO. "
+            f"Actualmente: host={host!r} port={port!r} recipients={recipients!r}"
+        )
+
+    return SmtpCfg(
+        host=host,
+        port=port,
+        user=user,
+        password=password,
+        mail_from=mail_from,
+        recipients=recipients,
+        use_ssl=use_ssl,
+        starttls=starttls,
+    )
+
+
+def send_email_with_attachment(
+    cfg: SmtpCfg,
+    subject: str,
+    body: str,
+    attachment_path: Path,
+) -> None:
+    if not attachment_path.exists():
+        raise RuntimeError(f"Adjunto no existe: {attachment_path}")
+
+    msg = EmailMessage()
+    msg["From"] = cfg.mail_from
+    msg["To"] = ", ".join(cfg.recipients)
+    msg["Subject"] = subject
+    msg.set_content(body)
+
+    data = attachment_path.read_bytes()
+    msg.add_attachment(
+        data,
+        maintype="application",
+        subtype="vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        filename=attachment_path.name,
+    )
+
+    if cfg.use_ssl:
+        with smtplib.SMTP_SSL(cfg.host, cfg.port, timeout=30) as s:
+            if cfg.user:
+                s.login(cfg.user, cfg.password)
+            s.send_message(msg)
     else:
-        st = {"batch_id": batch_id}
+        with smtplib.SMTP(cfg.host, cfg.port, timeout=30) as s:
+            s.ehlo()
+            if cfg.starttls:
+                s.starttls()
+                s.ehlo()
+            if cfg.user:
+                s.login(cfg.user, cfg.password)
+            s.send_message(msg)
 
-    st.update(fields)
-    st["updated_at"] = now_iso()
-    atomic_write_json(status_file, st)
 
-
-def is_quiet(dirpath: Path, quiet_seconds: int) -> bool:
-    # evita pillar uploads a medio escribir
-    latest = 0.0
-    for p in dirpath.rglob("*"):
+def is_batch_quiet(batch_dir: Path, quiet_seconds: int) -> bool:
+    """
+    Considera el batch “estable” si no hay cambios en los ficheros en quiet_seconds.
+    """
+    if quiet_seconds <= 0:
+        return True
+    latest_mtime = 0.0
+    for p in batch_dir.rglob("*"):
         if p.is_file():
-            latest = max(latest, p.stat().st_mtime)
-    if latest == 0.0:
-        return False
-    return (time.time() - latest) >= quiet_seconds
+            latest_mtime = max(latest_mtime, p.stat().st_mtime)
+    if latest_mtime == 0.0:
+        return True
+    return (time.time() - latest_mtime) >= quiet_seconds
 
 
-def main() -> None:
-    INBOX_DIR.mkdir(parents=True, exist_ok=True)
-    STATUS_DIR.mkdir(parents=True, exist_ok=True)
+def pick_single_xlsx(out_dir: Path) -> Path:
+    """
+    Devuelve el XLSX generado en out_dir.
+    - Si hay 0 -> error
+    - Si hay >1 -> el más reciente (y log warning)
+    """
+    xlsx = sorted(out_dir.glob("*.xlsx"))
+    if not xlsx:
+        raise RuntimeError(f"Extractor terminó OK pero no generó XLSX en: {out_dir}")
+    if len(xlsx) == 1:
+        return xlsx[0]
+    # Si hay varios, cogemos el más nuevo (por seguridad)
+    xlsx.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+    log(f"[WARN] [import_partida] múltiples XLSX en {out_dir}, usando el más reciente: {xlsx[0].name}")
+    return xlsx[0]
 
-    print(f"[INFO] [import_partida] SERVICE_ROOT={SERVICE_ROOT}")
-    print(f"[INFO] [import_partida] INBOX_DIR={INBOX_DIR}")
-    print(f"[INFO] [import_partida] STATUS_DIR={STATUS_DIR}")
-    print(f"[INFO] [import_partida] POLL_SECONDS={POLL_SECONDS} | BATCH_QUIET_SECONDS={BATCH_QUIET_SECONDS}")
+
+def main() -> int:
+    service_root = Path(os.getenv("SERVICE_ROOT", "/data")).resolve()
+    inbox_dir = Path(os.getenv("INBOX_DIR", str(service_root / "import_partida" / "inbox"))).resolve()
+    status_dir = Path(os.getenv("STATUS_DIR", str(service_root / "import_partida" / "status"))).resolve()
+    out_root = Path(os.getenv("OUT_DIR", str(service_root / "import_partida" / "out"))).resolve()
+
+    poll_seconds = int((os.getenv("POLL_SECONDS", "3") or "3").strip())
+    quiet_seconds = int((os.getenv("BATCH_QUIET_SECONDS", "30") or "30").strip())
+
+    extractor = Path("/apps/import_partida/extractor/extract_import_partida_fields.py")
+
+    log(f"[INFO] [import_partida] SERVICE_ROOT={service_root}")
+    log(f"[INFO] [import_partida] INBOX_DIR={inbox_dir}")
+    log(f"[INFO] [import_partida] STATUS_DIR={status_dir}")
+    log(f"[INFO] [import_partida] OUT_DIR={out_root}")
+    log(f"[INFO] [import_partida] POLL_SECONDS={poll_seconds} | BATCH_QUIET_SECONDS={quiet_seconds}")
+
+    smtp_cfg: Optional[SmtpCfg] = None
+    try:
+        smtp_cfg = load_smtp_cfg()
+        log(f"[INFO] [import_partida] EMAIL enabled | RECIPIENTS={smtp_cfg.recipients}")
+    except Exception as e:
+        log(f"[WARN] [import_partida] EMAIL disabled (SMTP config incomplete): {e}")
+
+    inbox_dir.mkdir(parents=True, exist_ok=True)
+    status_dir.mkdir(parents=True, exist_ok=True)
+    out_root.mkdir(parents=True, exist_ok=True)
+
+    processed_done: set[str] = set()
 
     while True:
         try:
-            batch_dirs = sorted([p for p in INBOX_DIR.iterdir() if p.is_dir()])
-            for bdir in batch_dirs:
-                batch_id = bdir.name
-                status_file = STATUS_DIR / batch_id / "status.json"
-
-                # Solo procesar si hay status y está en WAITING/UPLOADED
-                if not status_file.exists():
+            for batch_dir in sorted([p for p in inbox_dir.iterdir() if p.is_dir()]):
+                batch_id = batch_dir.name
+                if batch_id in processed_done:
                     continue
 
-                st = read_json(status_file)
-                state = (st.get("state") or "").upper()
-                stage = (st.get("stage") or "").upper()
-
-                if state in {"DONE", "ERROR"}:
-                    continue
-                if stage not in {"WAITING"}:
+                st_file = status_dir / batch_id / "status.json"
+                if not st_file.exists():
                     continue
 
-                if not is_quiet(bdir, BATCH_QUIET_SECONDS):
+                st = read_json(st_file)
+
+                if st.get("state") in ("DONE", "ERROR"):
+                    processed_done.add(batch_id)
                     continue
 
-                pdfs = [p for p in bdir.iterdir() if p.is_file() and p.suffix.lower() in ALLOWED_EXT]
+                if not is_batch_quiet(batch_dir, quiet_seconds):
+                    continue
+
+                # Import Partida: exactamente 1 PDF
+                pdfs = sorted([p for p in batch_dir.glob("*.pdf") if p.is_file()])
                 if len(pdfs) != 1:
-                    update_status(
-                        batch_id,
-                        state="ERROR",
-                        stage="ERROR",
-                        message=f"Se esperaba exactamente 1 PDF en el batch, pero hay {len(pdfs)}.",
+                    st.update(
+                        {
+                            "state": "ERROR",
+                            "stage": "ERROR",
+                            "updated_at": _now_iso(),
+                            "message": f"ERROR: se esperaba exactamente 1 PDF en el batch. Encontrados: {len(pdfs)}",
+                        }
                     )
+                    atomic_write_json(st_file, st)
+                    processed_done.add(batch_id)
                     continue
 
-                # Marcamos EXTRACTING (stub)
-                update_status(batch_id, state="RUNNING", stage="EXTRACTING", message="Procesando (stub watcher)...")
+                pdf_path = pdfs[0]
+                out_dir = out_root / batch_id
+                out_dir.mkdir(parents=True, exist_ok=True)
 
-                # STUB: aquí luego llamaremos al extractor y generaremos el XLSX
-                time.sleep(0.5)
-
-                # Marcamos DONE (stub)
-                update_status(
-                    batch_id,
-                    state="DONE",
-                    stage="DONE",
-                    processed_files=1,
-                    message="Procesado OK (stub). Próximo paso: generar XLSX y email.",
+                # RUNNING
+                st.update(
+                    {
+                        "state": "RUNNING",
+                        "stage": "EXTRACTING",
+                        "updated_at": _now_iso(),
+                        "processed_files": 0,
+                        "message": "Extrayendo campos y generando XLSX...",
+                    }
                 )
+                atomic_write_json(st_file, st)
 
-        except Exception as e:
-            print(f"[ERROR] [import_partida] loop error: {e}")
+                # Ejecutar extractor (con args correctos)
+                try:
+                    if not extractor.exists():
+                        raise RuntimeError(f"Extractor no existe en {extractor} (¿mount /apps en el container?)")
 
-        time.sleep(POLL_SECONDS)
+                    cmd = [sys.executable, str(extractor), str(pdf_path), str(out_dir)]
+                    log(f"[INFO] [import_partida] run: {' '.join(cmd)}")
+
+                    r = subprocess.run(cmd, capture_output=True, text=True)
+                    if r.stdout:
+                        log(f"[INFO] [import_partida] extractor stdout:\n{r.stdout.strip()}")
+                    if r.stderr:
+                        log(f"[WARN] [import_partida] extractor stderr:\n{r.stderr.strip()}")
+
+                    if r.returncode != 0:
+                        raise RuntimeError(f"extractor devolvió rc={r.returncode}")
+
+                    # Validar salida
+                    xlsx_path = pick_single_xlsx(out_dir)
+
+                    st.update(
+                        {
+                            "state": "RUNNING",
+                            "stage": "EMAILING" if smtp_cfg else "DONE",
+                            "updated_at": _now_iso(),
+                            "processed_files": 1,
+                            "message": "XLSX generado. Enviando email..." if smtp_cfg else "XLSX generado (email deshabilitado).",
+                        }
+                    )
+                    atomic_write_json(st_file, st)
+
+                    # Email (si hay SMTP)
+                    if smtp_cfg:
+                        subject = f"[DEV] Import Partida - {batch_id}"
+                        body = (
+                            f"Se ha generado el XLSX para el batch {batch_id}.\n\n"
+                            f"PDF: {pdf_path.name}\n"
+                            f"XLSX: {xlsx_path.name}\n"
+                        )
+                        send_email_with_attachment(smtp_cfg, subject, body, xlsx_path)
+
+                        st.update(
+                            {
+                                "recipients": smtp_cfg.recipients,
+                                "updated_at": _now_iso(),
+                                "message": "Email enviado correctamente.",
+                            }
+                        )
+                        atomic_write_json(st_file, st)
+
+                    # DONE
+                    st.update(
+                        {
+                            "state": "DONE",
+                            "stage": "DONE",
+                            "updated_at": _now_iso(),
+                            "processed_files": 1,
+                            "message": "Procesado OK.",
+                        }
+                    )
+                    atomic_write_json(st_file, st)
+                    processed_done.add(batch_id)
+
+                except Exception as e:
+                    msg = f"ERROR: {e}"
+                    log(f"[ERROR] [import_partida] {msg}")
+                    log(traceback.format_exc())
+
+                    st.update(
+                        {
+                            "state": "ERROR",
+                            "stage": "ERROR",
+                            "updated_at": _now_iso(),
+                            "message": msg,
+                        }
+                    )
+                    atomic_write_json(st_file, st)
+                    processed_done.add(batch_id)
+
+        except Exception:
+            log("[ERROR] [import_partida] loop exception")
+            log(traceback.format_exc())
+
+        time.sleep(poll_seconds)
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())
