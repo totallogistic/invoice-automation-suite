@@ -86,12 +86,30 @@ services:
     volumes:
       - ${DATA_ROOT:-${STACK_ROOT:-/data/ias_prod}/data}/import_partida:/data
 
+  tui_json_form:
+    build:
+      context: ./services/tui_json_form
+    container_name: ${COMPOSE_PROJECT_NAME:-ias}_tui_json_form
+    restart: unless-stopped
+    environment:
+      - TZ=Europe/Madrid
+    volumes:
+      # scripts + schema (solo lectura)
+      - ./tui_json_form.py:/apps/tui_json_form/tui_json_form.py:ro
+      - ./eu_customs_clearance_dossier_flat.schema.json:/apps/tui_json_form/eu_customs_clearance_dossier_flat.schema.json:ro
+
+      # salida persistente (por env)
+      - ${DATA_ROOT:-${STACK_ROOT:-/data/ias_prod}/data}/forms:/data/forms
+    networks:
+      - default
+
   tools_web:
     image: nginx:alpine
     restart: unless-stopped
     depends_on:
       - api_lear_cable
       - api_import_partida
+      - tui_json_form
 
     ports:
       - "${TOOLS_WEB_PORT:-8081}:80"
