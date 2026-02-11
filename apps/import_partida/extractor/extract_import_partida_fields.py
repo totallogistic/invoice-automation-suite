@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import csv
 import json
 import re
 import sys
@@ -162,38 +163,54 @@ def extract_fields(text: str) -> Dict[str, Any]:
     }
 
 
-def write_xlsx(out_path: Path, fields: Dict[str, Any]) -> None:
-    wb = Workbook()
-    ws = wb.active
-    ws.title = "import_partida"
-
+def get_headers_and_values(fields: Dict[str, Any]) -> tuple[list[str], list[str]]:
+    """Returns the headers and values for output files."""
     headers = [
-        "B/L No",
+        "B/L No.",
         "Shipper",
         "Consignee",
         "Vessel",
         "Port of Loading",
         "Port of Discharge",
-        "Packages",
-        "Weight (KGS)",
-        "Measurement (CBM)",
-        "Container (MRSU)",
+        "Contain",
+        "Weight",
+        "Measurement",
+        "MRSU",
     ]
+    values = [
+        fields.get("bl_no", ""),
+        fields.get("shipper", ""),
+        fields.get("consignee", ""),
+        fields.get("vessel", ""),
+        fields.get("port_of_loading", ""),
+        fields.get("port_of_discharge", ""),
+        fields.get("packages", ""),
+        fields.get("weight_kgs", ""),
+        fields.get("measurement_cbm", ""),
+        fields.get("container_no", ""),
+    ]
+    return headers, values
+
+
+def write_csv(out_path: Path, fields: Dict[str, Any]) -> None:
+    """Write extracted fields to CSV file."""
+    headers, values = get_headers_and_values(fields)
+    
+    with open(out_path, "w", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+        writer.writerow(headers)
+        writer.writerow(values)
+
+
+def write_xlsx(out_path: Path, fields: Dict[str, Any]) -> None:
+    """Write extracted fields to XLSX file."""
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "import_partida"
+
+    headers, values = get_headers_and_values(fields)
     ws.append(headers)
-    ws.append(
-        [
-            fields.get("bl_no", ""),
-            fields.get("shipper", ""),
-            fields.get("consignee", ""),
-            fields.get("vessel", ""),
-            fields.get("port_of_loading", ""),
-            fields.get("port_of_discharge", ""),
-            fields.get("packages", ""),
-            fields.get("weight_kgs", ""),
-            fields.get("measurement_cbm", ""),
-            fields.get("container_no", ""),
-        ]
-    )
+    ws.append(values)
     wb.save(str(out_path))
 
 
@@ -217,6 +234,7 @@ def main(argv: list[str]) -> int:
         json.dumps(fields, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
+    write_csv(out_dir / "import_partida.csv", fields)
     write_xlsx(out_dir / "import_partida.xlsx", fields)
 
     return 0
