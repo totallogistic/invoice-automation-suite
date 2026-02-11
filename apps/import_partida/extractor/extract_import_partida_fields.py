@@ -1,226 +1,229 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import csv
 import json
 import re
 import sys
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Dict, List, Optional
 
 import pdfplumber
-from openpyxl import Workbook
 
 
-def die(msg: str, rc: int = 2) -> int:
-    print(msg, file=sys.stderr)
-    return rc
+def die(msg: str, code: int = 2) -> int:
+    print(msg, file=sys.stderr, flush=True)
+    return code
 
 
-def norm(s: str) -> str:
-    s = s.replace("\r", "\n")
-    s = re.sub(r"[ \t]+", " ", s)
-    s = re.sub(r"\n{3,}", "\n\n", s)
+def read_pdf_lines(pdf_path: Path) -> List[str]:
+    lines: List[str] = []
+    with pdfplumber.open(str(pdf_path)) as pdf:
+        for page in pdf.pages:
+            txt = page.extract_text() or ""
+            for ln in txt.splitlines():
+                ln = ln.rstrip()
+                if ln.strip():
+                    lines.append(ln)
+    return lines
+
+
+def find_first_regex(text: str, patterns: List[str], flags: int = re.IGNORECASE) -> str:
+    for pat in patterns:
+        m = re.search(pat, text, flags)
+        if m:
+            return (m.group(1) or "").strip()
+    return ""
+
+
+def next_nonempty_line(lines: List[str], idx: int) -> str:
+    for j in range(idx + 1, min(idx + 8, len(lines))):
+        if lines[j].strip():
+            return lines[j].strip()
+    return ""
+
+
+def collect_block_until(lines: List[str], start_idx: int, stop_regex: str, max_lines: int = 6) -> List[str]:
+    out: List[str] = []
+    for j in range(start_idx + 1, min(start_idx + 1 + max_lines, len(lines))):
+        if re.search(stop_regex, lines[j], re.IGNORECASE):
+            break
+        if lines[j].strip():
+            out.append(lines[j].strip())
+    return out
+
+
+def clean_company(s: str) -> str:
+    s = s.strip()
+    # Quita dobles espacios
+    s = re.sub(r"\s+", " ", s)
+    # Quita puntuación final típica
+    s = s.rstrip(" .,:;")
     return s.strip()
 
 
-def read_pdf_text(pdf_path: Path) -> str:
-    chunks = []
-    with pdfplumber.open(str(pdf_path)) as pdf:
-        for page in pdf.pages:
-            chunks.append(page.extract_text() or "")
-    return norm("\n".join(chunks))
-
-
-def first_match(text: str, pattern: str, flags: int = re.IGNORECASE | re.MULTILINE) -> Optional[str]:
-    m = re.search(pattern, text, flags)
-    if not m:
-        return None
-    return (m.group(1) or "").strip()
-
-
-def clean_one_line(s: str) -> str:
-    s = s.strip()
-    s = re.sub(r"\s+", " ", s)
-    return s.strip(" :")  # NO quitamos '.' aquí a propósito
-
-
-def strip_trailing_punct(s: str) -> str:
-    # para Port of Discharge: quitamos ':' y '.' al final
-    return re.sub(r"[.:]+\s*$", "", s.strip())
-
-
-def line_value_after_label(text: str, labels: list[str]) -> Optional[str]:
-    for lab in labels:
-        lab_re = re.escape(lab)
-
-        # mismo renglón: "LABEL: value" o "LABEL value"
-        m = re.search(rf"(?im)^\s*{lab_re}\s*[:\-]?\s*(.+?)\s*$", text)
-        if m:
-            val = clean_one_line(m.group(1))
-            if val and val.lower() != lab.lower():
-                return val
-
-        # valor en la línea siguiente
-        m2 = re.search(rf"(?im)^\s*{lab_re}\s*$\n\s*(.+?)\s*$", text)
-        if m2:
-            val = clean_one_line(m2.group(1))
-            if val:
-                return val
-
-    return None
-
-
-def block_after_label(text: str, label: str, stop_labels: list[str], first_line_only: bool = False) -> Optional[str]:
+def extract_ports_from_layout(lines: List[str]) -> Dict[str, str]:
     """
-    Extrae bloque tras etiqueta hasta la siguiente etiqueta de parada.
-    Si first_line_only=True, devuelve SOLO la primera línea no vacía del bloque.
+    En este PDF concreto, aparece una línea:
+      "Port of Loading Port of Discharge ..."
+    y en la siguiente línea los valores:
+      "NINGBO, CHINA Valencia,Spain"
     """
-    stop_re = "|".join([re.escape(x) for x in stop_labels])
+    pol = ""
+    pod = ""
 
-    pat = rf"(?is){re.escape(label)}\s*(?:\([^)]*\))?\s*:?\s*\n(.*?)(?:\n(?:{stop_re})\b)"
-    m = re.search(pat, text)
-    if not m:
-        return None
+    for i, ln in enumerate(lines):
+        if ("Port of Loading" in ln) and ("Port of Discharge" in ln):
+            vals = next_nonempty_line(lines, i)
+            if not vals:
+                break
 
-    block_raw = m.group(1)
+            # Si hay separación clara por múltiples espacios, úsala
+            parts = re.split(r"\s{2,}", vals.strip())
+            if len(parts) >= 2:
+                pol = parts[0].strip()
+                pod = parts[1].strip().rstrip(":")
+                break
 
-    # Normaliza líneas (sin destruir estructura antes de sacar primera línea)
-    lines = [ln.strip() for ln in block_raw.splitlines()]
-    lines = [ln for ln in lines if ln]  # quita vacías
-    if not lines:
-        return None
+            # Si NO hay separación clara: heurística (como en tu ejemplo)
+            # "NINGBO, CHINA Valencia,Spain" -> pol="NINGBO, CHINA" pod="Valencia,Spain"
+            m = re.match(r"^(?P<pol>.+?)\s+(?P<pod>[A-Z][A-Za-z].+)$", vals.strip())
+            if m:
+                pol = (m.group("pol") or "").strip()
+                pod = (m.group("pod") or "").strip()
+                pod = pod.rstrip(":")
+                break
 
-    if first_line_only:
-        return clean_one_line(lines[0])
-
-    # bloque completo en una línea
-    block = " ".join(lines)
-    return clean_one_line(block)
-
-
-def extract_fields(text: str) -> Dict[str, Any]:
-    bl_no = first_match(text, r"\b(NPOS\d{4,})\b") or ""
-
-    shipper = block_after_label(
-        text,
-        "Shipper",
-        stop_labels=["Consignee", "Notify party", "Booking No.", "Export references", "Voyage No.", "Vessel"],
-        first_line_only=False,
-    ) or ""
-
-    # 👇 Consignee: SOLO razón social (primera línea)
-    consignee = block_after_label(
-        text,
-        "Consignee",
-        stop_labels=["Notify party", "Voyage No.", "Vessel", "Port of Loading", "Port of Discharge", "Place of Receipt"],
-        first_line_only=True,
-    ) or ""
-
-    vessel = (
-        first_match(text, r"(?im)^\s*Vessel\s*(?:\([^)]*\))?\s*:?\s*\n\s*([^\n]+)")
-        or first_match(text, r"(?im)^\s*Vessel\s*(?:\([^)]*\))?\s*:?\s*([^\n]+)")
-        or ""
-    )
-    vessel = clean_one_line(vessel)
-
-    port_loading = line_value_after_label(
-        text,
-        labels=["Port of Loading", "PORT OF LOADING", "P.O.L.", "POL"],
-    ) or ""
-    port_loading = clean_one_line(port_loading)
-    # 👇 lo quieres con punto final SIEMPRE
-    if port_loading and not port_loading.endswith("."):
-        port_loading = port_loading + "."
-
-    port_discharge = line_value_after_label(
-        text,
-        labels=["Port of Discharge", "PORT OF DISCHARGE", "P.O.D.", "POD"],
-    ) or ""
-    # 👇 lo quieres sin ':' ni '.' al final
-    port_discharge = strip_trailing_punct(clean_one_line(port_discharge))
-
-    container_no = first_match(text, r"\b(MRSU\d{7,})\b") or ""
-
-    packages = first_match(text, r"(?im)Said to Contain\s+(\d+)\s+PACKAGES") or ""
-    if not packages:
-        packages = first_match(text, r"(?im)\b(\d+)\s+PACKAGES\b") or ""
-
-    weight_kgs = first_match(text, r"(?im)\b(\d+(?:[.,]\d+)?)\s*KGS\b") or ""
-    measurement_cbm = first_match(text, r"(?im)\b(\d+(?:[.,]\d+)?)\s*CBM\b") or ""
+            # Fallback: si no logramos separar, al menos volcamos todo en loading
+            pol = vals.strip()
+            pod = ""
+            break
 
     return {
-        "bl_no": bl_no,
-        "shipper": shipper,
-        "consignee": consignee,
-        "vessel": vessel,
-        "port_of_loading": port_loading,
-        "port_of_discharge": port_discharge,
-        "packages": packages,
-        "weight_kgs": weight_kgs,
-        "measurement_cbm": measurement_cbm,
-        "container_no": container_no,
+        "port_of_loading": clean_company(pol),
+        "port_of_discharge": clean_company(pod),
     }
 
 
-def write_xlsx(out_path: Path, fields: Dict[str, Any]) -> None:
-    wb = Workbook()
-    ws = wb.active
-    ws.title = "import_partida"
-
-    headers = [
-        "B/L No",
-        "Shipper",
-        "Consignee",
-        "Vessel",
-        "Port of Loading",
-        "Port of Discharge",
-        "Packages",
-        "Weight (KGS)",
-        "Measurement (CBM)",
-        "Container (MRSU)",
-    ]
-    ws.append(headers)
-    ws.append(
-        [
-            fields.get("bl_no", ""),
-            fields.get("shipper", ""),
-            fields.get("consignee", ""),
-            fields.get("vessel", ""),
-            fields.get("port_of_loading", ""),
-            fields.get("port_of_discharge", ""),
-            fields.get("packages", ""),
-            fields.get("weight_kgs", ""),
-            fields.get("measurement_cbm", ""),
-            fields.get("container_no", ""),
-        ]
-    )
-    wb.save(str(out_path))
-
-
-def main(argv: list[str]) -> int:
-    if len(argv) != 3:
+def main() -> int:
+    if len(sys.argv) != 3:
         return die("Uso: extract_import_partida_fields.py <input.pdf> <out_dir>")
 
-    pdf_path = Path(argv[1]).expanduser().resolve()
-    out_dir = Path(argv[2]).expanduser().resolve()
-    out_dir.mkdir(parents=True, exist_ok=True)
+    pdf_path = Path(sys.argv[1]).expanduser().resolve()
+    out_dir = Path(sys.argv[2]).expanduser().resolve()
 
     if not pdf_path.exists():
-        return die(f"ERROR: no existe el PDF: {pdf_path}")
-    if pdf_path.suffix.lower() != ".pdf":
-        return die("ERROR: input no es .pdf")
+        return die(f"ERROR: PDF no existe: {pdf_path}")
 
-    text = read_pdf_text(pdf_path)
-    fields = extract_fields(text)
+    out_dir.mkdir(parents=True, exist_ok=True)
 
+    lines = read_pdf_lines(pdf_path)
+    full_text = "\n".join(lines)
+
+    # 1) B/L No.
+    bl_no = find_first_regex(
+        full_text,
+        [
+            r"\bB/L\s*No\.?\s*([A-Z0-9]+)\b",
+            r"\bB\/L\s*No\.?\s*([A-Z0-9]+)\b",
+        ],
+        flags=re.IGNORECASE,
+    )
+
+    # 2) Vessel
+    vessel = find_first_regex(
+        full_text,
+        [
+            r"\bVessel\s*([^\n]+)",
+        ],
+        flags=re.IGNORECASE,
+    )
+    vessel = clean_company(vessel)
+
+    # 3) Shipper: en este PDF el valor viene en la línea siguiente a "Shipper"
+    shipper = ""
+    for i, ln in enumerate(lines):
+        if re.search(r"\bShipper\b", ln, re.IGNORECASE):
+            v = next_nonempty_line(lines, i)
+            if v:
+                # La misma línea suele traer el Booking/BL al final: "... NPOS56802"
+                if bl_no and v.endswith(bl_no):
+                    v = v[: -len(bl_no)].strip()
+                shipper = clean_company(v)
+            break
+
+    # 4) Consignee: en tu PDF viene con el prefijo “As principal, where …)”
+    consignee = ""
+    for i, ln in enumerate(lines):
+        if re.search(r"\bConsignee\b", ln, re.IGNORECASE):
+            block = collect_block_until(lines, i, stop_regex=r"\bVessel\b", max_lines=6)
+            joined = " ".join(block)
+            joined = re.sub(r"\s+", " ", joined).strip()
+
+            # Si hay un ") ..." nos quedamos con lo que va después
+            if ")" in joined:
+                joined = joined.split(")")[-1].strip()
+
+            # Quita el prefijo exacto que te está ensuciando (más robusto)
+            joined = re.sub(
+                r"^As principal, where\s+“care of”,\s+“c/o”,\s+or other variants used\.\)\s*",
+                "",
+                joined,
+                flags=re.IGNORECASE,
+            )
+
+            consignee = clean_company(joined)
+            break
+
+    # 5) Ports (layout)
+    ports = extract_ports_from_layout(lines)
+
+    # 6) Contain / Weight / Measurement / MRSU
+    contain = find_first_regex(full_text, [r"\b(\d+\s+PACKAGES)\b"], flags=re.IGNORECASE)
+    weight = find_first_regex(full_text, [r"\b(\d[\d.,]*\s*KGS)\b"], flags=re.IGNORECASE)
+    measurement = find_first_regex(full_text, [r"\b(\d[\d.,]*\s*CBM)\b"], flags=re.IGNORECASE)
+    mrsu = find_first_regex(full_text, [r"\b(MRSU\d+)\b"], flags=re.IGNORECASE)
+
+    data = {
+        "bl_no": clean_company(bl_no),
+        "shipper": clean_company(shipper),
+        "consignee": clean_company(consignee),
+        "vessel": clean_company(vessel),
+        "port_of_loading": clean_company(ports.get("port_of_loading", "")),
+        "port_of_discharge": clean_company(ports.get("port_of_discharge", "")),
+        "contain": clean_company(contain),
+        "weight": clean_company(weight),
+        "measurement": clean_company(measurement),
+        "mrsu": clean_company(mrsu),
+    }
+
+    # JSON
     (out_dir / "extracted.json").write_text(
-        json.dumps(fields, ensure_ascii=False, indent=2),
+        json.dumps(data, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
-    write_xlsx(out_dir / "import_partida.xlsx", fields)
+
+    # CSV esperado (delimiter ;)
+    csv_path = out_dir / "import_partida.csv"
+    headers = [
+        "bl_no",
+        "shipper",
+        "consignee",
+        "vessel",
+        "port_of_loading",
+        "port_of_discharge",
+        "contain",
+        "weight",
+        "measurement",
+        "mrsu",
+    ]
+    with csv_path.open("w", encoding="utf-8", newline="") as f:
+        w = csv.DictWriter(f, fieldnames=headers, delimiter=";")
+        w.writeheader()
+        w.writerow({k: data.get(k, "") for k in headers})
 
     return 0
 
 
 if __name__ == "__main__":
-    raise SystemExit(main(sys.argv))
+    raise SystemExit(main())
