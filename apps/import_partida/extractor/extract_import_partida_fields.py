@@ -205,12 +205,14 @@ def write_csv(out_path: Path, fields: Dict[str, Any]) -> None:
         # Write headers without quotes
         writer.writerow(headers)
         # Write values with selective quoting
-        # Build the row manually to control quoting
+        # Build the row manually to control quoting, with proper escaping
         formatted_row = values[0]  # bl_no without quotes
         for val in values[1:-1]:  # middle values with quotes
-            formatted_row += ',"' + str(val) + '"'
+            # Escape any quotes in the value by doubling them
+            escaped_val = str(val).replace('"', '""')
+            formatted_row += ',"' + escaped_val + '"'
         formatted_row += ',' + values[-1]  # mrsu without quotes
-        # Use the writer to ensure consistent line endings
+        # Write with CRLF line ending for consistency
         f.write(formatted_row + '\r\n')
 
 
