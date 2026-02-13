@@ -14,3 +14,11 @@ __pycache__/
 *.bak
 *.old
 *.log
+*bkp*
+*copy*
+.DS_Store
+# Integrity generated runs / diffs
+integrity/runs/
+integrity/compare_out/
+out_compare/
+csv_diff_out/
