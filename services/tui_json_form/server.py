@@ -12,5 +12,6 @@ server = Server(
     CMD,
     host="0.0.0.0",
     port=8000,
+    public_url="/tools/json_form",
 )
 server.serve()
