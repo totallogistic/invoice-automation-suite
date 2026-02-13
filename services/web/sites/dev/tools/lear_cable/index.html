@@ -5,22 +5,40 @@
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <title>[DEV] Totallogistic Tools — Lear Cable</title>
     <style>
-      * { box-sizing: border-box; }
+      * { margin: 0; padding: 0; box-sizing: border-box; }
       body { 
         font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-        padding: 32px 24px;
+        background: #f5f5f5;
+        min-height: 100vh;
+      }
+      header {
+        background: linear-gradient(135deg, #1a4d7e 0%, #2563a8 100%);
+        color: white;
+        padding: 1.5rem;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        position: relative;
+      }
+      header h1 {
+        font-size: 1.5rem;
+        font-weight: 600;
+        letter-spacing: -0.5px;
+      }
+      .env-badge {
+        position: absolute;
+        top: 1rem;
+        right: 1.5rem;
+        background: rgba(16, 185, 129, 0.95);
+        color: white;
+        padding: 0.375rem 0.75rem;
+        border-radius: 4px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        letter-spacing: 0.5px;
+      }
+      main {
         max-width: 960px;
         margin: 0 auto;
-        background: #f8f9fa;
-        color: #212529;
-        line-height: 1.6;
-      }
-      h1 { 
-        font-size: 2rem;
-        font-weight: 600;
-        margin: 0 0 8px;
-        color: #1a1a1a;
-        letter-spacing: -0.02em;
+        padding: 32px 24px;
       }
       p {
         margin: 8px 0;
@@ -28,10 +46,10 @@
       .card { 
         background: white;
         border: 1px solid #e5e7eb;
-        border-radius: 12px;
+        border-radius: 8px;
         padding: 24px;
         margin: 24px 0;
-        box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
       }
       .row { 
         display: flex;
@@ -50,29 +68,20 @@
       }
       input[type="file"]:focus {
         outline: none;
-        border-color: #2563eb;
-        box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+        border-color: #2563a8;
+        box-shadow: 0 0 0 3px rgba(37, 99, 168, 0.1);
       }
       button { 
-        padding: 10px 20px;
-        background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+        padding: 10px 16px;
+        cursor: pointer;
+        background: #2563a8;
         color: white;
         border: none;
         border-radius: 6px;
         font-weight: 500;
-        font-size: 0.95rem;
-        cursor: pointer;
-        transition: all 0.2s ease;
-        box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+        transition: background 0.2s;
       }
-      button:hover {
-        background: linear-gradient(135deg, #1d4ed8 0%, #1e40af 100%);
-        box-shadow: 0 2px 4px 0 rgba(0, 0, 0, 0.1);
-        transform: translateY(-1px);
-      }
-      button:active {
-        transform: translateY(0);
-      }
+      button:hover { background: #1a4d7e; }
       .muted { 
         color: #6b7280;
         font-size: 0.95rem;
@@ -98,12 +107,12 @@
         border-radius: 12px;
       }
       progress::-webkit-progress-value {
-        background: linear-gradient(90deg, #2563eb 0%, #3b82f6 100%);
+        background: linear-gradient(90deg, #2563a8 0%, #3b82f6 100%);
         border-radius: 12px;
         transition: width 0.3s ease;
       }
       progress::-moz-progress-bar {
-        background: linear-gradient(90deg, #2563eb 0%, #3b82f6 100%);
+        background: linear-gradient(90deg, #2563a8 0%, #3b82f6 100%);
         border-radius: 12px;
       }
       .kv { 
@@ -129,20 +138,22 @@
         color: #16a34a;
         font-weight: 500;
       }
-      a {
-        color: #2563eb;
+      .back-link { 
+        display: inline-block;
+        margin-top: 1rem;
+        color: #2563a8;
         text-decoration: none;
         font-weight: 500;
-        transition: color 0.2s ease;
       }
-      a:hover {
-        color: #1d4ed8;
-        text-decoration: underline;
-      }
+      .back-link:hover { text-decoration: underline; }
     </style>
   </head>
   <body>
-    <h1>[DEV] Lear Cable</h1>
+    <header>
+      <div class="env-badge">DEV</div>
+      <h1>Lear Cable</h1>
+    </header>
+    <main>
     <p class="muted">Sube uno o varios archivos PDF, o un ZIP con múltiples PDFs. La página se queda aquí y muestra progreso/estado.</p>
 
     <div class="card">
@@ -183,7 +194,8 @@
       <div id="finalNote" style="margin-top:12px"></div>
     </div>
 
-    <p><a href="/">Volver</a></p>
+    <p><a href="/" class="back-link">← Volver</a></p>
+    </main>
 
     <script>
       const $ = (id) => document.getElementById(id);
@@ -206,12 +218,10 @@
       }
 
       function computePercent(st) {
-        // Si tienes processed_files/total_files real, usamos eso.
         const total = Number(st.total_files || 0);
         const done = Number(st.processed_files || 0);
         if (total > 0) return Math.min(100, Math.round((done / total) * 100));
 
-        // Si no hay granularidad real (extractor batch), aproximamos por stage.
         const stage = (st.stage || "").toUpperCase();
         if (stage === "WAITING") return 5;
         if (stage === "EXTRACTING") return 55;
@@ -280,17 +290,13 @@
           return setUploadMsg("Selecciona uno o más archivos PDF, o un archivo ZIP.", true);
         }
 
-        // Validate file types
         const validExtensions = ['.pdf', '.zip'];
         const hasZip = selectedFiles.some(f => f.name.toLowerCase().endsWith('.zip'));
-        const hasPdf = selectedFiles.some(f => f.name.toLowerCase().endsWith('.pdf'));
         
-        // If multiple files selected, none can be ZIP
         if (selectedFiles.length > 1 && hasZip) {
           return setUploadMsg("Cuando subes múltiples archivos, no puedes incluir ZIP. Sube solo PDFs o un único ZIP.", true);
         }
         
-        // Validate all files have valid extensions
         for (const file of selectedFiles) {
           const fileName = file.name.toLowerCase();
           const isValid = validExtensions.some(ext => fileName.endsWith(ext));
@@ -306,7 +312,6 @@
 
         try {
           const fd = new FormData();
-          // Append all selected files
           selectedFiles.forEach(file => {
             fd.append("files", file, file.name);
           });
