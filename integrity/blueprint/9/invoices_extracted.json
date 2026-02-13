@@ -1,0 +1,83 @@
+[
+  {
+    "file": "02343986.pdf",
+    "invoice_no": "02343986",
+    "pallets": 2,
+    "boxes": 0,
+    "gross_weight": 349.672,
+    "net_weight": 333.6,
+    "total_invoice": 14208.0
+  },
+  {
+    "file": "02343987.pdf",
+    "invoice_no": "02343987",
+    "pallets": 10,
+    "boxes": 0,
+    "gross_weight": 903.204,
+    "net_weight": 774.46,
+    "total_invoice": 23351.96
+  },
+  {
+    "file": "02343988.pdf",
+    "invoice_no": "02343988",
+    "pallets": 16,
+    "boxes": 0,
+    "gross_weight": 1306.156,
+    "net_weight": 1100.5,
+    "total_invoice": 30703.33
+  },
+  {
+    "file": "02344333.pdf",
+    "invoice_no": "02344333",
+    "pallets": 1,
+    "boxes": 0,
+    "gross_weight": 40.86,
+    "net_weight": 37.26,
+    "total_invoice": 1020.6
+  },
+  {
+    "file": "02344491.pdf",
+    "invoice_no": "02344491",
+    "pallets": 6,
+    "boxes": 0,
+    "gross_weight": 816.22,
+    "net_weight": 736.8,
+    "total_invoice": 21654.59
+  },
+  {
+    "file": "02344494.pdf",
+    "invoice_no": "02344494",
+    "pallets": 1,
+    "boxes": 0,
+    "gross_weight": 51.768,
+    "net_weight": 43.368,
+    "total_invoice": 2461.39
+  },
+  {
+    "file": "02344728.pdf",
+    "invoice_no": "02344728",
+    "pallets": 24,
+    "boxes": 0,
+    "gross_weight": 3908.374,
+    "net_weight": 2896.61,
+    "total_invoice": 216882.73
+  },
+  {
+    "file": "02346449.pdf",
+    "invoice_no": "02346449",
+    "pallets": 1,
+    "boxes": 0,
+    "gross_weight": 77.869611,
+    "net_weight": 42.017611,
+    "total_invoice": 1199.75
+  },
+  {
+    "file": "02346450.pdf",
+    "invoice_no": "02346450",
+    "pallets": 2,
+    "boxes": 0,
+    "gross_weight": 248.076,
+    "net_weight": 170.52,
+    "total_invoice": 6543.826
+  }
+]

@@ -1,0 +1,38 @@
+[
+  {
+    "file": "DS307207.pdf",
+    "invoice_no": "DS307207",
+    "pallets": 0,
+    "boxes": 42,
+    "gross_weight": 9023.73,
+    "net_weight": 6734.73,
+    "total_invoice": 196733.86
+  },
+  {
+    "file": "DS307209.pdf",
+    "invoice_no": "DS307209",
+    "pallets": 0,
+    "boxes": 4,
+    "gross_weight": 866.21,
+    "net_weight": 648.21,
+    "total_invoice": 18969.23
+  },
+  {
+    "file": "DS307212.pdf",
+    "invoice_no": "DS307212",
+    "pallets": 2,
+    "boxes": 26,
+    "gross_weight": 5375.203,
+    "net_weight": 3894.203,
+    "total_invoice": 124353.61
+  },
+  {
+    "file": "DS307218.pdf",
+    "invoice_no": "DS307218",
+    "pallets": 1,
+    "boxes": 2,
+    "gross_weight": 532.061,
+    "net_weight": 389.061,
+    "total_invoice": 12495.32
+  }
+]

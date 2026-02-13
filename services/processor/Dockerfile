@@ -11,5 +11,7 @@ RUN pip install --no-cache-dir -r /app/requirements.txt
 
 # Watcher
 COPY watcher.py /app/watcher.py
+COPY watcher_import_partida.py /app/watcher_import_partida.py
+
 
 CMD ["python3", "/app/watcher.py"]
