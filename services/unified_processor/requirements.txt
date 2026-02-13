@@ -1,0 +1,15 @@
+# Core processor requirements
+pyyaml==6.0.1
+
+# Common extractor dependencies
+# (these cover most invoice/PDF processing needs)
+pypdf==3.17.4
+pandas==2.1.4
+openpyxl==3.1.2
+xlsxwriter==3.1.9
+python-dateutil==2.8.2
+pillow==10.1.0
+reportlab==4.0.7
+
+# Add any other dependencies your extractors need
+# Check: apps/*/extractor/requirements.txt

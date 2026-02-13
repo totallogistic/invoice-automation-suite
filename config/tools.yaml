@@ -1,0 +1,48 @@
+# Tool Configuration
+
+data_root: /data
+
+tools:
+  # Lear Cable
+  - name: lear_cable
+    enabled: true
+    display_name: "Lear Cable Invoice Extractor"
+    description: "Extracts data from Lear Cable invoices"
+    
+    extractor:
+      type: python
+      path: /apps/lear_cable/extractor/extract_lear_fields.py
+    
+    input:
+      formats: [pdf]
+      inbox: /data/lear_cable/inbox
+    
+    output:
+      directory: /data/lear_cable/out
+      artifacts:
+        - invoices_extracted.xlsx
+    
+    email:
+      subject_template: "[Lear Cable] Batch {batch_id} processed"
+
+  # Import Partida
+  - name: import_partida
+    enabled: true
+    display_name: "Import Partida Processor"
+    description: "Processes import partida documents"
+    
+    extractor:
+      type: python
+      path: /apps/import_partida/extractor/process.py
+    
+    input:
+      formats: [pdf]
+      inbox: /data/import_partida/inbox
+    
+    output:
+      directory: /data/import_partida/out
+      artifacts:
+        - result.csv
+    
+    email:
+      subject_template: "[Import Partida] Batch {batch_id} ready"

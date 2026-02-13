@@ -22,3 +22,17 @@ integrity/runs/
 integrity/compare_out/
 out_compare/
 csv_diff_out/
+# Environment
+.env
+.env.dev
+.env.prod
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+
+# Data
+/data/
+/tmp/
