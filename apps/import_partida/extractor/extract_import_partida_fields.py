@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
-Import Partida extractor (B/L PDF -> import_partida.csv)
+Import Partida extractor - Multi-format support
+Extracts data from Maersk B/L PDFs (supports multiple template formats)
 
 Usage:
   extract_import_partida_fields.py <input.pdf> <out_dir>
@@ -9,7 +10,6 @@ Outputs in <out_dir>:
   - import_partida.csv
 """
 
-import csv
 import re
 import sys
 from pathlib import Path
@@ -49,23 +49,20 @@ def extract_bl_no(text: str) -> str:
     """Extract B/L number."""
     return extract_field(text, [
         r"B/L No\.\s+([A-Z0-9]+)",
+        r"B/L:\s*([A-Z0-9]+)",
     ])
 
 
 def extract_shipper(text: str) -> str:
-    """Extract shipper name (just the company name, no CO., LTD.)."""
-    # Look for the pattern after "Shipper" and before "CO., LTD."
-    # Line looks like: "NINGBO YINZHOU SUNEVER FASHION NPOS56802"
-    # We need to remove the booking number (which is the BL number)
+    """Extract shipper name (company name only, no CO., LTD.)."""
     lines = text.splitlines()
-    bl_no = extract_bl_no(text)  # Get BL number first to remove it
+    bl_no = extract_bl_no(text)
     
     for i, line in enumerate(lines):
         if "Shipper (As principal" in line:
-            # Next line should be the company name + booking number
             if i + 1 < len(lines):
                 company_line = lines[i + 1].strip()
-                # Remove the BL/booking number
+                # Remove booking/BL number if present
                 if bl_no:
                     company_line = company_line.replace(bl_no, "").strip()
                 # Remove "CO., LTD." and everything after
@@ -76,31 +73,47 @@ def extract_shipper(text: str) -> str:
 
 def extract_consignee(text: str) -> str:
     """Extract consignee name."""
-    # The consignee appears after "As principal, where" line
-    # Expected format: "ALVARO MORENO RETAIL S.L.U."
     lines = text.splitlines()
+    
+    # Format 1: "As principal, where..." followed by company name on same line
     for i, line in enumerate(lines):
-        # Look for the line with "As principal, where" that's part of consignee
-        if "As principal, where" in line and "ALVARO" in line:
-            # Extract the company name from the same line
-            # Line: "As principal, where "care of", "c/o", or other variants used.) ALVARO MORENO RETAIL S.L.U."
-            m = re.search(r'\)\s+([A-Z\s]+S\.L\.U\.)', line)
+        if "As principal, where" in line and ("ALVARO" in line or "NEXO" in line):
+            # Extract company name from same line
+            m = re.search(r'\)\s+([A-Z0-9\s\-]+(?:S\.L\.U\.|S\.L\.))', line)
             if m:
                 return m.group(1).strip()
+    
+    # Format 2: Line starts with company name after Consignee section
+    for i, line in enumerate(lines):
+        if "Consignee (Negotiable" in line:
+            # Check next few lines for company name
+            for j in range(i + 1, min(i + 4, len(lines))):
+                next_line = lines[j].strip()
+                # Look for S.L.U. or S.L.
+                if "S.L.U." in next_line or "S.L." in next_line:
+                    m = re.match(r'^([A-Z0-9\s\-]+(?:S\.L\.U\.|S\.L\.))', next_line)
+                    if m:
+                        return m.group(1).strip()
+    
     return ""
 
 
 def extract_vessel(text: str) -> str:
     """Extract vessel name and voyage number combined."""
-    # Look for "Vessel...BERLIN MAERSK" line
-    # The line after "Vessel (see clause 1 + 19) Voyage No. ..." is "BERLIN MAERSK 603W"
     lines = text.splitlines()
     
+    # Format 1: Line after "Vessel (see clause 1 + 19) Voyage No."
     for i, line in enumerate(lines):
         if "Vessel (see clause 1 + 19)" in line and i + 1 < len(lines):
-            # Next line has the vessel and voyage
             vessel_line = lines[i + 1].strip()
-            # Should be "BERLIN MAERSK 603W"
+            # Should be like "BERLIN MAERSK 603W"
+            return vessel_line
+    
+    # Format 2: Line after "Vessel Voyage No."
+    for i, line in enumerate(lines):
+        if line.startswith("Vessel") and "Voyage No." in line and i + 1 < len(lines):
+            vessel_line = lines[i + 1].strip()
+            # Should be like "BEIJING MAERSK 550W"
             return vessel_line
     
     return ""
@@ -108,21 +121,29 @@ def extract_vessel(text: str) -> str:
 
 def extract_ports(text: str) -> tuple:
     """Extract port of loading and port of discharge."""
-    # Look for lines containing port info
     lines = text.splitlines()
     pol = ""
     pod = ""
     
+    # Format 1: Ports on separate line "NINGBO, CHINA Valencia,Spain"
     for line in lines:
-        if "Port of Loading" in line and "Port of Discharge" in line:
-            # Both on same line
-            continue
-        elif line.startswith("NINGBO, CHINA"):
+        if line.startswith("NINGBO, CHINA"):
             pol = "NINGBO, CHINA"
-            # Next part might be port of discharge
-            parts = line.split()
             if "Valencia,Spain" in line:
                 pod = "Valencia,Spain"
+            break
+    
+    # Format 2: Ports on one line "Shanghai Valencia Madrid"
+    if not pol:
+        for line in lines:
+            # Look for line with multiple cities
+            if "Shanghai" in line and "Valencia" in line:
+                parts = line.split()
+                if "Shanghai" in parts:
+                    pol = "Shanghai"
+                if "Valencia" in parts:
+                    pod = "Valencia"
+                break
     
     return pol, pod
 
@@ -130,8 +151,9 @@ def extract_ports(text: str) -> tuple:
 def extract_contain(text: str) -> str:
     """Extract container/package count."""
     return extract_field(text, [
+        r"(\d+\s+CARTONS)",
         r"(\d+\s+PACKAGES)",
-        r"Said to Contain\s+(\d+\s+PACKAGES)",
+        r"Said to Contain\s+(\d+\s+(?:PACKAGES|CARTONS))",
     ])
 
 
@@ -152,9 +174,10 @@ def extract_measurement(text: str) -> str:
 
 
 def extract_mrsu(text: str) -> str:
-    """Extract MRSU container number."""
+    """Extract container number (MRSU or MSKU prefix)."""
     return extract_field(text, [
         r"\b(MRSU\d{7})\b",
+        r"\b(MSKU\d{7})\b",
     ])
 
 
@@ -242,3 +265,4 @@ def main(argv: list) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main(sys.argv))
+
