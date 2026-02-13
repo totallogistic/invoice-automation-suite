@@ -1,0 +1,136 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "EU Customs Clearance Dossier",
+  "description": "Schema for EU customs clearance dossier form",
+  "type": "object",
+  "properties": {
+    "dossier_number": {
+      "type": "string",
+      "title": "Dossier Number",
+      "description": "Unique identifier for the customs dossier"
+    },
+    "importer_name": {
+      "type": "string",
+      "title": "Importer Name",
+      "description": "Name of the importing company"
+    },
+    "importer_vat": {
+      "type": "string",
+      "title": "Importer VAT Number",
+      "description": "VAT identification number of the importer"
+    },
+    "importer_eori": {
+      "type": "string",
+      "title": "Importer EORI",
+      "description": "Economic Operators Registration and Identification number"
+    },
+    "exporter_name": {
+      "type": "string",
+      "title": "Exporter Name",
+      "description": "Name of the exporting company"
+    },
+    "exporter_country": {
+      "type": "string",
+      "title": "Exporter Country",
+      "description": "Country code of the exporter (ISO 3166-1 alpha-2)"
+    },
+    "invoice_number": {
+      "type": "string",
+      "title": "Invoice Number",
+      "description": "Commercial invoice number"
+    },
+    "invoice_date": {
+      "type": "string",
+      "title": "Invoice Date",
+      "format": "date",
+      "description": "Date of the commercial invoice (YYYY-MM-DD)"
+    },
+    "invoice_amount": {
+      "type": "number",
+      "title": "Invoice Amount",
+      "description": "Total amount on the invoice"
+    },
+    "invoice_currency": {
+      "type": "string",
+      "title": "Invoice Currency",
+      "description": "Currency code (ISO 4217)",
+      "default": "EUR"
+    },
+    "goods_description": {
+      "type": "string",
+      "title": "Goods Description",
+      "description": "Detailed description of the goods"
+    },
+    "hs_code": {
+      "type": "string",
+      "title": "HS Code",
+      "description": "Harmonized System code for the goods"
+    },
+    "origin_country": {
+      "type": "string",
+      "title": "Origin Country",
+      "description": "Country of origin (ISO 3166-1 alpha-2)"
+    },
+    "gross_weight_kg": {
+      "type": "number",
+      "title": "Gross Weight (kg)",
+      "description": "Total gross weight in kilograms"
+    },
+    "net_weight_kg": {
+      "type": "number",
+      "title": "Net Weight (kg)",
+      "description": "Total net weight in kilograms"
+    },
+    "packages_number": {
+      "type": "integer",
+      "title": "Number of Packages",
+      "description": "Total number of packages"
+    },
+    "packages_type": {
+      "type": "string",
+      "title": "Package Type",
+      "description": "Type of packaging (e.g., boxes, pallets)"
+    },
+    "transport_mode": {
+      "type": "string",
+      "title": "Transport Mode",
+      "description": "Mode of transport",
+      "enum": ["Air", "Sea", "Road", "Rail", "Multimodal"]
+    },
+    "bl_awb_number": {
+      "type": "string",
+      "title": "BL/AWB Number",
+      "description": "Bill of Lading or Air Waybill number"
+    },
+    "arrival_date": {
+      "type": "string",
+      "title": "Arrival Date",
+      "format": "date",
+      "description": "Expected or actual arrival date (YYYY-MM-DD)"
+    },
+    "customs_procedure": {
+      "type": "string",
+      "title": "Customs Procedure",
+      "description": "Type of customs procedure"
+    },
+    "incoterm": {
+      "type": "string",
+      "title": "Incoterm",
+      "description": "International Commercial Terms",
+      "enum": ["EXW", "FCA", "CPT", "CIP", "DAP", "DPU", "DDP", "FAS", "FOB", "CFR", "CIF"]
+    },
+    "notes": {
+      "type": "string",
+      "title": "Additional Notes",
+      "description": "Any additional information or remarks"
+    }
+  },
+  "required": [
+    "dossier_number",
+    "importer_name",
+    "importer_vat",
+    "invoice_number",
+    "invoice_date",
+    "goods_description"
+  ]
+}
