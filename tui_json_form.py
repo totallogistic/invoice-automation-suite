@@ -138,12 +138,20 @@ class JSONFormApp(App):
                     if 'enum' in field_spec:
                         options = [(str(opt), str(opt)) for opt in field_spec['enum']]
                         default = field_spec.get('default', '')
-                        select_widget = Select(
-                            options,
-                            value=default if default else None,
-                            id=f"field_{field_name}",
-                            classes="field-input"
-                        )
+                        # Create select widget, only set value if there's a default
+                        if default:
+                            select_widget = Select(
+                                options,
+                                value=default,
+                                id=f"field_{field_name}",
+                                classes="field-input"
+                            )
+                        else:
+                            select_widget = Select(
+                                options,
+                                id=f"field_{field_name}",
+                                classes="field-input"
+                            )
                         self.field_widgets[field_name] = select_widget
                         yield select_widget
                     else:
