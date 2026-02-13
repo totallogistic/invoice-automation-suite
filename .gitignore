@@ -22,3 +22,5 @@ integrity/runs/
 integrity/compare_out/
 out_compare/
 csv_diff_out/
+# Local data directories for testing
+local_data/
