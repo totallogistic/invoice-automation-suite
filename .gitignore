@@ -36,3 +36,6 @@ __pycache__/
 # Data
 /data/
 /tmp/
+
+# Archived old code
+/archive/
