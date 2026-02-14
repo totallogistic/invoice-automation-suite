@@ -33,7 +33,8 @@ tools:
     
     extractor:
       type: python
-      path: /apps/import_partida/extractor/process.py
+      path: /apps/import_partida/extractor/wrapper.py
+
     
     input:
       formats: [pdf]
@@ -42,7 +43,7 @@ tools:
     output:
       directory: /data/import_partida/out
       artifacts:
-        - result.csv
+        - import_partida.csv
     
     email:
       subject_template: "[Import Partida] Batch {batch_id} ready"

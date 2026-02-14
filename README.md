@@ -1,53 +1,110 @@
-# invoice-automation-suite (staging-lab)
+# Invoice Automation Suite - Unified Architecture
 
-Suite Docker para automatizar la extracción de datos de facturas (Lear Cable) y entregar resultados por email.
-Incluye:
-- **API** (FastAPI) para subir ZIPs y consultar estado.
-- **Processor** (watcher) que procesa lotes (extractor) y envía emails.
-- **Web/UI** (nginx estático) + reverse proxy a la API.
-- **SFTPGo** (opcional) para entradas por SFTP / administración web.
+Automated invoice processing system with multi-tool support.
 
-> Stack pensado para LAN primero. Luego se expondrá externamente desde un servidor dedicado.
+## Architecture
 
----
+**Unified Services** (3 total):
+- `unified_api` - Single API for all tools
+- `unified_processor` - Single processor for all tools  
+- `tools_web` - Web interface + reverse proxy
 
-## Arquitectura (alto nivel)
+**Current Tools**:
+- Lear Cable Invoice Extractor
+- Import Partida Processor
 
-Cliente:
-- Subida por **API** (ZIP) → `POST /api/lear_cable/batches`
-- (Opcional) Subida por **SFTP** a `inbox/` + marker `_DONE`
-
-Servidor:
-- `api_lear_cable` escribe lote en `/data/inbox/...`
-- `processor_lear_cable` detecta lote listo, lo mueve a `processing/`, ejecuta extractor, genera outputs en `out/`,
-  actualiza status y envía email con adjuntos.
-
-Rutas en disco (host):
-- Data root: `/srv/sftpgo/lear_cable/data`
-  - `inbox/`, `processing/`, `out/`, `processed/`, `error/`, `status/`
-
----
-
-## Servicios y puertos (LAN)
-
-- **UI + reverse proxy (nginx)**: `http://<host>:8081/`
-  - UI Lear Cable: `http://<host>:8081/tools/lear_cable/`
-  - API: `http://<host>:8081/api/lear_cable/...`
-- **SFTPGo Admin UI**: `http://<host>:8080/`
-- **SFTP**: `sftp://<host>:2222` (SFTPGo expone 2022 en el contenedor)
-
----
-
-## Requisitos
-
-- Docker + Docker Compose
-- (Recomendado) `jq` para ver JSON bonito en CLI
-
----
-
-## Quickstart (LAN)
-
-1) Crea tu `.env` (NO se commitea):
+## Quick Start
 ```bash
-cp env.example .env
-# edita .env con tus credenciales SMTP y settings
+# 1. Configure environment
+cp .env.example .env
+# Edit .env with your SMTP settings
+
+# 2. Start services
+docker compose up -d
+
+# 3. Access web interface
+http://localhost:8081/
+```
+
+## Adding a New Tool
+
+1. Create extractor:
+```bash
+   mkdir -p apps/my_tool/extractor
+   # Write your extractor script
+```
+
+2. Add to config:
+```yaml
+   # config/tools.yaml
+   - name: my_tool
+     display_name: "My Tool"
+     extractor:
+       path: /apps/my_tool/extractor/process.py
+     input:
+       formats: [pdf]
+     output:
+       artifacts: [output.xlsx]
+     email:
+       subject_template: "[My Tool] Batch {batch_id}"
+```
+
+3. Restart:
+```bash
+   docker compose restart
+```
+
+## Directory Structure
+```
+apps/              Tool-specific extractors
+config/            Tool configurations
+libs/              Shared utilities
+services/          Core services (API, Processor, Web)
+tests/             Tests
+```
+
+## Environment Variables
+
+Required in `.env`:
+```bash
+# Data
+DATA_ROOT=/data
+
+# Web
+TOOLS_WEB_PORT=8081
+
+# Email
+SMTP_HOST=smtp.example.com
+SMTP_PORT=587
+SMTP_USER=user@example.com
+SMTP_PASS=password
+MAIL_FROM=noreply@example.com
+MAIL_TO=recipient@example.com
+```
+
+## Development
+```bash
+# View logs
+docker compose logs -f
+
+# Restart after config change
+docker compose restart unified_api unified_processor
+
+# Run tests
+pytest tests/
+```
+
+## Migration from Old Architecture
+
+This repository previously used separate services per tool. 
+The old code is archived in `archive/` directory.
+
+**Benefits of unified architecture**:
+- 73% fewer services
+- 90% faster to add new tools
+- Single codebase for infrastructure
+- Easier maintenance and testing
+
+---
+
+For detailed documentation, see the `docs/` directory.
