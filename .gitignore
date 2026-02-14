@@ -39,3 +39,25 @@ __pycache__/
 
 # Archived old code
 /archive/
+
+# Python build artifacts
+*.egg-info/
+__pycache__/
+*.pyc
+*.pyo
+
+# Environment
+.env
+.env.dev
+.env.prod
+
+# Data
+/data/
+/tmp/
+
+# Archive (old code)
+/archive/
+
+# Temp files
+current_services.txt
+*.tmp
