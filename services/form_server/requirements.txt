@@ -1,3 +1,0 @@
-textual>=0.47.0
-textual-serve>=1.0.0
-jsonschema>=4.20.0

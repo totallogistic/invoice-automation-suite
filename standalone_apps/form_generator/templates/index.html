@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JSON Schema Form Generator</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <header>
+        <h1>📋 JSON Schema Form Generator</h1>
+        <p class="description">Selecciona un formulario para comenzar</p>
+    </header>
+
+    <main>
+        <div class="schema-list">
+            {% if schemas %}
+                {% for schema in schemas %}
+                <a href="/form/{{ schema.name }}" class="schema-card">
+                    <h2>{{ schema.title }}</h2>
+                    <p>{{ schema.description }}</p>
+                    <span class="schema-name">{{ schema.name }}</span>
+                </a>
+                {% endfor %}
+            {% else %}
+                <div class="empty-state">
+                    <p>No hay schemas disponibles.</p>
+                    <p class="muted">Añade archivos .json en el directorio <code>schemas/</code></p>
+                </div>
+            {% endif %}
+        </div>
+    </main>
+
+    <footer>
+        <p>Generador Universal de Formularios | FastAPI + JSON Schema</p>
+    </footer>
+</body>
+</html>
