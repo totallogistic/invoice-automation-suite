@@ -1,0 +1,30 @@
+[Unit]
+Description=JSON Schema Form Generator
+After=network.target
+Documentation=https://github.com/totallogistic/invoice-automation-suite
+
+[Service]
+Type=simple
+User={{USER}}
+WorkingDirectory={{APP_DIR}}
+ExecStart={{PYTHON_CMD}} {{APP_DIR}}/app.py
+
+# Restart policy
+Restart=always
+RestartSec=10
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=form-generator
+
+# Environment
+Environment="PYTHONUNBUFFERED=1"
+Environment="PYTHONDONTWRITEBYTECODE=1"
+
+# Security hardening (optional)
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
