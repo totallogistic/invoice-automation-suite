@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/packing-list-schema.json",
+  "title": "PackingListAduanas",
+  "description": "Esquema para un packing list internacional válido en aduanas",
+  "type": "object",
+  "properties": {
+    "fechaEmision": {
+      "type": "string",
+      "format": "date",
+      "description": "Fecha de emisión del packing list"
+    },
+    "exportador": {
+      "type": "object",
+      "properties": {
+        "nombre": { "type": "string" },
+        "direccion": { "type": "string" },
+        "contacto": { "type": "string" },
+        "documentoIdentidad": { "type": "string" }
+      },
+      "required": ["nombre", "direccion"]
+    },
+    "importador": {
+      "type": "object",
+      "properties": {
+        "nombre": { "type": "string" },
+        "direccion": { "type": "string" },
+        "contacto": { "type": "string" },
+        "documentoIdentidad": { "type": "string" }
+      },
+      "required": ["nombre", "direccion"]
+    },
+    "numeroFactura": {
+      "type": "string",
+      "description": "Número de la factura comercial asociada"
+    },
+    "bultos": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "numeroBulto": { "type": "integer" },
+          "marca": { "type": "string" },
+          "tipoEmbalaje": { "type": "string", "enum": ["caja", "pallet", "bidón", "bolsa"] },
+          "contenido": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "descripcion": { "type": "string" },
+                "cantidad": { "type": "integer" },
+                "codigoProducto": { "type": "string" },
+                "pesoNetoKG": { "type": "number" },
+                "pesoBrutoKG": { "type": "number" },
+                "dimensionesCM": {
+                  "type": "object",
+                  "properties": {
+                    "largo": { "type": "number" },
+                    "ancho": { "type": "number" },
+                    "alto": { "type": "number" }
+                  }
+                }
+              },
+              "required": ["descripcion", "cantidad", "pesoNetoKG", "pesoBrutoKG"]
+            }
+          }
+        },
+        "required": ["numeroBulto", "tipoEmbalaje", "contenido"]
+      }
+    },
+    "pesoTotalNetoKG": { "type": "number" },
+    "pesoTotalBrutoKG": { "type": "number" },
+    "volumenTotalM3": { "type": "number" },
+    "codigoHS": { "type": "string", "description": "Código Armonizado (opcional pero recomendado)" },
+    "observaciones": { "type": "string" }
+  },
+  "required": ["fechaEmision", "exportador", "importador", "numeroFactura", "bultos"]
+}   
