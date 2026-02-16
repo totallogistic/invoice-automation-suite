@@ -111,7 +111,10 @@ class EmailService:
         types = {
             ".json": ("application", "json"),
             ".csv": ("text", "csv"),
+            ".txt": ("text", "plain"),
             ".xlsx": ("application", "vnd.openxmlformats-officedocument.spreadsheetml.sheet"),
+            ".xls": ("application", "vnd.ms-excel"),
+            ".ods": ("application", "vnd.oasis.opendocument.spreadsheet"),
             ".pdf": ("application", "pdf"),
         }
         return types.get(suffix, ("application", "octet-stream"))

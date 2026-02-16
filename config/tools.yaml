@@ -15,10 +15,10 @@ tools:
     
     input:
       formats: [pdf]
-      inbox: /data/lear_cable/inbox          # SEPARADO por tool
+      inbox: /data/lear_cable/inbox
     
     output:
-      directory: /data/out                    # COMPARTIDO
+      directory: /data/out
       artifacts:
         - invoices_extracted.xlsx
     
@@ -37,10 +37,10 @@ tools:
     
     input:
       formats: [pdf]
-      inbox: /data/import_partida/inbox      # SEPARADO por tool
+      inbox: /data/import_partida/inbox
     
     output:
-      directory: /data/out                    # COMPARTIDO
+      directory: /data/out
       artifacts:
         - import_partida.csv
     
@@ -59,12 +59,35 @@ tools:
     
     input:
       formats: [pdf]
-      inbox: /data/lear_rabat/inbox          # SEPARADO por tool
+      inbox: /data/lear_rabat/inbox
     
     output:
-      directory: /data/out                    # COMPARTIDO
+      directory: /data/out
       artifacts:
         - COMPLETADO_*.ods
     
     email:
       subject_template: "[Lear Rabat] Batch {batch_id} - DUA files ready"
+
+  # Cuadre Asientos
+  - name: cuadre_asientos
+    enabled: true
+    display_name: "Cuadre de Asientos Contables"
+    description: "Procesa apuntes contables eliminando pares compensados"
+    
+    extractor:
+      type: python
+      path: /apps/cuadre_asientos/extractor/cuadre_asientos_wrapper.py
+    
+    input:
+      formats: [xlsx, xls]
+      inbox: /data/cuadre_asientos/inbox
+    
+    output:
+      directory: /data/out
+      artifacts:
+        - "*_procesado_*.xlsx"
+        - "*_reporte_*.txt"
+    
+    email:
+      subject_template: "[Cuadre Asientos] Batch {batch_id} - Procesamiento completado"

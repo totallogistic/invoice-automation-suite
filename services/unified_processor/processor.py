@@ -164,7 +164,10 @@ class UnifiedProcessor:
         recipients = self._get_recipients()
         if recipients:
             subject = tool.email_subject_template.format(batch_id=batch_id)
-            body = f"Batch {batch_id} processed.\n{pdf_count} files."
+            
+            # Check for text report to use as email body
+            body = self._build_email_body(batch_id, pdf_count, output_path, artifacts)
+            
             self.email_service.send(recipients, subject, body, artifacts)
         
         # Done
@@ -201,6 +204,25 @@ class UnifiedProcessor:
         """Get recipients from env."""
         mail_to = os.getenv("MAIL_TO", "").strip()
         return [e.strip() for e in mail_to.split(",") if e.strip()]
+    
+    def _build_email_body(self, batch_id: str, pdf_count: int, output_path: Path, artifacts: List[Path]) -> str:
+        """
+        Build email body. If a .txt report file exists in artifacts, use it as body.
+        Otherwise use default message.
+        """
+        # Look for text report file (e.g., *_reporte_*.txt)
+        txt_reports = [a for a in artifacts if a.suffix == '.txt' and 'report' in a.name.lower() or 'reporte' in a.name.lower()]
+        
+        if txt_reports:
+            # Use the first text report as email body
+            try:
+                report_content = txt_reports[0].read_text(encoding='utf-8')
+                return report_content
+            except Exception as e:
+                logger.warning(f"Failed to read report file {txt_reports[0]}: {e}")
+        
+        # Default body if no report found
+        return f"Batch {batch_id} processed.\n{pdf_count} file(s) processed."
 
 
 def main():
@@ -229,4 +251,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

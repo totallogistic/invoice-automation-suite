@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cuadre de Asientos Contables</title>
+    <link rel="stylesheet" href="/assets/styles.css">
+</head>
+<body>
+    <div class="container">
+        <h1>📊 Cuadre de Asientos Contables</h1>
+        
+        <div class="description">
+            <p>Procesa apuntes contables y elimina automáticamente aquellos que se compensan.</p>
+            <p><strong>Formato aceptado:</strong> Excel (XLSX, XLS)</p>
+        </div>
+
+        <div class="upload-section">
+            <p>Sube uno o varios archivos Excel, o un ZIP con múltiples Excels. La página se queda aquí y muestra progreso/estado.</p>
+            
+            <input type="file" id="file-input" multiple accept=".xlsx,.xls,.zip">
+            <button id="upload-btn" onclick="submitFiles()">Subir Archivo(s)</button>
+        </div>
+
+        <div id="status" class="status"></div>
+        
+        <div id="batch-progress" style="display:none;">
+            <h2>Batch: <span id="batch-id"></span> <span id="batch-status-badge"></span></h2>
+            <div class="progress-bar">
+                <div id="progress-fill" class="progress-fill"></div>
+            </div>
+            <p id="progress-text">0%</p>
+
+            <table class="batch-details">
+                <tr><th>Mensaje</th><td id="msg">—</td></tr>
+                <tr><th>Archivos</th><td id="archivos">—</td></tr>
+                <tr><th>Updated</th><td id="updated">—</td></tr>
+                <tr><th>Recipients</th><td id="recipients">—</td></tr>
+            </table>
+
+            <p id="final-message" class="final-message"></p>
+        </div>
+
+        <p><a href="/">&larr; Volver al inicio</a></p>
+    </div>
+
+    <script src="/assets/batch_upload.js"></script>
+    <script>
+        // Tool-specific config
+        window.TOOL_NAME = 'cuadre_asientos';
+    </script>
+</body>
+</html>
