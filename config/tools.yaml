@@ -47,3 +47,25 @@ tools:
     
     email:
       subject_template: "[Import Partida] Batch {batch_id} ready"
+
+  # Lear Rabat
+  - name: lear_rabat
+    enabled: true
+    display_name: "Lear Rabat DUA Processor"
+    description: "Extracts DUA data from Lear Automotive Morocco invoices"
+    
+    extractor:
+      type: python
+      path: /apps/lear_rabat/extractor/extract_lear_rabat.py
+    
+    input:
+      formats: [pdf]
+      inbox: /data/lear_rabat/inbox
+    
+    output:
+      directory: /data/lear_rabat/out
+      artifacts:
+        - COMPLETADO_*.ods
+    
+    email:
+      subject_template: "[Lear Rabat] Batch {batch_id} - DUA files ready"
