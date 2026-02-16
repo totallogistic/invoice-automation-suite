@@ -143,14 +143,25 @@ def procesar_batch(archivos_entrada, output_dir):
         base_name = archivo_path.stem
         
         archivo_xlsx = output_dir / f"{base_name}_procesado_{timestamp}.xlsx"
+        archivo_cazados = output_dir / f"{base_name}_cazados_{timestamp}.xlsx"
         archivo_reporte = output_dir / f"{base_name}_reporte_{timestamp}.txt"
         
         try:
-            # Procesar archivo
-            df_original, df_filtrado, estadisticas = procesar_archivo(
+            # Procesar archivo (ahora retorna 4 valores)
+            df_original, df_filtrado, df_eliminados, estadisticas = procesar_archivo(
                 str(archivo_path),
                 str(archivo_xlsx)
             )
+            
+            # El procesar_archivo genera automáticamente el archivo de cazados
+            # con el nombre basado en archivo_xlsx reemplazando "_procesado" por "_cazados"
+            archivo_cazados_temp = str(archivo_xlsx).replace('_procesado_', '_cazados_')
+            archivo_cazados_temp = archivo_cazados_temp.replace('.xlsx', '_cazados.xlsx') if '_cazados_' not in archivo_cazados_temp else archivo_cazados_temp
+            
+            # Copiar el archivo de cazados al nombre con timestamp deseado
+            import shutil
+            if Path(archivo_cazados_temp).exists():
+                shutil.copy(archivo_cazados_temp, archivo_cazados)
             
             # Generar reporte de texto
             reporte_texto = generar_reporte_texto(estadisticas, archivo_path.name)
@@ -165,13 +176,15 @@ def procesar_batch(archivos_entrada, output_dir):
             resultados.append({
                 'archivo_entrada': str(archivo_path),
                 'archivo_xlsx': str(archivo_xlsx),
+                'archivo_cazados': str(archivo_cazados),
                 'archivo_reporte': str(archivo_reporte),
                 'estadisticas': estadisticas,
                 'exito': True
             })
             
             print(f"\n✓ Archivo procesado exitosamente")
-            print(f"  Excel generado: {archivo_xlsx.name}")
+            print(f"  Excel procesado: {archivo_xlsx.name}")
+            print(f"  Excel cazados:   {archivo_cazados.name}")
             print(f"  Reporte generado: {archivo_reporte.name}")
             
         except Exception as e:

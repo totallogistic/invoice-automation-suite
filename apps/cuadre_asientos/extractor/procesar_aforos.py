@@ -15,6 +15,13 @@ import pandas as pd
 import re
 import sys
 from pathlib import Path
+import smtplib
+import ssl
+from email.mime.multipart import MIMEMultipart
+from email.mime.base import MIMEBase
+from email.mime.text import MIMEText
+from email import encoders
+import os
 
 
 def extraer_codigo_aforo(concepto):
@@ -91,9 +98,12 @@ def encontrar_pares_compensados(grupo_df):
         grupo_df: DataFrame con apuntes del mismo código de aforo
         
     Returns:
-        Set con los índices de los registros a eliminar
+        Tupla con:
+        - Set con los índices de los registros a eliminar
+        - Lista de tuplas (idx_debe, idx_haber) con los pares encontrados
     """
     indices_a_eliminar = set()
+    pares_ordenados = []  # Lista de (idx_debe, idx_haber)
     
     # Separar en DEBE y HABER
     debe_df = grupo_df[grupo_df['DEBE_NORMALIZADO'] > 0].copy()
@@ -118,9 +128,10 @@ def encontrar_pares_compensados(grupo_df):
                 # ¡Encontramos un par! Marcar ambos para eliminar
                 indices_a_eliminar.add(idx_debe)
                 indices_a_eliminar.add(idx_haber)
+                pares_ordenados.append((idx_debe, idx_haber))  # Guardar el par
                 break  # Ya emparejamos este registro de DEBE
     
-    return indices_a_eliminar
+    return indices_a_eliminar, pares_ordenados
 
 
 def procesar_archivo(archivo_entrada, archivo_salida=None):
@@ -166,6 +177,7 @@ def procesar_archivo(archivo_entrada, archivo_salida=None):
     # Encontrar pares compensados
     print("\nBuscando pares compensados...")
     indices_a_eliminar = set()
+    todos_los_pares = []  # Lista de todos los pares (idx_debe, idx_haber) ordenados
     
     # Agrupar por código de aforo
     for codigo_aforo, grupo in df[df['CODIGO_AFORO'].notna()].groupby('CODIGO_AFORO'):
@@ -173,8 +185,9 @@ def procesar_archivo(archivo_entrada, archivo_salida=None):
             continue  # No hay suficientes registros para emparejar
         
         # Buscar pares dentro del grupo
-        indices_grupo = encontrar_pares_compensados(grupo)
+        indices_grupo, pares_grupo = encontrar_pares_compensados(grupo)
         indices_a_eliminar.update(indices_grupo)
+        todos_los_pares.extend(pares_grupo)  # Agregar los pares de este grupo
     
     print(f"\nRegistros a eliminar (compensados): {len(indices_a_eliminar)}")
     
@@ -184,9 +197,18 @@ def procesar_archivo(archivo_entrada, archivo_salida=None):
     total_haber_original = df['HABER_NORMALIZADO'].sum()
     
     # Totales de los registros ELIMINADOS
-    df_eliminados = df.loc[list(indices_a_eliminar)]
+    # Crear DataFrame ordenado por pares (DEBE, HABER, DEBE, HABER...)
+    filas_ordenadas = []
+    for idx_debe, idx_haber in todos_los_pares:
+        filas_ordenadas.append(idx_debe)  # Primero el DEBE
+        filas_ordenadas.append(idx_haber)  # Luego el HABER
+    
+    df_eliminados = df.loc[filas_ordenadas]
     total_debe_eliminado = df_eliminados['DEBE_NORMALIZADO'].sum()
     total_haber_eliminado = df_eliminados['HABER_NORMALIZADO'].sum()
+    
+    # Guardar número de registros eliminados ANTES de agregar totales
+    num_registros_eliminados = len(df_eliminados)
     
     # Crear DataFrame filtrado
     df_filtrado = df.drop(indices_a_eliminar)
@@ -217,6 +239,31 @@ def procesar_archivo(archivo_entrada, archivo_salida=None):
     # Agregar la fila al DataFrame
     df_filtrado = pd.concat([df_filtrado, pd.DataFrame([fila_totales])], ignore_index=True)
     
+    # ===== PREPARAR DATAFRAME DE ELIMINADOS (CAZADOS) =====
+    # Eliminar columnas auxiliares del DataFrame eliminados
+    df_eliminados_export = df_eliminados.drop(['CODIGO_AFORO', 'DEBE_NORMALIZADO', 'HABER_NORMALIZADO'], axis=1)
+    
+    # Agregar columna de número de par (1, 1, 2, 2, 3, 3, ...)
+    # Esto ayuda a visualizar qué registros forman pares
+    num_pares = []
+    for i in range(len(todos_los_pares)):
+        num_pares.append(i + 1)  # DEBE del par i
+        num_pares.append(i + 1)  # HABER del par i
+    
+    # Insertar columna "PAR" al principio
+    df_eliminados_export.insert(0, 'PAR', num_pares)
+    
+    # Agregar fila de totales al DataFrame de eliminados
+    fila_totales_elim = pd.Series({col: '' for col in df_eliminados_export.columns})
+    fila_totales_elim['PAR'] = ''  # Dejar vacío en la fila de totales
+    fila_totales_elim['CUENTA'] = 'TOTAL......'
+    fila_totales_elim['CONCEPTO'] = 'TOTALES ASIENTOS CAZADOS (CUADRADOS)'
+    fila_totales_elim['IMPORTE DEBE'] = f"{total_debe_eliminado:.2f}" if total_debe_eliminado != 0 else ''
+    fila_totales_elim['IMPORTE HABER'] = f"{total_haber_eliminado:.2f}" if total_haber_eliminado != 0 else ''
+    fila_totales_elim['SALDO'] = f"{(total_debe_eliminado - total_haber_eliminado):.2f}" if (total_debe_eliminado - total_haber_eliminado) != 0 else '0.00'
+    
+    df_eliminados_export = pd.concat([df_eliminados_export, pd.DataFrame([fila_totales_elim])], ignore_index=True)
+    
     # Estadísticas completas
     estadisticas = {
         'total_original': len(df),
@@ -239,13 +286,29 @@ def procesar_archivo(archivo_entrada, archivo_salida=None):
         'descuadre_restante': total_debe_restante - total_haber_restante,
     }
     
-    # Guardar archivo si se especificó ruta de salida
+    # Guardar archivos si se especificó ruta de salida
     if archivo_salida:
-        print(f"\nGuardando archivo resultante: {archivo_salida}")
+        # Guardar archivo de asientos RESTANTES
+        print(f"\nGuardando archivos resultantes...")
+        print(f"  - Asientos restantes: {archivo_salida}")
         df_filtrado.to_excel(archivo_salida, index=False, sheet_name='HOJA1')
-        print("Archivo guardado exitosamente")
+        
+        # Generar nombre para archivo de CAZADOS
+        # Si el archivo es "archivo_procesado.xlsx", crear "archivo_cazados.xlsx"
+        if archivo_salida.endswith('_procesado.xlsx'):
+            archivo_cazados = archivo_salida.replace('_procesado.xlsx', '_cazados.xlsx')
+        elif archivo_salida.endswith('.xlsx'):
+            archivo_cazados = archivo_salida.replace('.xlsx', '_cazados.xlsx')
+        else:
+            archivo_cazados = archivo_salida + '_cazados.xlsx'
+        
+        # Guardar archivo de asientos CAZADOS
+        print(f"  - Asientos cazados:   {archivo_cazados}")
+        df_eliminados_export.to_excel(archivo_cazados, index=False, sheet_name='HOJA1')
+        
+        print("Archivos guardados exitosamente")
     
-    return df, df_filtrado, estadisticas
+    return df, df_filtrado, df_eliminados_export, estadisticas
 
 
 def mostrar_estadisticas(estadisticas):
@@ -369,7 +432,7 @@ Ejemplos de uso:
     
     # Procesar archivo
     try:
-        df_original, df_filtrado, estadisticas = procesar_archivo(
+        df_original, df_filtrado, df_eliminados, estadisticas = procesar_archivo(
             archivo_entrada, 
             archivo_salida
         )
