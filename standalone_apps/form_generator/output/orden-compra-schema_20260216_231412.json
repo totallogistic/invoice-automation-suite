@@ -1,0 +1,15 @@
+{
+  "numeroOrden": "345345",
+  "fecha": "2026-02-06",
+  "proveedor": {
+    "nombre": "345435",
+    "email": "noneedtoknow369@proton.me",
+    "telefono": ""
+  },
+  "producto": "clean",
+  "cantidad": 9,
+  "precioUnitario": 435,
+  "urgencia": "Normal",
+  "entregaDomicilio": false,
+  "observaciones": ""
+}
