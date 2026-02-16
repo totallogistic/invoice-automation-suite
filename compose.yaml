@@ -61,32 +61,3 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-
-  # =================================================================
-# =================================================================
-  # FORM SERVICES - Web-based form interfaces
-  # =================================================================
-  
-  form_packing_list:
-    build:
-      context: ./services/form_server
-    restart: unless-stopped
-    ports:
-      - "8100:8000"
-    volumes:
-      - ./apps/forms/packing_list:/schemas:ro
-    command: python3 serve_packing_list.py
-    environment:
-      - TEXTUAL_DRIVER=web
-
-  form_customs_clearance:
-    build:
-      context: ./services/form_server
-    restart: unless-stopped
-    ports:
-      - "8101:8000"
-    volumes:
-      - ./apps/forms/customs_clearance:/schemas:ro
-    command: python3 serve_customs_clearance.py
-    environment:
-      - TEXTUAL_DRIVER=web
