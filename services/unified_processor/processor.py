@@ -134,12 +134,25 @@ class UnifiedProcessor:
         # Run extractor
         output_path = self._run_extractor(tool, batch_id, processing_path)
         
-        # Collect artifacts
-        artifacts = [
-            output_path / artifact
-            for artifact in tool.output_artifacts
-            if (output_path / artifact).exists()
-        ]
+        # Collect artifacts - support glob patterns (e.g., COMPLETADO_*.ods)
+        artifacts = []
+        for artifact_pattern in tool.output_artifacts:
+            if '*' in artifact_pattern or '?' in artifact_pattern:
+                # Use glob for wildcard patterns
+                matched = list(output_path.glob(artifact_pattern))
+                artifacts.extend(matched)
+                logger.info(f"[{tool.name}] Pattern '{artifact_pattern}' matched {len(matched)} file(s)")
+            else:
+                # Exact filename match
+                artifact_path = output_path / artifact_pattern
+                if artifact_path.exists():
+                    artifacts.append(artifact_path)
+                    logger.info(f"[{tool.name}] Found artifact: {artifact_pattern}")
+                else:
+                    logger.warning(f"[{tool.name}] Artifact not found: {artifact_pattern}")
+        
+        if not artifacts:
+            logger.warning(f"[{tool.name}] No artifacts found for patterns: {tool.output_artifacts}")
         
         # Send email
         status_mgr.update_status(
@@ -216,3 +229,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

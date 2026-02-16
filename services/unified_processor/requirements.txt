@@ -7,7 +7,7 @@ openpyxl
 pandas
 pdfplumber==0.11.4
 pypdfium2==4.30.0
-
+odfpy==1.4.1
 # Additional extractor dependencies
 xlsxwriter==3.1.9
 python-dateutil==2.8.2

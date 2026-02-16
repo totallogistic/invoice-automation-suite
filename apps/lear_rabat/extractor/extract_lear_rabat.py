@@ -62,7 +62,12 @@ def extract_invoice_number(text: str) -> str:
     """Extract invoice number from header."""
     lines = text.splitlines()
     for line in lines[:20]:
-        # Match pattern like "00007297" on line after "INVOICE"
+        # Match pattern like "00007297 Page: 1 / 4"
+        # Extract the 8-digit invoice number at start of line
+        m = re.match(r'^(\d{8})\s', line.strip())
+        if m:
+            return m.group(1)
+        # Also try standalone 8 digits
         if re.match(r'^\d{8}$', line.strip()):
             return line.strip()
     return ""
@@ -396,3 +401,4 @@ def main(argv: List[str]) -> int:
 
 if __name__ == "__main__":
     sys.exit(main(sys.argv[1:]))
+

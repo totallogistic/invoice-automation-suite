@@ -1,4 +1,4 @@
-# Tool Configuration
+# Tool Configuration - Separate Inboxes, Shared Outputs
 
 data_root: /data
 
@@ -15,10 +15,10 @@ tools:
     
     input:
       formats: [pdf]
-      inbox: /data/lear_cable/inbox
+      inbox: /data/lear_cable/inbox          # SEPARADO por tool
     
     output:
-      directory: /data/lear_cable/out
+      directory: /data/out                    # COMPARTIDO
       artifacts:
         - invoices_extracted.xlsx
     
@@ -34,14 +34,13 @@ tools:
     extractor:
       type: python
       path: /apps/import_partida/extractor/wrapper.py
-
     
     input:
       formats: [pdf]
-      inbox: /data/import_partida/inbox
+      inbox: /data/import_partida/inbox      # SEPARADO por tool
     
     output:
-      directory: /data/import_partida/out
+      directory: /data/out                    # COMPARTIDO
       artifacts:
         - import_partida.csv
     
@@ -60,10 +59,10 @@ tools:
     
     input:
       formats: [pdf]
-      inbox: /data/lear_rabat/inbox
+      inbox: /data/lear_rabat/inbox          # SEPARADO por tool
     
     output:
-      directory: /data/lear_rabat/out
+      directory: /data/out                    # COMPARTIDO
       artifacts:
         - COMPLETADO_*.ods
     
