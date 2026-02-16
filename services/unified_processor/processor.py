@@ -76,10 +76,11 @@ class UnifiedProcessor:
             # Initialize status if needed
             status_mgr = StatusManager(tool.status_dir)
             if not status_mgr.get_status(batch_id):
-                pdf_count = len(BatchOperations.get_pdfs(batch_dir))
+                # Count files with the tool's accepted formats
+                file_count = len(BatchOperations.get_files(batch_dir, tool.input_formats))
                 status_mgr.create_status(
                     batch_id=batch_id,
-                    total_files=pdf_count,
+                    total_files=file_count,
                     message="Waiting"
                 )
             
@@ -123,7 +124,7 @@ class UnifiedProcessor:
         status_mgr = StatusManager(tool.status_dir)
         
         # Update: processing
-        pdf_count = len(BatchOperations.get_pdfs(processing_path))
+        file_count = len(BatchOperations.get_files(processing_path, tool.input_formats))
         status_mgr.update_status(
             batch_id=batch_id,
             state="PROCESSING",
@@ -158,7 +159,7 @@ class UnifiedProcessor:
         status_mgr.update_status(
             batch_id=batch_id,
             stage="SENDING_EMAIL",
-            processed_files=pdf_count
+            processed_files=file_count
         )
         
         recipients = self._get_recipients()
@@ -166,7 +167,7 @@ class UnifiedProcessor:
             subject = tool.email_subject_template.format(batch_id=batch_id)
             
             # Check for text report to use as email body
-            body = self._build_email_body(batch_id, pdf_count, output_path, artifacts)
+            body = self._build_email_body(batch_id, file_count, output_path, artifacts)
             
             self.email_service.send(recipients, subject, body, artifacts)
         
@@ -183,12 +184,13 @@ class UnifiedProcessor:
         output_path = tool.output_dir / batch_id
         output_path.mkdir(parents=True, exist_ok=True)
         
-        pdfs = BatchOperations.get_pdfs(processing_path)
+        # Get files with the tool's accepted formats
+        files = BatchOperations.get_files(processing_path, tool.input_formats)
         
         cmd = [
             "python3",
             str(tool.extractor_path)
-        ] + [str(p) for p in pdfs] + [
+        ] + [str(p) for p in files] + [
             "-o", str(output_path)
         ]
         
@@ -205,7 +207,7 @@ class UnifiedProcessor:
         mail_to = os.getenv("MAIL_TO", "").strip()
         return [e.strip() for e in mail_to.split(",") if e.strip()]
     
-    def _build_email_body(self, batch_id: str, pdf_count: int, output_path: Path, artifacts: List[Path]) -> str:
+    def _build_email_body(self, batch_id: str, file_count: int, output_path: Path, artifacts: List[Path]) -> str:
         """
         Build email body. If a .txt report file exists in artifacts, use it as body.
         Otherwise use default message.
@@ -222,7 +224,7 @@ class UnifiedProcessor:
                 logger.warning(f"Failed to read report file {txt_reports[0]}: {e}")
         
         # Default body if no report found
-        return f"Batch {batch_id} processed.\n{pdf_count} file(s) processed."
+        return f"Batch {batch_id} processed.\n{file_count} file(s) processed."
 
 
 def main():
@@ -251,3 +253,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

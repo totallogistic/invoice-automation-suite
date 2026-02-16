@@ -85,8 +85,17 @@ async def create_batch(
             if not content:
                 continue
             
-            filename = upload_file.filename or f"file_{file_count}.pdf"
+            # Use the original filename (which includes extension)
+            filename = upload_file.filename or f"file_{file_count}"
             safe_filename = Path(filename).name
+            
+            # Validate file extension against tool's accepted formats
+            file_ext = Path(safe_filename).suffix.lower().lstrip('.')
+            if file_ext not in tool.input_formats:
+                raise HTTPException(
+                    400, 
+                    f"Invalid file type .{file_ext}. Tool '{tool_name}' accepts: {', '.join(tool.input_formats)}"
+                )
             
             (batch_inbox / safe_filename).write_bytes(content)
             file_count += 1
@@ -146,3 +155,4 @@ def get_status(
         "processed_files": status.processed_files,
         "message": status.message
     }
+

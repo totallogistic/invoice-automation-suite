@@ -66,5 +66,33 @@ class BatchOperations:
     
     @staticmethod
     def get_pdfs(directory: Path) -> List[Path]:
-        """Get all PDF files."""
+        """Get all PDF files (kept for backward compatibility)."""
         return sorted(directory.rglob("*.pdf"))
+    
+    @staticmethod
+    def get_files(directory: Path, extensions: List[str] = None) -> List[Path]:
+        """
+        Get all files with specified extensions.
+        
+        Args:
+            directory: Directory to search
+            extensions: List of extensions (without dot), e.g., ['pdf', 'xlsx', 'xls']
+                       If None, returns all files except hidden and _DONE marker
+        
+        Returns:
+            Sorted list of file paths
+        """
+        files = []
+        
+        if extensions:
+            # Get files with specific extensions
+            for ext in extensions:
+                files.extend(directory.rglob(f"*.{ext}"))
+        else:
+            # Get all files, excluding hidden and markers
+            for file_path in directory.rglob("*"):
+                if file_path.is_file() and not file_path.name.startswith(('.', '_')):
+                    files.append(file_path)
+        
+        return sorted(files)
+
