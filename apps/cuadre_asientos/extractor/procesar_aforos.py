@@ -26,38 +26,48 @@ import os
 
 def extraer_codigo_aforo(concepto):
     """
-    Extrae el código de aforo del campo concepto.
+    Extrae el código de aforo del campo concepto y lo normaliza.
     
-    Soporta formatos:
-    - Hoj Afo: 2025.00000789.1.1/... -> 2025.00000789
-    - Hoja/Aforo 2024/00205669 ... -> 2024.00205669
-    - Aforo 2024/204107 ... -> 2024.00204107
+    Soporta formatos variados:
+    - Hoj Afo: 2025.00000789.1.1/... -> 202500000789
+    - Hoj Afo: 2025 00079776 ... -> 202500079776
+    - Hoja/Aforo 2024/00205669 ... -> 202400205669
+    - Aforo 2024/204107 ... -> 202400204107
+    
+    IMPORTANTE: Normaliza el código a 12 dígitos (año + 8 dígitos)
+    eliminando puntos, espacios y caracteres especiales.
     
     Args:
         concepto: String con el texto del concepto
         
     Returns:
-        String con el código de aforo (13 caracteres) o None si no se encuentra
+        String con el código de aforo normalizado (12 dígitos) o None si no se encuentra
     """
     if pd.isna(concepto):
         return None
     
     concepto = str(concepto).strip()
     
-    # Patrón 1: "Hoj Afo: 2025.00000789.1.1/..."
-    match = re.search(r'Hoj Afo:\s*(\d{4}\.\d{8})', concepto, re.IGNORECASE)
-    if match:
-        return match.group(1)
+    # Patrón más flexible que captura año (4 dígitos) seguido de más dígitos
+    # con cualquier separador (puntos, espacios, barras, o nada)
+    # Acepta: "Hoj Afo", "H.Afo", "H Afo", "Hoja/Aforo", "Aforo", "Parte Hoj Afo", etc.
+    patron_general = r'(?:Parte\s+)?(?:H\.?\s*Afo|Hoj\s+Afo|Hoja/?Aforo|Aforo)[:\s/]*(\d{4})[\s\./]*(\d+)'
     
-    # Patrón 2: "Hoja/Aforo 2024/00205669..."
-    match = re.search(r'Hoja/Aforo\s*(\d{4})[/\.](\d+)', concepto, re.IGNORECASE)
+    match = re.search(patron_general, concepto, re.IGNORECASE)
     if match:
-        return f"{match.group(1)}.{match.group(2).zfill(8)}"
-    
-    # Patrón 3: "Aforo 2024/204107..." (puede estar al inicio o después de espacio)
-    match = re.search(r'(?:^|\s)Aforo\s*(\d{4})[/\.](\d+)', concepto, re.IGNORECASE)
-    if match:
-        return f"{match.group(1)}.{match.group(2).zfill(8)}"
+        anio = match.group(1)  # 4 dígitos del año (ej: 2025)
+        resto = match.group(2)  # El resto de dígitos
+        
+        # Limpiar completamente: quitar TODOS los caracteres no numéricos
+        resto_limpio = re.sub(r'\D', '', resto)
+        
+        # Tomar solo los primeros 8 dígitos (rellenar con ceros si es más corto)
+        codigo_numerico = resto_limpio[:8].zfill(8)
+        
+        # Retornar código normalizado de 12 dígitos: YYYYNNNNNNNN
+        codigo_normalizado = f"{anio}{codigo_numerico}"
+        
+        return codigo_normalizado
     
     return None
 
@@ -92,7 +102,7 @@ def encontrar_pares_compensados(grupo_df):
     
     Un par se compensa si:
     - Uno tiene importe en DEBE y el otro en HABER
-    - Los importes son iguales (con tolerancia de 0.01 para redondeos)
+    - Los importes son EXACTAMENTE iguales (sin tolerancia)
     
     Args:
         grupo_df: DataFrame con apuntes del mismo código de aforo
@@ -116,15 +126,15 @@ def encontrar_pares_compensados(grupo_df):
             
         importe_debe = row_debe['DEBE_NORMALIZADO']
         
-        # Buscar en HABER un importe igual (con tolerancia)
+        # Buscar en HABER un importe EXACTAMENTE igual
         for idx_haber, row_haber in haber_df.iterrows():
             if idx_haber in indices_a_eliminar:
                 continue
                 
             importe_haber = row_haber['HABER_NORMALIZADO']
             
-            # Verificar si los importes coinciden (tolerancia de 0.01)
-            if abs(importe_debe - importe_haber) < 0.01:
+            # Verificar si los importes coinciden EXACTAMENTE (sin tolerancia)
+            if importe_debe == importe_haber:
                 # ¡Encontramos un par! Marcar ambos para eliminar
                 indices_a_eliminar.add(idx_debe)
                 indices_a_eliminar.add(idx_haber)

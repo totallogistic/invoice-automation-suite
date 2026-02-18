@@ -15,9 +15,8 @@ import re
 import sys
 from pathlib import Path
 from typing import Dict, List, Optional
-from decimal import Decimal
 
-SCRIPT_VERSION = "2026-02-16.v1"
+SCRIPT_VERSION = "2026-02-18.v2"
 
 try:
     import pdfplumber
@@ -44,14 +43,31 @@ def read_pdf_text(pdf_path: Path) -> str:
     return "\n".join(parts)
 
 
-def parse_number(s: str) -> Optional[float]:
-    """Parse a number string, handling spaces, commas as decimals."""
+def detect_number_format(text: str) -> str:
+    """Detect whether the invoice uses EU or US number format.
+    
+    EU format: spaces for thousands, comma for decimal  (e.g. "1 536,00" or "13 210,09")
+    US format: commas for thousands, dot for decimal    (e.g. "1,536.00" or "13,210.09")
+    """
+    us_pattern = re.findall(r'\d{1,3},\d{3}\.\d{2}', text)
+    eu_pattern = re.findall(r'\d{1,3}\s\d{3},\d{2}', text)
+    
+    if len(us_pattern) > len(eu_pattern):
+        return "US"
+    return "EU"
+
+
+def parse_number(s: str, fmt: str = "EU") -> Optional[float]:
+    """Parse a number string, handling both EU and US formats."""
     if not s or s.strip() == "":
         return None
-    # Remove spaces
-    s = s.replace(" ", "").strip()
-    # Handle comma as decimal separator (European format)
-    s = s.replace(",", ".")
+    s = s.strip()
+    
+    if fmt == "US":
+        s = s.replace(",", "")
+    else:
+        s = s.replace(" ", "").replace(",", ".")
+    
     try:
         return float(s)
     except ValueError:
@@ -62,18 +78,15 @@ def extract_invoice_number(text: str) -> str:
     """Extract invoice number from header."""
     lines = text.splitlines()
     for line in lines[:20]:
-        # Match pattern like "00007297 Page: 1 / 4"
-        # Extract the 8-digit invoice number at start of line
         m = re.match(r'^(\d{8})\s', line.strip())
         if m:
             return m.group(1)
-        # Also try standalone 8 digits
         if re.match(r'^\d{8}$', line.strip()):
             return line.strip()
     return ""
 
 
-def extract_invoice_metadata(text: str) -> Dict:
+def extract_invoice_metadata(text: str, fmt: str) -> Dict:
     """Extract invoice header data (weights, pallets, totals)."""
     lines = text.splitlines()
     
@@ -82,31 +95,33 @@ def extract_invoice_metadata(text: str) -> Dict:
     peso_brut = None
     peso_net = None
     pallets = None
+    total_opr = None
     
     for i, line in enumerate(lines):
-        # Extract total from "Total: 110 134,51"
-        if "TOTAL INVOICE" in line or "Total:" in line:
-            for j in range(i, min(i + 10, len(lines))):
-                m = re.search(r'Total:\s+([\d\s,\.]+)', lines[j])
-                if m:
-                    total_invoice = parse_number(m.group(1))
-                    break
+        # Extract total: "Total: 110 134,51" or "Total: 94,200.01"
+        m = re.search(r'Total:\s+([\d\s,\.]+)', line)
+        if m:
+            total_invoice = parse_number(m.group(1), fmt)
         
-        # Extract weights "Net: 8827 K Brut - Bruto - Gross: 10696 K"
+        # Extract weights
         if "Net:" in line and "Gross:" in line:
             m = re.search(r'Net:\s*([\d\s]+)\s*K\s+.*?Gross:\s*([\d\s]+)\s*K', line)
             if m:
-                peso_net = parse_number(m.group(1))
-                peso_brut = parse_number(m.group(2))
+                peso_net = parse_number(m.group(1), "EU")
+                peso_brut = parse_number(m.group(2), "EU")
         
-        # Extract pallet count from "Colls - Bultos - Packs" section
-        if i < 30 and ("Colls" in line or "Packs" in line):
-            # Next line or same line might have the number
-            for check_line in [line, lines[i+1] if i+1 < len(lines) else ""]:
-                m = re.search(r'\b(\d{1,3})\s*$', check_line.strip())
-                if m:
-                    pallets = int(m.group(1))
-                    break
+        # Extract pallet count from delivery conditions line
+        if i < 15 and ("FCA" in line or "EXW" in line or "DAP" in line):
+            m = re.search(r'\b(\d{1,3})\s*$', line.strip())
+            if m:
+                pallets = int(m.group(1))
+    
+    # Extract total OPR from end of document
+    for line in reversed(lines):
+        m = re.search(r'OPR Material Cost:\s+([\d\s,\.]+)', line)
+        if m:
+            total_opr = parse_number(m.group(1), fmt)
+            break
     
     return {
         "invoice_no": invoice_no,
@@ -114,101 +129,140 @@ def extract_invoice_metadata(text: str) -> Dict:
         "peso_brut": peso_brut,
         "peso_net": peso_net,
         "pallets": pallets,
+        "total_opr": total_opr,
     }
 
 
-def extract_line_items(text: str) -> List[Dict]:
-    """Extract line items with project grouping."""
-    lines = text.splitlines()
-    items = []
-    current_project = None
+def extract_line_items(text: str, fmt: str) -> List[Dict]:
+    """Extract line items with project grouping.
     
-    # Track project-level data
-    project_data = {}
+    Key insight: Items appear BEFORE their project header.
+    The project header appears after the last item in that project,
+    followed by OPR Material Cost for that project.
+    """
+    lines = text.splitlines()
+    
+    # First pass: collect all FG items
+    raw_items = []
     
     i = 0
     while i < len(lines):
         line = lines[i].strip()
         
-        # Detect project headers: "O_BCP21 Project: 7 Plts"
-        project_match = re.match(r'(O_\w+)\s+Project:\s+(\d+)\s+Plts', line)
-        if project_match:
-            current_project = project_match.group(1)
-            project_pallets = int(project_match.group(2))
-            project_data[current_project] = {"pallets": project_pallets}
-            i += 1
-            continue
-        
-        # Detect FG (Finished Goods) lines
-        # Pattern: "N FG PartNumber ESOPO...- CodeI HSCode Quantity"
-        fg_match = re.match(r'(\d+)\s+FG\s+(\S+)\s+ESOPO\d+-\s*(\d+)I?\s+([\d]+)\s+([\d,\.]+)', line)
+        # Detect FG lines - flexible regex for both number formats
+        fg_match = re.match(
+            r'(\d+)\s+FG\s+(\S+)\s+ESOPO\d+-\s*(\d+)I?\s+(\d+)\s+(.*)',
+            line
+        )
         if fg_match:
             line_no = fg_match.group(1)
             part_number = fg_match.group(2)
-            code = fg_match.group(3)  # Remove 'I' suffix if present
+            code = fg_match.group(3)
             hs_code = fg_match.group(4)
-            quantity = parse_number(fg_match.group(5))
+            qty_str = fg_match.group(5).strip()
+            quantity = parse_number(qty_str, fmt)
             
-            # Look ahead for "Subtotal FG:" and "Partial Weight:"
+            # Search forward for Subtotal FG and Partial Weight
             subtotal_price = None
             partial_weight = None
             
-            for j in range(i + 1, min(i + 30, len(lines))):
+            for j in range(i + 1, min(i + 50, len(lines))):
                 check_line = lines[j].strip()
                 
                 if "Subtotal FG:" in check_line:
-                    # Extract price from end of line
-                    m = re.search(r'([\d\s,\.]+)$', check_line)
+                    m = re.search(r'Subtotal FG:\s+\S+\s+([\d\s,\.]+)', check_line)
                     if m:
-                        subtotal_price = parse_number(m.group(1))
+                        subtotal_price = parse_number(m.group(1), fmt)
+                    break
                 
                 if "Partial Weight:" in check_line:
-                    # Extract weight "1 034,50 K"
-                    m = re.search(r'([\d\s,\.]+)\s*K', check_line)
+                    m = re.search(r'Partial Weight:\s+([\d\s,\.]+)\s*K?', check_line)
                     if m:
-                        partial_weight = parse_number(m.group(1))
+                        partial_weight = parse_number(m.group(1), fmt)
                 
-                # Stop at next FG or project
-                if re.match(r'(\d+\s+FG|O_\w+\s+Project)', check_line):
+                # Stop at next FG line
+                if re.match(r'\d+\s+FG\s+', check_line):
                     break
             
-            # Look for project subtotals (OPR Material Cost, etc.)
-            opr_material = None
-            if current_project and current_project in project_data:
-                # Scan for OPR Material Cost for this project
-                for j in range(i, min(i + 100, len(lines))):
-                    check_line = lines[j].strip()
-                    if "OPR Material Cost:" in check_line:
-                        m = re.search(r'([\d\s,\.]+)$', check_line)
-                        if m:
-                            opr_material = parse_number(m.group(1))
-                            project_data[current_project]["opr_material"] = opr_material
-                        break
-                    # Stop at next project
-                    if re.match(r'O_\w+\s+Project:', check_line) and current_project not in check_line:
-                        break
-            
-            item_data = {
+            raw_items.append({
                 "line_no": line_no,
+                "line_idx": i,
                 "part_number": part_number,
                 "code": code,
                 "hs_code": hs_code,
                 "quantity": quantity,
                 "subtotal_price": subtotal_price,
                 "partial_weight": partial_weight,
-                "project": current_project,
-            }
-            
-            # Add project-level data
-            if current_project and current_project in project_data:
-                item_data["project_pallets"] = project_data[current_project].get("pallets")
-                item_data["opr_material"] = project_data[current_project].get("opr_material")
-            
-            items.append(item_data)
+            })
         
         i += 1
     
-    return items
+    # Second pass: find project headers and OPR costs
+    projects = []
+    for i, line_text in enumerate(lines):
+        line = line_text.strip()
+        
+        project_match = re.match(r'(O_\w+)\s+Project:\s+(\d+)\s+Plts', line)
+        if project_match:
+            project_name = project_match.group(1)
+            project_pallets = int(project_match.group(2))
+            
+            opr_material = None
+            for j in range(i + 1, min(i + 10, len(lines))):
+                m = re.search(r'OPR Material Cost:\s+([\d\s,\.]+)', lines[j])
+                if m:
+                    opr_material = parse_number(m.group(1), fmt)
+                    break
+            
+            projects.append({
+                "name": project_name,
+                "pallets": project_pallets,
+                "opr_material": opr_material,
+                "line_idx": i,
+            })
+    
+    # Assign projects to items: each item belongs to the NEXT project header
+    for item in raw_items:
+        item_line = item["line_idx"]
+        
+        best_project = None
+        for proj in projects:
+            if proj["line_idx"] > item_line:
+                best_project = proj
+                break
+        
+        if best_project:
+            item["project"] = best_project["name"]
+            item["project_pallets"] = best_project["pallets"]
+            item["opr_material"] = best_project["opr_material"]
+        else:
+            item["project"] = None
+            item["project_pallets"] = None
+            item["opr_material"] = None
+    
+    # Mark last item per project (only last gets OPR/pallets)
+    project_items = {}
+    for idx, item in enumerate(raw_items):
+        proj = item.get("project")
+        if proj:
+            if proj not in project_items:
+                project_items[proj] = []
+            project_items[proj].append(idx)
+    
+    last_in_project = set()
+    for proj, indices in project_items.items():
+        last_in_project.add(indices[-1])
+    
+    for idx, item in enumerate(raw_items):
+        if idx not in last_in_project:
+            item["opr_material"] = None
+            item["project_pallets"] = None
+    
+    # Clean up
+    for item in raw_items:
+        item.pop("line_idx", None)
+    
+    return raw_items
 
 
 def get_cell_value(cell):
@@ -220,107 +274,213 @@ def get_cell_value(cell):
 
 def set_cell_value(cell, value):
     """Set text value in ODS cell."""
-    # Remove existing content
-    for child in cell.childNodes[:]:
-        cell.removeChild(child)
-    # Add new content
+    if cell is None:
+        return
+    try:
+        for child in list(cell.childNodes):
+            try:
+                cell.removeChild(child)
+            except (ValueError, Exception):
+                pass
+    except Exception:
+        pass
     p = odftext.P()
     p.addText(str(value))
     cell.appendChild(p)
 
 
-def update_ods_template(template_path: Path, items: List[Dict], invoice_data: Dict, output_path: Path):
-    """Update ODS template with extracted invoice data."""
+def format_eu_number(value, decimals=2):
+    """Format a number in EU style: comma as decimal separator, strip trailing zeros."""
+    if value is None:
+        return ""
+    formatted = f'{value:.{decimals}f}'.replace(".", ",")
+    # Strip trailing zeros after comma, and strip comma if no decimals left
+    if "," in formatted:
+        formatted = formatted.rstrip("0").rstrip(",")
+    return formatted
+
+
+def format_peso_br(value):
+    """Format PESO BR with dot as thousands separator (integer)."""
+    if value is None:
+        return ""
+    int_val = round(value)
+    if int_val >= 1000:
+        # Format with dot as thousands separator
+        s = str(int_val)
+        parts = []
+        while s:
+            parts.append(s[-3:])
+            s = s[:-3]
+        return ".".join(reversed(parts))
+    return str(int_val)
+
+
+def build_cell_map(row, writable_cols=None):
+    """Build a mapping from column index to cell, handling repeated cells.
     
-    # Load template
+    For columns listed in writable_cols, if the cell is repeated,
+    split it so each column has its own independent cell.
+    Returns dict of {col_index: cell}.
+    """
+    if writable_cols is None:
+        writable_cols = set()
+    
+    cells = list(row.getElementsByType(table.TableCell))
+    cell_map = {}
+    col = 0
+    
+    for cell in cells:
+        rep = cell.getAttribute("numbercolumnsrepeated")
+        rep = int(rep) if rep else 1
+        
+        # Check if any writable column falls within this repeated range
+        needs_split = any((col + r) in writable_cols for r in range(rep))
+        
+        if needs_split and rep > 1:
+            # Remove the repeat attribute
+            try:
+                cell.removeAttribute("numbercolumnsrepeated")
+            except Exception:
+                pass
+            
+            cell_map[col] = cell
+            
+            # Create individual cells for the remaining repetitions
+            prev = cell
+            for r in range(1, rep):
+                import copy
+                new_cell = table.TableCell()
+                # Copy the text content
+                val = get_cell_value(cell)
+                if val:
+                    p = odftext.P()
+                    p.addText(val)
+                    new_cell.appendChild(p)
+                # Insert after previous cell
+                parent = cell.parentNode
+                next_sib = prev.nextSibling
+                if next_sib:
+                    parent.insertBefore(new_cell, next_sib)
+                else:
+                    parent.appendChild(new_cell)
+                cell_map[col + r] = new_cell
+                prev = new_cell
+        else:
+            for r in range(rep):
+                cell_map[col + r] = cell
+        
+        col += rep
+    
+    return cell_map
+
+
+def get_col_b_value(cell_map):
+    """Get the value of column B (index 1)."""
+    cell = cell_map.get(1)
+    if cell:
+        return get_cell_value(cell)
+    return ""
+
+
+def update_ods_template(template_path: Path, items: List[Dict], invoice_data: Dict, output_path: Path):
+    """Update ODS template with extracted invoice data.
+    
+    Items are placed SEQUENTIALLY in template rows starting from row 1.
+    The code is written into column G (CODIGO).
+    """
+    
     doc = load_ods(str(template_path))
     sheet = doc.spreadsheet.getElementsByType(table.Table)[0]
     rows = sheet.getElementsByType(table.TableRow)
     
-    # Column mapping (0-indexed)
-    COL_CODE = 6  # Column G - CODIGO (to match against)
-    COL_VALOR_DUA = 9  # Column J - VALOR DUA
-    COL_OPR_MAT = 10  # Column K - OPR Material Cost
-    COL_PALETS = 11  # Column L - PALETS
-    COL_VE = 12  # Column M - V.E (calculated)
-    COL_PESO_BR = 13  # Column N - PESO BR
-    COL_PESO_NET = 14  # Column O - PESO NET
-    COL_UN = 15  # Column P - UN (units/quantity)
+    COL_CODE_G = 6
+    COL_VALOR_DUA = 9
+    COL_OPR_MAT = 10
+    COL_PALETS = 11
+    COL_VE = 12
+    COL_PESO_BR = 13
+    COL_PESO_NET = 14
+    COL_UN = 15
     
-    # Group items by code
-    items_by_code = {}
-    for item in items:
-        code = item["code"]
-        if code not in items_by_code:
-            items_by_code[code] = []
-        items_by_code[code].append(item)
+    WRITABLE_COLS = {COL_CODE_G, COL_VALOR_DUA, COL_OPR_MAT, COL_PALETS,
+                     COL_VE, COL_PESO_BR, COL_PESO_NET, COL_UN}
     
-    # Update data rows
+    # Calculate brut/net ratio for PESO BR
+    peso_brut = invoice_data.get("peso_brut") or 0
+    peso_net = invoice_data.get("peso_net") or 0
+    brut_net_ratio = peso_brut / peso_net if peso_net > 0 else 1.0
+    
+    item_idx = 0
+    
     for row_idx, row in enumerate(rows):
-        if row_idx == 0:  # Skip header row
+        if row_idx == 0:
             continue
         
-        cells = row.getElementsByType(table.TableCell)
-        if len(cells) < 17:
+        cell_map = build_cell_map(row, WRITABLE_COLS)
+        col_b = get_col_b_value(cell_map)
+        
+        # Handle totals row (520)
+        if col_b == "520":
+            if invoice_data.get("total_invoice") is not None:
+                set_cell_value(cell_map.get(COL_VALOR_DUA), format_eu_number(invoice_data["total_invoice"]))
+            if invoice_data.get("total_opr") is not None:
+                set_cell_value(cell_map.get(COL_OPR_MAT), format_eu_number(invoice_data["total_opr"]))
+            if invoice_data.get("pallets") is not None:
+                set_cell_value(cell_map.get(COL_PALETS), str(invoice_data["pallets"]))
+            if invoice_data.get("peso_brut") is not None:
+                set_cell_value(cell_map.get(COL_PESO_BR), str(int(invoice_data["peso_brut"])))
+            if invoice_data.get("peso_net") is not None:
+                set_cell_value(cell_map.get(COL_PESO_NET), str(int(invoice_data["peso_net"])))
             continue
         
-        # Get the code from column G
-        code = get_cell_value(cells[COL_CODE])
-        
-        if code and code in items_by_code:
-            # Get first matching item for this code
-            item = items_by_code[code][0]
+        # Place next item sequentially
+        if item_idx < len(items):
+            item = items[item_idx]
             
-            # Set VALOR DUA (subtotal price)
-            if item.get("subtotal_price"):
-                set_cell_value(cells[COL_VALOR_DUA], f'{item["subtotal_price"]:.2f}'.replace(".", ","))
+            # Write code to column G (strip leading zeros)
+            code = item.get("code", "")
+            code_display = code.lstrip("0") or code
+            set_cell_value(cell_map.get(COL_CODE_G), code_display)
             
-            # Set OPR Material Cost
-            if item.get("opr_material"):
-                set_cell_value(cells[COL_OPR_MAT], f'{item["opr_material"]:.2f}'.replace(".", ","))
+            # VALOR DUA
+            subtotal = item.get("subtotal_price")
+            if subtotal is not None:
+                set_cell_value(cell_map.get(COL_VALOR_DUA), format_eu_number(subtotal))
             
-            # Set PALETS (project-level)
-            if item.get("project_pallets"):
-                set_cell_value(cells[COL_PALETS], str(item["project_pallets"]))
+            # OPR Material Cost (only last item in project)
+            opr = item.get("opr_material")
+            if opr is not None:
+                set_cell_value(cell_map.get(COL_OPR_MAT), format_eu_number(opr))
             
-            # Calculate and set V.E (VALOR DUA + OPR Material)
-            if item.get("subtotal_price") and item.get("opr_material"):
-                ve = item["subtotal_price"] + item["opr_material"]
-                set_cell_value(cells[COL_VE], f'{ve:.2f}'.replace(".", ","))
+            # PALETS (only last item in project)
+            pallets = item.get("project_pallets")
+            if pallets is not None:
+                set_cell_value(cell_map.get(COL_PALETS), str(pallets))
             
-            # Set PESO NET (partial weight)
-            if item.get("partial_weight"):
-                set_cell_value(cells[COL_PESO_NET], str(item["partial_weight"]))
+            # V.E = VALOR_DUA + OPR (or just VALOR_DUA)
+            if subtotal is not None:
+                ve = subtotal + (opr if opr else 0)
+                set_cell_value(cell_map.get(COL_VE), format_eu_number(ve))
             
-            # Set UN (quantity/units)
-            if item.get("quantity"):
-                set_cell_value(cells[COL_UN], str(int(item["quantity"])))
+            # PESO BR (calculated)
+            partial_weight = item.get("partial_weight")
+            if partial_weight is not None:
+                peso_br = partial_weight * brut_net_ratio
+                set_cell_value(cell_map.get(COL_PESO_BR), format_peso_br(peso_br))
+            
+            # PESO NET
+            if partial_weight is not None:
+                # PESO NET always with 2 decimals
+                set_cell_value(cell_map.get(COL_PESO_NET), f'{partial_weight:.2f}'.replace(".", ","))
+            
+            # UN (quantity)
+            quantity = item.get("quantity")
+            if quantity is not None:
+                set_cell_value(cell_map.get(COL_UN), str(int(quantity)))
+            
+            item_idx += 1
     
-    # Update totals row (code 520 gets invoice-level totals)
-    for row_idx, row in enumerate(rows):
-        cells = row.getElementsByType(table.TableCell)
-        if len(cells) < 17:
-            continue
-        
-        code_cell = get_cell_value(cells[1])  # Column B
-        
-        if code_cell == "520":
-            # Set invoice-level totals
-            if invoice_data.get("total_invoice"):
-                set_cell_value(cells[COL_VALOR_DUA], f'{invoice_data["total_invoice"]:.2f}'.replace(".", ","))
-            
-            if invoice_data.get("pallets"):
-                set_cell_value(cells[COL_PALETS], str(invoice_data["pallets"]))
-            
-            if invoice_data.get("peso_brut"):
-                set_cell_value(cells[COL_PESO_BR], str(int(invoice_data["peso_brut"])))
-            
-            if invoice_data.get("peso_net"):
-                set_cell_value(cells[COL_PESO_NET], str(int(invoice_data["peso_net"])))
-            
-            break
-    
-    # Save output
     doc.save(str(output_path))
 
 
@@ -329,21 +489,28 @@ def process_invoice(pdf_path: Path, template_path: Path, output_dir: Path) -> Pa
     
     print(f"Processing: {pdf_path.name}")
     
-    # Extract data
     text = read_pdf_text(pdf_path)
-    invoice_data = extract_invoice_metadata(text)
-    items = extract_line_items(text)
+    fmt = detect_number_format(text)
+    print(f"  Number format: {fmt}")
+    
+    invoice_data = extract_invoice_metadata(text, fmt)
+    items = extract_line_items(text, fmt)
     
     invoice_no = invoice_data.get("invoice_no", "UNKNOWN")
-    print(f"  Invoice: {invoice_no}, Items: {len(items)}")
+    print(f"  Invoice: {invoice_no}, Items: {len(items)}, Pallets: {invoice_data.get('pallets')}")
+    print(f"  Total: {invoice_data.get('total_invoice')}, OPR: {invoice_data.get('total_opr')}")
+    print(f"  Peso Brut: {invoice_data.get('peso_brut')}, Peso Net: {invoice_data.get('peso_net')}")
     
-    # Generate output filename
+    for i, item in enumerate(items):
+        print(f"  #{i+1}: code={item['code']} part={item['part_number']} "
+              f"qty={item.get('quantity')} subtotal={item.get('subtotal_price')} "
+              f"weight={item.get('partial_weight')} project={item.get('project')} "
+              f"pallets={item.get('project_pallets')} opr={item.get('opr_material')}")
+    
     output_file = output_dir / f"COMPLETADO_{invoice_no}.ods"
-    
-    # Update template
     update_ods_template(template_path, items, invoice_data, output_file)
     
-    print(f"  ✓ Created: {output_file.name}")
+    print(f"  ✔ Created: {output_file.name}")
     return output_file
 
 
@@ -361,23 +528,18 @@ def main(argv: List[str]) -> int:
     
     args = parser.parse_args(argv)
     
-    # Resolve paths
     output_dir = Path(args.output).resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
     
-    # Find template
     if args.template:
         template_path = Path(args.template).resolve()
     else:
-        # Default: look for template in same directory as script
         template_path = Path(__file__).parent / "COMPLETADO_TEMPLATE.ods"
     
     if not template_path.exists():
         print(f"ERROR: Template not found: {template_path}", file=sys.stderr)
-        print("Please provide template with -t flag or place COMPLETADO_TEMPLATE.ods in extractor directory", file=sys.stderr)
         return 2
     
-    # Process each PDF
     processed_files = []
     for pdf_file in args.pdfs:
         pdf_path = Path(pdf_file).resolve()
@@ -395,10 +557,9 @@ def main(argv: List[str]) -> int:
             traceback.print_exc()
             return 3
     
-    print(f"\n✓ Successfully processed {len(processed_files)} invoice(s)")
+    print(f"\n✔ Successfully processed {len(processed_files)} invoice(s)")
     return 0
 
 
 if __name__ == "__main__":
     sys.exit(main(sys.argv[1:]))
-
