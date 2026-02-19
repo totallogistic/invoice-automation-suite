@@ -2,7 +2,7 @@
 <html lang="es">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
     <title>Totallogistic Tools [PROD]</title>
     <style>
       * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -34,7 +34,7 @@
         position: absolute;
         top: 1rem;
         right: 1.5rem;
-        background: rgba(220, 53, 69, 0.95);
+        background: rgba(16, 185, 129, 0.95);
         color: white;
         padding: 0.375rem 0.75rem;
         border-radius: 4px;
@@ -48,6 +48,17 @@
         width: 100%;
         margin: 2rem auto;
         padding: 0 1.5rem;
+      }
+      .section-title {
+        font-size: 0.875rem;
+        font-weight: 600;
+        color: #6b7280;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin: 2rem 0 1rem;
+      }
+      .section-title:first-child {
+        margin-top: 0;
       }
       .tools-list {
         background: white;
@@ -69,6 +80,11 @@
         background: #f0f7ff;
         padding-left: 2rem;
       }
+      .tools-list a.external::after {
+        content: " ↗";
+        opacity: 0.5;
+        font-size: 0.875rem;
+      }
       footer {
         text-align: center;
         padding: 1.5rem;
@@ -79,15 +95,22 @@
   </head>
   <body>
     <header>
-      <div class="env-badge">PROD</div>
+      <div class="env-badge">DEV</div>
       <h1>Totallogistic Tools</h1>
       <p>Herramientas de automatización de facturas</p>
     </header>
     <main>
+      <div class="section-title">Procesamiento Automático (Batch)</div>
       <div class="tools-list">
         <a href="/tools/lear_cable/">Lear Cable</a>
         <a href="/tools/import_partida/">Partida</a>
         <a href="/tools/lear_rabat/">Lear Rabat (DUA)</a>
+        <a href="/tools/cuadre_asientos/">📊 Cuadre Asientos</a>
+      </div>
+
+      <div class="section-title">Formularios Interactivos</div>
+      <div class="tools-list">
+        <a href="http://192.168.1.110:8200" target="_blank" class="external">📋 Generador de Formularios</a>
       </div>
     </main>
     <footer>
