@@ -19,6 +19,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from jsonschema import Draft202012Validator, ValidationError
 import uvicorn
+import os
 
 # Configuration
 SCHEMAS_DIR = Path(__file__).parent / "schemas"
@@ -174,10 +175,7 @@ if __name__ == "__main__":
     print(f"🌐 Server starting at: http://localhost:8200")
     print("=" * 60)
     print()
-    
-    uvicorn.run(
-        app,
-        host="0.0.0.0",
-        port=8200,
-        log_level="info"
-    )
+    # Leer puerto de variable de entorno
+    port = int(os.getenv("FORM_UI_PORT", "8200"))
+    print(f"[INFO] Starting Form Generator on port {port}")
+    uvicorn.run(app, host="0.0.0.0", port=port)

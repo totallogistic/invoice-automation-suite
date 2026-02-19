@@ -34,6 +34,23 @@ fi
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 APP_DIR="$(dirname "$SCRIPT_DIR")"
 REPO_ROOT="$(cd "$APP_DIR/../.." && pwd)"
+HOST_IP=$(hostname -I | awk '{print $1}')
+FORM_PORT="8200" # Default
+if [ -f "$REPO_ROOT/.env.prod" ]; then
+  FORM_PORT=$(grep "^FORM_UI_PORT=" "$REPO_ROOT/.env.prod" | cut -d'=' -f2 | tr -d ' ')
+elif [ -f "$REPO_ROOT/.env.dev" ]; then
+  FORM_PORT=$(grep "^FORM_UI_PORT=" "$REPO_ROOT/.env.dev" | cut -d'=' -f2 | tr -d ' ')
+elif [ -f "$REPO_ROOT/.env" ]; then
+  FORM_PORT=$(grep "^FORM_UI_PORT=" "$REPO_ROOT/.env" | cut -d'=' -f2 | tr -d ' ')
+fi
+# Fallback to 8200 if not found or empty
+FORM_PORT=${FORM_PORT:-8200}
+
+echo -e "${BLUE}📁 Detected paths:${NC}"
+echo "   Repo root: $REPO_ROOT"
+echo "   App dir:   $APP_DIR"
+echo "   Form port: $FORM_PORT" # << AÑADIR ESTO PARA DEBUG
+echo ""
 
 echo -e "${BLUE}📁 Detected paths:${NC}"
 echo "   Repo root: $REPO_ROOT"
@@ -101,6 +118,7 @@ if [ -f "$TEMPLATE_FILE" ]; then
   sed -e "s|{{USER}}|$INSTALL_USER|g" \
     -e "s|{{APP_DIR}}|$APP_DIR|g" \
     -e "s|{{PYTHON_CMD}}|$PYTHON_CMD|g" \
+    -e "s|{{FORM_UI_PORT}}|$FORM_PORT|g" \
     "$TEMPLATE_FILE" >"$SERVICE_FILE"
 else
   # Generate service file directly
@@ -121,6 +139,7 @@ StandardError=journal
 
 # Environment
 Environment="PYTHONUNBUFFERED=1"
+Environment="FORM_UI_PORT=$FORM_PORT"
 
 [Install]
 WantedBy=multi-user.target
@@ -183,8 +202,8 @@ echo "   Logs:        sudo journalctl -u form-generator -f"
 echo "   Disable:     sudo systemctl disable form-generator"
 echo ""
 echo -e "${BLUE}🌐 Access:${NC}"
-echo "   http://localhost:8200"
-echo "   http://$(hostname -I | awk '{print $1}'):8200"
+echo "   http://localhost:$FORM_PORT"
+echo "   http://$HOST_IP:$FORM_PORT"
 echo ""
 echo -e "${YELLOW}💡 Tip: Run ./install/uninstall.sh to remove the service${NC}"
 echo ""

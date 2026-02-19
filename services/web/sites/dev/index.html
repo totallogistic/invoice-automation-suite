@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>Totallogistic Tools [DEV]</title>
+    <title>totallogistic Automatizacion</title>
     <style>
       * { margin: 0; padding: 0; box-sizing: border-box; }
       body {
@@ -19,16 +19,20 @@
         padding: 2rem 1.5rem;
         box-shadow: 0 2px 8px rgba(0,0,0,0.15);
         position: relative;
+        text-align: center;
       }
-      header h1 {
-        font-size: 1.75rem;
-        font-weight: 600;
-        letter-spacing: -0.5px;
+      header .logo {
+        max-width: 250px;
+        height: auto;
+        margin: 0 auto 0.75rem;
+        display: block;
       }
-      header p {
-        margin-top: 0.5rem;
-        opacity: 0.9;
-        font-size: 0.95rem;
+      header .header-description {
+        margin: 0;
+        opacity: 0.95;
+        font-size: 1.1rem;
+        font-weight: 300;
+        letter-spacing: 0.5px;
       }
       .env-badge {
         position: absolute;
@@ -95,26 +99,42 @@
   </head>
   <body>
     <header>
-      <div class="env-badge">DEV</div>
-      <h1>Totallogistic Tools</h1>
-      <p>Herramientas de automatización de facturas</p>
+      <div class="env-badge" id="env-badge">...</div>
+      <img src="/assets/totallogistic-logo.png" alt="totallogistic" class="logo">
+      <p class="header-description">Portal de Herramientas y Procesos</p>
     </header>
     <main>
-      <div class="section-title">Procesamiento Automático (Batch)</div>
+      <div class="section-title">Procesos</div>
       <div class="tools-list">
-        <a href="/tools/lear_cable/">Lear Cable</a>
-        <a href="/tools/import_partida/">Partida</a>
-        <a href="/tools/lear_rabat/">Lear Rabat (DUA)</a>
+        <a href="/tools/lear_cable/">🔗 Lear Cable</a>
+        <a href="/tools/import_partida/">🚛 Partida</a>
+        <a href="/tools/lear_rabat/">🇲🇦 Lear Rabat (DUA)</a>
         <a href="/tools/cuadre_asientos/">📊 Cuadre Asientos</a>
       </div>
 
-      <div class="section-title">Formularios Interactivos</div>
+      <div class="section-title">Formularios</div>
       <div class="tools-list">
-        <a href="http://192.168.0.42:8200" target="_blank" class="external">📋 Generador de Formularios</a>
+        <a href="#" id="form-generator-link" target="_blank" class="external">⚙️ Lista de formularios de registro</a>
       </div>
     </main>
     <footer>
-      © 2026 Totallogistic
+      © 2026 totallogistic
     </footer>
+    <script>
+    // Cargar configuración desde env.json
+    fetch('/env.json')
+      .then(r => r.json())
+      .then(data => {
+       // Título
+       document.title = `Herramientas [${data.env.toUpperCase()}]`;
+      
+       // Badge
+       document.getElementById('env-badge').textContent = data.env.toUpperCase();
+      
+       // Form Generator Link
+       const formUrl = `http://${window.location.hostname}:${data.formPort}`;
+       document.getElementById('form-generator-link').href = formUrl;
+     });
+    </script>
   </body>
 </html>

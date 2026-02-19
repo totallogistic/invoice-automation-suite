@@ -21,6 +21,7 @@ SyslogIdentifier=form-generator
 # Environment
 Environment="PYTHONUNBUFFERED=1"
 Environment="PYTHONDONTWRITEBYTECODE=1"
+Environment="FORM_UI_PORT={{FORM_UI_PORT}}"
 
 # Security hardening (optional)
 NoNewPrivileges=true
