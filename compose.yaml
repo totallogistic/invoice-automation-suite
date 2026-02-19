@@ -52,7 +52,7 @@ services:
       - "${TOOLS_WEB_PORT:-8081}:80"
     volumes:
       # Use WEB_SITE_DIR env var, defaults to site_dev for development
-      - ./services/web/sites/dev:/usr/share/nginx/html:ro
+      - ./services/web/sites/${ENVIRONMENT:-dev}:/usr/share/nginx/html:ro
       - ./services/web/nginx_unified.conf:/etc/nginx/conf.d/default.conf:ro
     depends_on:
       - unified_api
