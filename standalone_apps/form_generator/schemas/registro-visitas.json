@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Registro de Visitas",
+  "description": "Formulario para registrar visitas a las instalaciones",
+  "type": "object",
+  "properties": {
+    "fecha": {
+      "type": "string",
+      "format": "date",
+      "title": "Fecha de Visita"
+    },
+    "nombre": {
+      "type": "string",
+      "title": "Nombre"
+    },
+    "apellidos": {
+      "type": "string",
+      "title": "Apellidos"
+    },
+    "dni": {
+      "type": "string",
+      "title": "DNI"
+    },
+    "empresa": {
+      "type": "string",
+      "title": "Empresa"
+    },
+    "motivoVisita": {
+      "type": "string",
+      "title": "Motivo de la Visita",
+      "enum": ["Comercial", "Cita previa", "Entrega", "Recogida", "Otro"]
+    },
+    "personaAtiende": {
+      "type": "string",
+      "title": "Persona que lo Atiende",
+      "enum": ["Rafael Rubiales", "Rubén Rubiales", "Javier Martínez", "Jose Luis Martínez", "Juan Antonio Martínez", "Jose Luis del Pino", "Otro"]
+    },
+    "observaciones": {
+      "type": "string",
+      "title": "Observaciones"
+    },
+    "aceptaGDPR": {
+      "type": "boolean",
+      "title": "Acepto el tratamiento de datos personales"
+    }
+  },
+  "required": ["fecha", "nombre", "apellidos", "dni", "empresa", "motivoVisita", "personaAtiende", "aceptaGDPR"]
+}

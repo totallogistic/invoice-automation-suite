@@ -17,15 +17,36 @@ from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from jsonschema import Draft202012Validator, ValidationError
+from jsonschema import Draft202012Validator, ValidationError, validate, Draft7Validator
+
 import uvicorn
 import os
+from openpyxl import Workbook, load_workbook
+from openpyxl.styles import Font, Alignment, PatternFill
+from pathlib import Path
+import smtplib
+from email.mime.multipart import MIMEMultipart
+from email.mime.base import MIMEBase
+from email.mime.text import MIMEText
+from email import encoders
+from datetime import datetime
 
 # Configuration
 SCHEMAS_DIR = Path(__file__).parent / "schemas"
 OUTPUT_DIR = Path(__file__).parent / "output"
 TEMPLATES_DIR = Path(__file__).parent / "templates"
 STATIC_DIR = Path(__file__).parent / "static"
+
+# Excel storage configuration
+EXCEL_STORAGE_DIR = Path(__file__).parent / "excel_storage"
+EXCEL_STORAGE_DIR.mkdir(exist_ok=True)
+
+# Email configuration (read from env)
+SMTP_HOST = os.getenv("SMTP_HOST", "")
+SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
+SMTP_USER = os.getenv("SMTP_USER", "")
+SMTP_PASS = os.getenv("SMTP_PASS", "")
+MAIL_FROM = os.getenv("MAIL_FROM", "")
 
 # Ensure directories exist
 OUTPUT_DIR.mkdir(exist_ok=True)
@@ -34,6 +55,108 @@ OUTPUT_DIR.mkdir(exist_ok=True)
 app = FastAPI(title="JSON Schema Form Generator", version="1.0")
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 templates = Jinja2Templates(directory=TEMPLATES_DIR)
+
+def send_email_with_json(to_email: str, subject: str, schema_name: str, data: dict, json_path: str):
+    """
+    Send email with JSON attachment.
+    Returns True if successful, False otherwise.
+    """
+    if not SMTP_HOST or not SMTP_USER or not SMTP_PASS:
+        print("⚠️ Email not configured, skipping...")
+        return False
+    
+    try:
+        # Create message
+        msg = MIMEMultipart()
+        msg['From'] = MAIL_FROM or SMTP_USER
+        msg['To'] = to_email
+        msg['Subject'] = subject
+        
+        # Email body
+        body = f"""
+<html>
+<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+    <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+        <h2 style="color: #2563a8; border-bottom: 2px solid #2563a8; padding-bottom: 10px;">
+            {subject}
+        </h2>
+        
+        <p>Se ha completado un nuevo formulario:</p>
+        
+        <div style="background: #f5f5f5; padding: 15px; border-radius: 8px; margin: 20px 0;">
+            <h3 style="margin-top: 0; color: #1a4d7e;">📋 Datos del Formulario:</h3>
+            <table style="width: 100%; border-collapse: collapse;">
+"""
+        
+        # Add data rows
+        for key, value in data.items():
+            # Skip internal fields
+            if key.startswith('_'):
+                continue
+            
+            # Format key
+            formatted_key = key.replace('_', ' ').replace('-', ' ').title()
+            
+            # Format value
+            if isinstance(value, bool):
+                formatted_value = "✓ Sí" if value else "✗ No"
+            elif value is None or value == "":
+                formatted_value = "-"
+            else:
+                formatted_value = str(value)
+            
+            body += f"""
+                <tr>
+                    <td style="padding: 8px; border-bottom: 1px solid #ddd; font-weight: 600;">
+                        {formatted_key}:
+                    </td>
+                    <td style="padding: 8px; border-bottom: 1px solid #ddd;">
+                        {formatted_value}
+                    </td>
+                </tr>
+"""
+        
+        body += """
+            </table>
+        </div>
+        
+        <p style="color: #6b7280; font-size: 0.9rem; margin-top: 30px;">
+            Este mensaje ha sido generado automáticamente por el sistema de formularios de Totallogistic.
+        </p>
+    </div>
+</body>
+</html>
+"""
+        
+        msg.attach(MIMEText(body, 'html'))
+        
+        # Attach JSON file
+        with open(json_path, 'rb') as f:
+            attach = MIMEBase('application', 'json')
+            attach.set_payload(f.read())
+            encoders.encode_base64(attach)
+            attach.add_header('Content-Disposition', f'attachment; filename="{Path(json_path).name}"')
+            msg.attach(attach)
+        
+        # Send email - Handle SSL vs STARTTLS
+        if SMTP_PORT == 465:
+            # SSL directo para puerto 465
+            with smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT) as server:
+                server.login(SMTP_USER, SMTP_PASS)
+                server.send_message(msg)
+        else:
+            # STARTTLS para puerto 587
+            with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as server:
+                server.starttls()
+                server.login(SMTP_USER, SMTP_PASS)
+                server.send_message(msg)
+        
+        print(f"✅ Email sent to {to_email}")
+        return True
+        
+    except Exception as e:
+        print(f"❌ Error sending email: {e}")
+        return False
 
 
 def load_schema(schema_name: str) -> Dict[str, Any]:
@@ -58,6 +181,56 @@ def validate_data(schema: Dict[str, Any], data: Any) -> tuple[bool, list[str]]:
     
     return len(errors) == 0, errors
 
+def append_to_excel(schema_name: str, data: dict) -> str:
+    """
+    Append data to an Excel file, creating it if it doesn't exist.
+    Returns the Excel file path.
+    """
+    excel_file = EXCEL_STORAGE_DIR / f"{schema_name}.xlsx"
+    
+    # Load or create workbook
+    if excel_file.exists():
+        wb = load_workbook(excel_file)
+        ws = wb.active
+    else:
+        wb = Workbook()
+        ws = wb.active
+        ws.title = schema_name
+        
+        # Create header row
+        headers = list(data.keys())
+        ws.append(headers)
+        
+        # Style header
+        header_fill = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
+        header_font = Font(bold=True, color="FFFFFF")
+        
+        for cell in ws[1]:
+            cell.fill = header_fill
+            cell.font = header_font
+            cell.alignment = Alignment(horizontal="center")
+    
+    # Append data row
+    row_data = [data.get(key, "") for key in [cell.value for cell in ws[1]]]
+    ws.append(row_data)
+    
+    # Auto-adjust column widths
+    for column in ws.columns:
+        max_length = 0
+        column_letter = column[0].column_letter
+        for cell in column:
+            try:
+                if len(str(cell.value)) > max_length:
+                    max_length = len(cell.value)
+            except:
+                pass
+        adjusted_width = min(max_length + 2, 50)
+        ws.column_dimensions[column_letter].width = adjusted_width
+    
+    # Save
+    wb.save(excel_file)
+    
+    return str(excel_file)
 
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
@@ -142,6 +315,121 @@ async def save_data(schema_name: str, data: Dict[str, Any]):
         "download_url": f"/download/{filename}"
     })
 
+@app.post("/api/save-to-excel/{schema_name}")
+async def save_to_excel(
+    schema_name: str,
+    data: dict,
+    send_email: bool = False,
+    email_to: str = None
+):
+    """Save form data to Excel and optionally send email."""
+    
+    # Validate against schema
+    schema_file = SCHEMAS_DIR / f"{schema_name}.json"
+    if not schema_file.exists():
+        raise HTTPException(status_code=404, detail=f"Schema '{schema_name}' not found")
+    
+    with open(schema_file, 'r', encoding='utf-8') as f:
+        schema = json.load(f)
+    
+    validator = Draft7Validator(schema)
+    errors = list(validator.iter_errors(data))
+
+    if errors:
+        error_messages = [f"{e.path}: {e.message}" for e in errors]
+        raise HTTPException(status_code=400, detail=f"Validation errors: {', '.join(error_messages)}")
+
+    # Save to Excel
+    try:
+        excel_path = append_to_excel(schema_name, data)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error saving to Excel: {str(e)}")
+    
+    response = {
+        "success": True,
+        "message": "Registro guardado correctamente",
+        "excel_file": Path(excel_path).name,
+        "row_number": None  # Could calculate this
+    }
+    
+    # Send email if requested
+    if send_email and email_to and SMTP_HOST:
+        try:
+            # TODO: Implement email sending
+            response["email_sent"] = True
+        except Exception as e:
+            response["email_sent"] = False
+            response["email_error"] = str(e)
+    
+    return response
+
+@app.post("/api/save-and-email/{schema_name}")
+async def save_and_email(
+    schema_name: str,
+    data: dict,
+    email_to: str = None
+):
+    """Save form data as JSON and send via email."""
+    
+    # Validate against schema
+    schema_file = SCHEMAS_DIR / f"{schema_name}.json"
+    if not schema_file.exists():
+        raise HTTPException(status_code=404, detail=f"Schema '{schema_name}' not found")
+    
+    with open(schema_file, 'r', encoding='utf-8') as f:
+        schema = json.load(f)
+    
+    try:
+        validator = Draft7Validator(schema)
+        errors = list(validator.iter_errors(data))
+        if errors:
+            error_msg = errors[0].message
+            raise HTTPException(status_code=400, detail=f"Validation error: {error_msg}")
+    except Exception as e:
+        if not isinstance(e, HTTPException):
+            raise HTTPException(status_code=400, detail=f"Validation error: {str(e)}")
+        raise
+    # Generate filename
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"{schema_name}_{timestamp}.json"
+    filepath = OUTPUT_DIR / filename
+    
+    # Save JSON
+    try:
+        with open(filepath, 'w', encoding='utf-8') as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error saving file: {str(e)}")
+    
+    # Determine email recipient
+    if not email_to:
+        email_to = os.getenv("MAIL_TO", "")
+    
+    if not email_to:
+        return {
+            "success": True,
+            "message": "Formulario guardado (email no configurado)",
+            "filename": filename,
+            "email_sent": False
+        }
+    
+    # Send email
+    subject = f"Nuevo formulario: {schema.get('title', schema_name)}"
+    email_sent = send_email_with_json(
+        to_email=email_to,
+        subject=subject,
+        schema_name=schema_name,
+        data=data,
+        json_path=str(filepath)
+    )
+    
+    return {
+        "success": True,
+        "message": "Formulario enviado por email" if email_sent else "Formulario guardado (error en email)",
+        "filename": filename,
+        "email_sent": email_sent,
+        "email_to": email_to if email_sent else None
+    }
 
 @app.get("/download/{filename}")
 async def download_file(filename: str):

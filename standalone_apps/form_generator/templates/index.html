@@ -5,6 +5,71 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>JSON Schema Form Generator</title>
     <link rel="stylesheet" href="/static/style.css">
+    <style>
+        /* Estilos adicionales para agrupación */
+        .schema-section {
+            margin-bottom: 3rem;
+        }
+        
+        .section-header {
+            margin-bottom: 1.5rem;
+            padding-bottom: 0.75rem;
+            border-bottom: 2px solid #e5e7eb;
+        }
+        
+        .section-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: #1f2937;
+            margin-bottom: 0.5rem;
+        }
+        
+        .section-description {
+            font-size: 0.9rem;
+            color: #6b7280;
+        }
+        
+        .schema-card {
+            position: relative;
+        }
+        
+        .badge {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            margin-left: 0.5rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .badge-draft {
+            background: #fef3c7;
+            color: #92400e;
+        }
+        
+        .badge-excel {
+            background: #d1fae5;
+            color: #065f46;
+        }
+        
+        .badge-email {
+            background: #dbeafe;
+            color: #1e40af;
+        }
+        
+        .badge-inactive {
+            background: #f3f4f6;
+            color: #6b7280;
+        }
+        
+        .card-badge {
+            position: absolute;
+            top: 1rem;
+            right: 1rem;
+        }
+    </style>
 </head>
 <body>
     <header>
@@ -13,22 +78,91 @@
     </header>
 
     <main>
-        <div class="schema-list">
-            {% if schemas %}
+        {% if schemas %}
+        
+        <!-- Grupo 1: Descarga de Archivos (Ejemplos) -->
+        <div class="schema-section">
+            <div class="section-header">
+                <div class="section-title">
+                    📥 Generación de Documentos
+                    <span class="badge badge-draft">Ejemplos</span>
+                </div>
+                <p class="section-description">
+                    Formularios que generan documentos para descargar (modelos de demostración)
+                </p>
+            </div>
+            <div class="schema-list">
                 {% for schema in schemas %}
+                {% if schema.name in ['packing_list', 'customs_clearance'] %}
                 <a href="/form/{{ schema.name }}" class="schema-card">
+                    <span class="card-badge badge badge-draft">Demo</span>
                     <h2>{{ schema.title }}</h2>
-                    <p>{{ schema.description }}</p>
+                    <p>{{ schema.description or '' }}</p>
                     <span class="schema-name">{{ schema.name }}</span>
                 </a>
+                {% endif %}
                 {% endfor %}
-            {% else %}
-                <div class="empty-state">
-                    <p>No hay schemas disponibles.</p>
-                    <p class="muted">Añade archivos .json en el directorio <code>schemas/</code></p>
-                </div>
-            {% endif %}
+            </div>
         </div>
+
+        <!-- Grupo 2: Registro en Excel (Operativos) -->
+        <div class="schema-section">
+            <div class="section-header">
+                <div class="section-title">
+                    📊 Registros y Revisiones
+                    <span class="badge badge-excel">Operativo</span>
+                </div>
+                <p class="section-description">
+                    Formularios que registran información en archivos Excel compartidos
+                </p>
+            </div>
+            <div class="schema-list">
+                {% for schema in schemas %}
+                {% if schema.name in ['registro-visitas', 'revision-vehiculos', 'revision-estanterias', 'mantenimiento-maquinas', 'revision-motocicletas'] %}
+                <a href="/form/{{ schema.name }}" class="schema-card">
+                    <span class="card-badge badge badge-excel">Excel</span>
+                    <h2>{{ schema.title }}</h2>
+                    <p>{{ schema.description or '' }}</p>
+                    <span class="schema-name">{{ schema.name }}</span>
+                </a>
+                {% endif %}
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Grupo 3: Envío por Email (Pendiente) -->
+        <div class="schema-section">
+            <div class="section-header">
+                <div class="section-title">
+                    📧 Notificaciones por Email
+                    <span class="badge badge-inactive">Próximamente</span>
+                </div>
+                <p class="section-description">
+                    Formularios que envían notificaciones automáticas por correo electrónico
+                </p>
+            </div>
+            <div class="schema-list">
+                {% for schema in schemas %}
+                {% if schema.name in ['orden-compra-schema', 'reporte-incidencia-schema', 'solicitud-vacaciones-schema'] %}
+                <a href="/form/{{ schema.name }}" class="schema-card" style="opacity: 0.6;">
+                    <span class="card-badge badge badge-inactive">En desarrollo</span>
+                    <h2>{{ schema.title }}</h2>
+                    <p>{{ schema.description or '' }}</p>
+                    <span class="schema-name">{{ schema.name }}</span>
+                </a>
+                {% endif %}
+                {% endfor %}
+            </div>
+        </div>
+
+        {% else %}
+        <div class="schema-list">
+            <div style="text-align: center; padding: 3rem; color: #6b7280;">
+                <p>📂 No hay esquemas disponibles</p>
+                <p style="font-size: 0.9rem;">Añade archivos JSON Schema a la carpeta <code>schemas/</code></p>
+            </div>
+        </div>
+        {% endif %}
     </main>
 
     <footer>

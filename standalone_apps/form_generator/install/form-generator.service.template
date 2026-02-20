@@ -29,3 +29,11 @@ PrivateTmp=true
 
 [Install]
 WantedBy=multi-user.target
+
+# Email configuration - AÑADIR ESTO
+Environment="SMTP_HOST={{SMTP_HOST}}"
+Environment="SMTP_PORT={{SMTP_PORT}}"
+Environment="SMTP_USER={{SMTP_USER}}"
+Environment="SMTP_PASS={{SMTP_PASS}}"
+Environment="MAIL_FROM={{MAIL_FROM}}"
+Environment="MAIL_TO={{MAIL_TO}}"

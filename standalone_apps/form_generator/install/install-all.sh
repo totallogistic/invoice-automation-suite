@@ -47,9 +47,9 @@ fi
 # Count environments
 ENV_COUNT=$(echo "$ENV_FILES" | wc -l)
 echo -e "${GREEN}✓ Found $ENV_COUNT environment(s):${NC}"
-echo "$ENV_FILES" | while read file; do
+while IFS= read -r file; do
   basename "$file"
-done
+done <<<"$ENV_FILES"
 echo ""
 
 # Confirm
@@ -60,11 +60,11 @@ if [[ $REPLY =~ ^[Nn]$ ]]; then
   exit 0
 fi
 
-# Install each environment
+# Install each environment - AVOID SUBSHELL with <<< syntax
 INSTALL_COUNT=0
 echo ""
 
-echo "$ENV_FILES" | while read ENV_FILE; do
+while IFS= read -r ENV_FILE; do
   ENV_NAME=$(basename "$ENV_FILE" | sed 's/^\.env\.//')
 
   echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
@@ -72,8 +72,14 @@ echo "$ENV_FILES" | while read ENV_FILE; do
   echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
   echo ""
 
-  # Read port from env file
-  FORM_PORT=$(grep "^FORM_UI_PORT=" "$ENV_FILE" | cut -d'=' -f2 | tr -d ' ' | tr -d '"' | tr -d "'")
+  # Read configuration from env file - EXPLICIT PARSING
+  FORM_PORT=$(grep "^FORM_UI_PORT=" "$ENV_FILE" 2>/dev/null | head -1 | cut -d'=' -f2 | tr -d ' "'"'"'')
+  SMTP_HOST=$(grep "^SMTP_HOST=" "$ENV_FILE" 2>/dev/null | head -1 | cut -d'=' -f2 | tr -d ' "'"'"'')
+  SMTP_PORT=$(grep "^SMTP_PORT=" "$ENV_FILE" 2>/dev/null | head -1 | cut -d'=' -f2 | tr -d ' "'"'"'')
+  SMTP_USER=$(grep "^SMTP_USER=" "$ENV_FILE" 2>/dev/null | head -1 | cut -d'=' -f2 | tr -d ' "'"'"'')
+  SMTP_PASS=$(grep "^SMTP_PASS=" "$ENV_FILE" 2>/dev/null | head -1 | cut -d'=' -f2 | tr -d ' "'"'"'')
+  MAIL_FROM=$(grep "^MAIL_FROM=" "$ENV_FILE" 2>/dev/null | head -1 | cut -d'=' -f2 | tr -d ' "'"'"'')
+  MAIL_TO=$(grep "^MAIL_TO=" "$ENV_FILE" 2>/dev/null | head -1 | cut -d'=' -f2 | tr -d ' "'"'"'')
 
   if [ -z "$FORM_PORT" ]; then
     echo -e "${YELLOW}⚠️  No FORM_UI_PORT in $ENV_FILE, skipping${NC}"
@@ -83,6 +89,11 @@ echo "$ENV_FILES" | while read ENV_FILE; do
 
   echo -e "${BLUE}   Environment: ${GREEN}$ENV_NAME${NC}"
   echo -e "${BLUE}   Port:        ${GREEN}$FORM_PORT${NC}"
+  if [ -n "$SMTP_HOST" ]; then
+    echo -e "${BLUE}   Email:       ${GREEN}Configured → ${MAIL_TO}${NC}"
+  else
+    echo -e "${BLUE}   Email:       ${YELLOW}Not configured${NC}"
+  fi
   echo ""
 
   # Create service name
@@ -96,8 +107,8 @@ echo "$ENV_FILES" | while read ENV_FILE; do
     continue
   fi
 
-  # Generate service file
-  cat >"$SERVICE_FILE" <<EOF
+  # Generate service file with email variables - USE HEREDOC WITHOUT QUOTES
+  cat >"$SERVICE_FILE" <<SERVICEEOF
 [Unit]
 Description=JSON Schema Form Generator [$ENV_NAME]
 After=network.target
@@ -122,6 +133,12 @@ SyslogIdentifier=${SERVICE_NAME}
 Environment="PYTHONUNBUFFERED=1"
 Environment="PYTHONDONTWRITEBYTECODE=1"
 Environment="FORM_UI_PORT=$FORM_PORT"
+Environment="SMTP_HOST=$SMTP_HOST"
+Environment="SMTP_PORT=$SMTP_PORT"
+Environment="SMTP_USER=$SMTP_USER"
+Environment="SMTP_PASS=$SMTP_PASS"
+Environment="MAIL_FROM=$MAIL_FROM"
+Environment="MAIL_TO=$MAIL_TO"
 
 # Security
 NoNewPrivileges=true
@@ -129,13 +146,13 @@ PrivateTmp=true
 
 [Install]
 WantedBy=multi-user.target
-EOF
+SERVICEEOF
 
   chmod 644 "$SERVICE_FILE"
 
   # Reload and enable
   systemctl daemon-reload
-  systemctl enable "$SERVICE_NAME"
+  systemctl enable "$SERVICE_NAME" >/dev/null 2>&1
 
   # Start service
   if systemctl start "$SERVICE_NAME"; then
@@ -152,7 +169,7 @@ EOF
   fi
 
   echo ""
-done
+done <<<"$ENV_FILES"
 
 # Summary
 echo -e "${GREEN}============================================================${NC}"
@@ -171,14 +188,14 @@ echo "   Logs (dev):  sudo journalctl -u form-generator-dev -f"
 echo ""
 echo -e "${BLUE}🌐 Access:${NC}"
 
-# Show access URLs
-echo "$ENV_FILES" | while read ENV_FILE; do
+# Show access URLs - ALSO AVOID SUBSHELL
+while IFS= read -r ENV_FILE; do
   ENV_NAME=$(basename "$ENV_FILE" | sed 's/^\.env\.//')
-  FORM_PORT=$(grep "^FORM_UI_PORT=" "$ENV_FILE" | cut -d'=' -f2 | tr -d ' ' | tr -d '"' | tr -d "'")
+  FORM_PORT=$(grep "^FORM_UI_PORT=" "$ENV_FILE" 2>/dev/null | head -1 | cut -d'=' -f2 | tr -d ' "'"'"'')
   if [ -n "$FORM_PORT" ]; then
     HOST_IP=$(hostname -I | awk '{print $1}')
     echo "   $ENV_NAME: http://$HOST_IP:$FORM_PORT"
   fi
-done
+done <<<"$ENV_FILES"
 
 echo ""

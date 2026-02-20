@@ -1,0 +1,92 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Mantenimiento de Máquinas de Almacén",
+  "description": "Registro de mantenimiento periódico - Delegación Algeciras",
+  "type": "object",
+  "properties": {
+    "fechaMantenimiento": {
+      "type": "string",
+      "format": "date",
+      "title": "Fecha de Mantenimiento"
+    },
+    "responsable": {
+      "type": "string",
+      "title": "Responsable del Mantenimiento",
+      "enum": [
+        "DIEGO LADRÓN FONCUBIERTA",
+        "ASRIH EL KADDOURI HICHAM",
+        "BECERRA SORIANO LUCAS MANUEL",
+        "RODRIGUEZ SANTANA ANTONIO",
+        "RODRIGUEZ SANTANA MANUEL"
+      ]
+    },
+    "maquina": {
+      "type": "string",
+      "title": "Máquina / Equipo",
+      "enum": [
+        "CARRETILLA TOYOTA 7FBMF25",
+        "CARRETILLA LATERAL STILL FM 14",
+        "TRASPALETA ELECTRICA A - 7PML20/6",
+        "TRASPALETA ELECTRICA C - LPE200",
+        "RETRACTILADORA ELECT. MA 00"
+      ]
+    },
+    "tipoRevision": {
+      "type": "string",
+      "title": "Tipo de Revisión",
+      "enum": [
+        "NIVELES BATERIAS",
+        "ENGRASE",
+        "REVISIÓN GENERAL"
+      ]
+    },
+    "mes": {
+      "type": "string",
+      "title": "Mes",
+      "enum": [
+        "ENERO", "FEBRERO", "MARZO", "ABRIL", "MAYO", "JUNIO",
+        "JULIO", "AGOSTO", "SEPTIEMBRE", "OCTUBRE", "NOVIEMBRE", "DICIEMBRE"
+      ]
+    },
+    "estadoGeneral": {
+      "type": "string",
+      "title": "Estado General",
+      "enum": ["CORRECTO", "REQUIERE ATENCIÓN", "DEFECTUOSO"]
+    },
+    "nivelBateria": {
+      "type": "string",
+      "title": "Nivel de Batería",
+      "enum": ["CORRECTO", "BAJO", "CRÍTICO", "N/A"]
+    },
+    "engraseRealizado": {
+      "type": "string",
+      "title": "Engrase Realizado",
+      "enum": ["SÍ", "NO", "N/A"]
+    },
+    "incidencias": {
+      "type": "string",
+      "title": "Incidencias Detectadas",
+      "description": "Detalles de problemas o anomalías encontradas"
+    },
+    "accionesRealizadas": {
+      "type": "string",
+      "title": "Acciones Realizadas",
+      "description": "Reparaciones o ajustes efectuados"
+    },
+    "proximaRevision": {
+      "type": "string",
+      "format": "date",
+      "title": "Próxima Revisión Programada"
+    }
+  },
+  "required": [
+    "fechaMantenimiento",
+    "responsable",
+    "maquina",
+    "tipoRevision",
+    "mes",
+    "estadoGeneral",
+    "nivelBateria",
+    "engraseRealizado"
+  ]
+}

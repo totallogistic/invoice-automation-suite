@@ -17,6 +17,63 @@ const successDiv = document.getElementById('success-message');
 let formData = {};
 
 // ============================================================================
+// Schema Configuration - Define backend action per schema
+// ============================================================================
+const SCHEMA_CONFIG = {
+    'registro-visitas': {
+        action: 'excel',
+        endpoint: `/api/save-to-excel/${SCHEMA_NAME}`,
+        successMessage: '✅ Visita registrada correctamente',
+        clearOnSuccess: true
+    },
+    'revision-vehiculos': {
+        action: 'excel',
+        endpoint: `/api/save-to-excel/${SCHEMA_NAME}`,
+        successMessage: '✅ Revisión registrada correctamente',
+        clearOnSuccess: true
+    },
+    'revision-estanterias': {
+        action: 'excel',
+        endpoint: `/api/save-to-excel/${SCHEMA_NAME}`,
+        successMessage: '✅ Revisión de estantería registrada correctamente',
+        clearOnSuccess: true
+    },
+    'mantenimiento-maquinas': {
+      action: 'excel',
+      endpoint: `/api/save-to-excel/${SCHEMA_NAME}`,
+      successMessage: '✅ Mantenimiento registrado correctamente',
+      clearOnSuccess: true
+    },
+    'revision-motocicletas': {
+      action: 'excel',
+      endpoint: `/api/save-to-excel/${SCHEMA_NAME}`,
+      successMessage: '✅ Revisión de motocicleta registrada correctamente',
+      clearOnSuccess: true
+    },
+    'orden-compra-schema': {
+        action: 'email',
+        endpoint: `/api/save-and-email/${SCHEMA_NAME}`,
+        successMessage: '✅ Orden de compra enviada por email',
+        clearOnSuccess: true
+    },
+    'reporte-incidencia-schema': {
+        action: 'email',
+        endpoint: `/api/save-and-email/${SCHEMA_NAME}`,
+        successMessage: '✅ Reporte de incidencia enviado por email',
+        clearOnSuccess: true
+    },
+    'default': {
+        action: 'download',
+        successMessage: '✅ Archivo descargado',
+        clearOnSuccess: false
+    }
+};
+
+function getSchemaConfig() {
+    return SCHEMA_CONFIG[SCHEMA_NAME] || SCHEMA_CONFIG['default'];
+}
+
+// ============================================================================
 // Form Generation
 // ============================================================================
 
@@ -251,45 +308,103 @@ async function validateForm() {
 }
 
 // ============================================================================
-// Save & Download
+// Save & Download - WITH EXCEL SUPPORT
 // ============================================================================
 
 async function saveForm() {
     const data = collectFormData();
+    const config = getSchemaConfig();
     
     // Clear previous messages
     errorsDiv.style.display = 'none';
     successDiv.style.display = 'none';
     
     try {
-        const response = await fetch(`/api/save/${SCHEMA_NAME}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(data)
-        });
-        
-        const result = await response.json();
-        
-        if (result.success) {
-            showSuccess(`✓ Guardado: ${result.filename}`);
+        if (config.action === 'excel') {
+            // Save to Excel backend
+            const response = await fetch(config.endpoint, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
             
-            // Auto-download
-            setTimeout(() => {
-                window.location.href = result.download_url;
-            }, 500);
+            const result = await response.json();
             
-            // Clear localStorage
-            localStorage.removeItem(`form_${SCHEMA_NAME}`);
-        } else {
-            showErrors(result.errors);
+            if (response.ok && result.success) {
+                showSuccess(config.successMessage);
+                
+                // Clear form if configured
+                if (config.clearOnSuccess) {
+                    setTimeout(() => {
+                        resetForm(true); // true = skip confirmation
+                    }, 1500);
+                }
+                
+                // Clear localStorage
+                localStorage.removeItem(`form_${SCHEMA_NAME}`);
+            } else {
+                showErrors([result.detail || 'Error al guardar']);
+            }
+          } else if (config.action === 'email') {
+            // Send via email
+            const response = await fetch(config.endpoint, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
+            
+            const result = await response.json();
+            
+            if (response.ok && result.success) {
+                let message = config.successMessage;
+                if (result.email_sent) {
+                    message += ` → ${result.email_to}`;
+                }
+                showSuccess(message);
+                
+                // Clear form if configured
+                if (config.clearOnSuccess) {
+                    setTimeout(() => {
+                        resetForm(true);
+                    }, 2000);
+                }
+                
+                localStorage.removeItem(`form_${SCHEMA_NAME}`);
+            } else {
+                showErrors([result.detail || result.message || 'Error al enviar']);
+            }
+            
+        } else {          
+            // Default action: download JSON
+            const response = await fetch(`/api/save/${SCHEMA_NAME}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                showSuccess(`✓ Guardado: ${result.filename}`);
+                
+                // Auto-download
+                setTimeout(() => {
+                    window.location.href = result.download_url;
+                }, 500);
+                
+                // Clear localStorage
+                localStorage.removeItem(`form_${SCHEMA_NAME}`);
+            } else {
+                showErrors(result.errors);
+            }
         }
     } catch (e) {
         showErrors([`Error al guardar: ${e.message}`]);
     }
 }
 
-function resetForm() {
-    if (confirm('¿Seguro que quieres resetear el formulario?')) {
+function resetForm(skipConfirmation = false) {
+    if (skipConfirmation || confirm('¿Seguro que quieres resetear el formulario?')) {
         formData = {};
         localStorage.removeItem(`form_${SCHEMA_NAME}`);
         renderForm();
@@ -379,7 +494,7 @@ function toggleHelp() {
 
 btnSave.addEventListener('click', saveForm);
 btnValidate.addEventListener('click', validateForm);
-btnReset.addEventListener('click', resetForm);
+btnReset.addEventListener('click', () => resetForm(false));
 btnHelp.addEventListener('click', toggleHelp);
 
 // Keyboard shortcuts
@@ -393,7 +508,7 @@ document.addEventListener('keydown', (e) => {
     // Ctrl+R → Reset (prevent default browser reload)
     if (e.ctrlKey && e.key === 'r') {
         e.preventDefault();
-        resetForm();
+        resetForm(false);
     }
     
     // Escape → Close help
