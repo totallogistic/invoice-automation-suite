@@ -46,6 +46,42 @@
         font-weight: 600;
         letter-spacing: 0.5px;
       }
+      .tool-badge {
+        display: inline-block;
+        padding: 0.25rem 0.75rem;
+        border-radius: 12px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        margin-left: 0.5rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
+
+      .badge-operativo {
+        background: #d1fae5;
+        color: #065f46;
+      }
+      
+      .badge-en-cola {
+        background: #fecaca;  /* ← Cambiar a un rojo más claro */
+        color: #7f1d1d;       /* ← Texto más oscuro */
+      }
+
+      .badge-en-proceso {
+        background: #bfdbfe;  /* ← Cambiar a un azul más claro */
+        color: #1e3a8a;       /* ← Texto más oscuro */
+      }
+
+      .badge-wip {
+        background: #fef3c7;
+        color: #92400e;
+      } 
+
+      .badge-draft {
+        background: #f3f4f6;
+        color: #6b7280;
+      }
+
       main {
         flex: 1;
         max-width: 800px;
@@ -104,18 +140,29 @@
       <p class="header-description">Portal de Herramientas y Procesos</p>
     </header>
     <main>
-      <div class="section-title">Procesos</div>
-      <div class="tools-list">
-        <a href="/tools/lear_cable/">🔗 Lear Cable</a>
-        <a href="/tools/import_partida/">🚛 Partida</a>
-        <a href="/tools/lear_rabat/">🇲🇦 Lear Rabat (DUA)</a>
-        <a href="/tools/cuadre_asientos/">📊 Cuadre Asientos</a>
-      </div>
+    <div class="section-title">Procesos</div>
+    <div class="tools-list">
+    <a href="/tools/lear_cable/">
+      🔗 Lear Cable
+      <span class="tool-badge badge-operativo">Operativo</span>
+    </a>
+    <a href="/tools/lear_rabat/">
+      🇲🇦 Lear Rabat (DUA)
+      <span class="tool-badge badge-operativo">Operativo</span>
+    </a>
+    <a href="/tools/cuadre_asientos/">
+      📊 Cuadre Asientos
+    <span class="tool-badge badge-operativo">Operativo</span>
+  </a>
+</div>
 
-      <div class="section-title">Formularios</div>
-      <div class="tools-list">
-        <a href="#" id="form-generator-link" target="_blank" class="external">⚙️ Lista de formularios de registro</a>
-      </div>
+<div class="section-title">Formularios</div>
+<div class="tools-list">
+  <a href="#" id="form-generator-link" target="_blank" class="external">
+    ⚙️ Lista de formularios de registro
+    <span class="tool-badge badge-operativo">Operativo</span>
+  </a>
+</div>
     </main>
     <footer>
       © 2026 totallogistic

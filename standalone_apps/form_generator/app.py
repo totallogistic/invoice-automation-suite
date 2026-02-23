@@ -232,6 +232,16 @@ def append_to_excel(schema_name: str, data: dict) -> str:
     
     return str(excel_file)
 
+@app.get("/form-custom/estanterias", response_class=HTMLResponse)
+async def estanterias_custom(request: Request):
+    """Custom form for estanterías with multiple rows."""
+    return templates.TemplateResponse("estanterias-custom.html", {"request": request})
+
+@app.get("/politica-privacidad", response_class=HTMLResponse)
+async def politica_privacidad(request: Request):
+    """Display privacy policy page."""
+    return templates.TemplateResponse("politica-privacidad.html", {"request": request})
+
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
     """Show list of available schemas."""
@@ -259,11 +269,75 @@ async def show_form(request: Request, schema_name: str):
     """Display form for a specific schema."""
     schema = load_schema(schema_name)
     
-    return templates.TemplateResponse("form.html", {
+    # Check if schema has custom template
+    template_name = schema.get("custom_template", "form.html")
+    
+    return templates.TemplateResponse(template_name, {
         "request": request,
         "schema_name": schema_name,
         "schema": schema,
-        "schema_json": json.dumps(schema, ensure_ascii=False)
+        "form": schema,  # Alias for template compatibility
+        "schema_json": json.dumps(schema, ensure_ascii=False),
+        "success": False  # Will be True after successful submission
+    })
+
+
+@app.post("/form/{schema_name}", response_class=HTMLResponse)
+async def submit_form(request: Request, schema_name: str):
+    """Handle form submission for custom templates."""
+    schema = load_schema(schema_name)
+    
+    # Get form data
+    form_data = await request.form()
+    data = dict(form_data)
+    
+    # Convert checkbox values
+    for key, value in data.items():
+        if value == "on":  # HTML checkbox sends "on" when checked
+            data[key] = True
+    
+    # Save to Excel
+    try:
+        excel_path = append_to_excel(schema_name, data)
+        success = True
+        error = None
+    except Exception as e:
+        success = False
+        error = str(e)
+        print(f"Error saving to Excel: {e}")
+    
+    # Send email if configured
+    email_to = os.getenv("MAIL_TO", "")
+    if success and email_to and SMTP_HOST:
+        # Generate JSON file
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"{schema_name}_{timestamp}.json"
+        filepath = OUTPUT_DIR / filename
+        
+        with open(filepath, 'w', encoding='utf-8') as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+        
+        # Send email
+        subject = f"Nuevo formulario: {schema.get('title', schema_name)}"
+        send_email_with_json(
+            to_email=email_to,
+            subject=subject,
+            schema_name=schema_name,
+            data=data,
+            json_path=str(filepath)
+        )
+    
+    # Return form with success message
+    template_name = schema.get("custom_template", "form.html")
+    
+    return templates.TemplateResponse(template_name, {
+        "request": request,
+        "schema_name": schema_name,
+        "schema": schema,
+        "form": schema,
+        "schema_json": json.dumps(schema, ensure_ascii=False),
+        "success": success,
+        "error": error
     })
 
 

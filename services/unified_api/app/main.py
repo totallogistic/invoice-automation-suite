@@ -15,6 +15,7 @@ from fastapi.responses import JSONResponse
 
 from .tool_registry import ToolRegistry
 from iasuite_common.status import StatusManager
+import re as _re
 
 
 # Configuration
@@ -58,6 +59,21 @@ def list_tools():
         ]
     }
 
+def _read_script_version(path: str) -> str:
+    try:
+        text = Path(path).read_text()
+        m = _re.search(r'SCRIPT_VERSION\s*=\s*["\']([^"\']+)["\']', text)
+        return m.group(1) if m else "unknown"
+    except Exception:
+        return "unknown"
+
+@app.get("/api/lear_rabat/version")
+def lear_rabat_version():
+    return {"version": _read_script_version("/app/apps/lear_rabat/extractor/extract_lear_rabat.py")}
+
+@app.get("/api/lear_cable/version")
+def lear_cable_version():
+    return {"version": _read_script_version("/app/apps/lear_cable/extractor/extract_lear_fields.py")}
 
 @app.post("/api/{tool_name}/batches")
 async def create_batch(

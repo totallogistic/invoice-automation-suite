@@ -44,19 +44,19 @@
             letter-spacing: 0.5px;
         }
         
-        .badge-draft {
-            background: #fef3c7;
-            color: #92400e;
-        }
-        
-        .badge-excel {
+        .badge-operativo {
             background: #d1fae5;
             color: #065f46;
         }
         
-        .badge-email {
+        .badge-en-proceso {
             background: #dbeafe;
             color: #1e40af;
+        }
+        
+        .badge-draft {
+            background: #f3f4f6;
+            color: #6b7280;
         }
         
         .badge-inactive {
@@ -80,37 +80,11 @@
     <main>
         {% if schemas %}
         
-        <!-- Grupo 1: Descarga de Archivos (Ejemplos) -->
-        <div class="schema-section">
-            <div class="section-header">
-                <div class="section-title">
-                    📥 Generación de Documentos
-                    <span class="badge badge-draft">Ejemplos</span>
-                </div>
-                <p class="section-description">
-                    Formularios que generan documentos para descargar (modelos de demostración)
-                </p>
-            </div>
-            <div class="schema-list">
-                {% for schema in schemas %}
-                {% if schema.name in ['packing_list', 'customs_clearance'] %}
-                <a href="/form/{{ schema.name }}" class="schema-card">
-                    <span class="card-badge badge badge-draft">Demo</span>
-                    <h2>{{ schema.title }}</h2>
-                    <p>{{ schema.description or '' }}</p>
-                    <span class="schema-name">{{ schema.name }}</span>
-                </a>
-                {% endif %}
-                {% endfor %}
-            </div>
-        </div>
-
-        <!-- Grupo 2: Registro en Excel (Operativos) -->
+        <!-- Grupo 1: Registros y Revisiones (Excel) -->
         <div class="schema-section">
             <div class="section-header">
                 <div class="section-title">
                     📊 Registros y Revisiones
-                    <span class="badge badge-excel">Operativo</span>
                 </div>
                 <p class="section-description">
                     Formularios que registran información en archivos Excel compartidos
@@ -118,9 +92,23 @@
             </div>
             <div class="schema-list">
                 {% for schema in schemas %}
-                {% if schema.name in ['registro-visitas', 'revision-vehiculos', 'revision-estanterias', 'mantenimiento-maquinas', 'revision-motocicletas'] %}
+                {% if schema.name == 'registro-visitas' %}
                 <a href="/form/{{ schema.name }}" class="schema-card">
-                    <span class="card-badge badge badge-excel">Excel</span>
+                    <span class="card-badge badge badge-operativo">Operativo</span>
+                    <h2>{{ schema.title }}</h2>
+                    <p>{{ schema.description or '' }}</p>
+                    <span class="schema-name">{{ schema.name }}</span>
+                </a>
+                {% elif schema.name == 'revision-estanterias' %}
+                <a href="/form-custom/estanterias" class="schema-card">
+                    <span class="card-badge badge badge-en-proceso">En Proceso</span>
+                    <h2>{{ schema.title }}</h2>
+                    <p>{{ schema.description or '' }}</p>
+                    <span class="schema-name">{{ schema.name }}</span>
+                </a>
+                {% elif schema.name in ['revision-vehiculos', 'mantenimiento-maquinas', 'revision-motocicletas'] %}
+                <a href="/form/{{ schema.name }}" class="schema-card">
+                    <span class="card-badge badge badge-en-proceso">En Proceso</span>
                     <h2>{{ schema.title }}</h2>
                     <p>{{ schema.description or '' }}</p>
                     <span class="schema-name">{{ schema.name }}</span>
@@ -130,12 +118,11 @@
             </div>
         </div>
 
-        <!-- Grupo 3: Envío por Email (Pendiente) -->
+        <!-- Grupo 2: Notificaciones por Email -->
         <div class="schema-section">
             <div class="section-header">
                 <div class="section-title">
                     📧 Notificaciones por Email
-                    <span class="badge badge-inactive">Próximamente</span>
                 </div>
                 <p class="section-description">
                     Formularios que envían notificaciones automáticas por correo electrónico
@@ -143,9 +130,41 @@
             </div>
             <div class="schema-list">
                 {% for schema in schemas %}
-                {% if schema.name in ['orden-compra-schema', 'reporte-incidencia-schema', 'solicitud-vacaciones-schema'] %}
-                <a href="/form/{{ schema.name }}" class="schema-card" style="opacity: 0.6;">
-                    <span class="card-badge badge badge-inactive">En desarrollo</span>
+                {% if schema.name == 'reporte-incidencia-schema' %}
+                <a href="/form/{{ schema.name }}" class="schema-card">
+                    <span class="card-badge badge badge-operativo">Operativo</span>
+                    <h2>{{ schema.title }}</h2>
+                    <p>{{ schema.description or '' }}</p>
+                    <span class="schema-name">{{ schema.name }}</span>
+                </a>
+                {% elif schema.name in ['orden-compra-schema', 'solicitud-vacaciones-schema'] %}
+                <a href="/form/{{ schema.name }}" class="schema-card">
+                    <span class="card-badge badge badge-en-proceso">En Proceso</span>
+                    <h2>{{ schema.title }}</h2>
+                    <p>{{ schema.description or '' }}</p>
+                    <span class="schema-name">{{ schema.name }}</span>
+                </a>
+                {% endif %}
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Grupo 3: Ejemplos/Demos -->
+        <div class="schema-section">
+            <div class="section-header">
+                <div class="section-title">
+                    📥 Generación de Documentos
+                    <span class="badge badge-draft">Ejemplos</span>
+                </div>
+                <p class="section-description">
+                    Formularios de demostración que generan documentos para descargar
+                </p>
+            </div>
+            <div class="schema-list">
+                {% for schema in schemas %}
+                {% if schema.name in ['packing_list', 'customs_clearance'] %}
+                <a href="/form/{{ schema.name }}" class="schema-card">
+                    <span class="card-badge badge badge-draft">Demo</span>
                     <h2>{{ schema.title }}</h2>
                     <p>{{ schema.description or '' }}</p>
                     <span class="schema-name">{{ schema.name }}</span>

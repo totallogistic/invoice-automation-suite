@@ -11,79 +11,43 @@
     },
     "responsable": {
       "type": "string",
-      "title": "Responsable de la Comprobación",
-      "enum": [
-        "DIEGO LADRON FONCUBIERTA",
-        "ASRIH EL KADDOURI HICHAM",
-        "BECERRA SORIANO LUCAS MANUEL",
-        "RODRIGUEZ SANTANA ANTONIO",
-        "RODRIGUEZ SANTANA MANUEL"
-      ]
+      "title": "Responsable de la Comprobación"
     },
     "nave": {
       "type": "string",
-      "title": "Nave / Zona",
-      "enum": [
-        "NAVE 1",
-        "NAVE 2",
-        "NAVE 3",
-        "NAVE 4"
-      ]
+      "title": "Nave / Zona"
     },
     "fila": {
       "type": "string",
-      "title": "Fila de Estantería",
-      "enum": [
-        "FILA 1", "FILA 2", "FILA 3", "FILA 4", "FILA 5",
-        "FILA 6", "FILA 7", "FILA 8", "FILA 9", "FILA 10",
-        "FILA 11", "FILA 12", "FILA 13", "FILA 14", "FILA 15",
-        "FILA 16", "FILA 17"
-      ]
+      "title": "Fila de Estantería"
     },
     "trimestre": {
       "type": "string",
-      "title": "Trimestre",
-      "enum": [
-        "1er trimestre",
-        "2do trimestre",
-        "3er trimestre",
-        "4to trimestre"
-      ]
+      "title": "Trimestre"
     },
     "colocacion": {
       "type": "string",
-      "title": "Colocación",
-      "enum": ["CORRECTO (√)", "INCORRECTO (X)"],
-      "default": "CORRECTO (√)"
+      "title": "Colocación"
     },
     "accesibilidadSenalizacion": {
       "type": "string",
-      "title": "Accesibilidad y Señalización",
-      "enum": ["CORRECTO (√)", "INCORRECTO (X)"],
-      "default": "CORRECTO (√)"
+      "title": "Accesibilidad y Señalización"
     },
     "corrosionPatas": {
       "type": "string",
-      "title": "Corrosión en Patas",
-      "enum": ["SIN CORROSIÓN (√)", "CON CORROSIÓN (X)"],
-      "default": "SIN CORROSIÓN (√)"
+      "title": "Corrosión en Patas"
     },
     "anclajesSuelo": {
       "type": "string",
-      "title": "Anclajes al Suelo",
-      "enum": ["CORRECTO (√)", "INCORRECTO (X)"],
-      "default": "CORRECTO (√)"
+      "title": "Anclajes al Suelo"
     },
     "proteccionesGolpes": {
       "type": "string",
-      "title": "Protecciones Contra Golpes",
-      "enum": ["CORRECTO (√)", "INCORRECTO (X)"],
-      "default": "CORRECTO (√)"
+      "title": "Protecciones Contra Golpes"
     },
     "observaciones": {
       "type": "string",
-      "title": "Observaciones",
-      "description": "Detalles adicionales o incidencias detectadas"
+      "title": "Observaciones"
     }
   },
   "required": [
@@ -91,11 +55,6 @@
     "responsable",
     "nave",
     "fila",
-    "trimestre",
-    "colocacion",
-    "accesibilidadSenalizacion",
-    "corrosionPatas",
-    "anclajesSuelo",
-    "proteccionesGolpes"
+    "trimestre"
   ]
 }

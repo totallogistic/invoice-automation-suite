@@ -16,7 +16,7 @@ import sys
 from pathlib import Path
 from typing import Dict, List, Optional
 
-SCRIPT_VERSION = "2026-02-18.v2"
+SCRIPT_VERSION = "2026-02-21.v9"
 
 try:
     import pdfplumber
@@ -150,15 +150,16 @@ def extract_line_items(text: str, fmt: str) -> List[Dict]:
         line = lines[i].strip()
         
         # Detect FG lines - flexible regex for both number formats
+        # HS code is optional (some items don't have it)
         fg_match = re.match(
-            r'(\d+)\s+FG\s+(\S+)\s+ESOPO\d+-\s*(\d+)I?\s+(\d+)\s+(.*)',
+            r'(\d+)\s+FG\s+(\S+)\s+ESOPO\d+-\s*(\d+)I?\s+(?:(\d{7,})\s+)?([\d,\.\s]+)',
             line
         )
         if fg_match:
             line_no = fg_match.group(1)
             part_number = fg_match.group(2)
             code = fg_match.group(3)
-            hs_code = fg_match.group(4)
+            hs_code = fg_match.group(4) or ""  # may be None if no HS code
             qty_str = fg_match.group(5).strip()
             quantity = parse_number(qty_str, fmt)
             
@@ -273,9 +274,24 @@ def get_cell_value(cell):
 
 
 def set_cell_value(cell, value):
-    """Set text value in ODS cell."""
+    """Set text value in ODS cell, removing any formula."""
     if cell is None:
         return
+    # Remove formula attribute if present (prevents formula from overriding our value)
+    try:
+        cell.removeAttribute("formula")
+    except Exception:
+        pass
+    # Remove cached value attributes
+    try:
+        cell.removeAttribute("valuetype")
+    except Exception:
+        pass
+    try:
+        cell.removeAttribute("value")
+    except Exception:
+        pass
+    # Clear children
     try:
         for child in list(cell.childNodes):
             try:
@@ -287,6 +303,76 @@ def set_cell_value(cell, value):
     p = odftext.P()
     p.addText(str(value))
     cell.appendChild(p)
+
+
+def set_numeric_value(cell, numeric_value, display_text=None):
+    """Set a proper ODS numeric value with office:value-type and office:value.
+    
+    This ensures formulas like SUM() can read the cell correctly.
+    """
+    if cell is None:
+        return
+    
+    float_val = float(numeric_value)
+    
+    # Remove formula attribute if present
+    try:
+        cell.removeAttribute("formula")
+    except Exception:
+        pass
+    
+    # Set ODS numeric attributes
+    cell.setAttribute("valuetype", "float")
+    cell.setAttribute("value", str(float_val))
+    
+    # Clear children and set display text
+    try:
+        for child in list(cell.childNodes):
+            try:
+                cell.removeChild(child)
+            except (ValueError, Exception):
+                pass
+    except Exception:
+        pass
+    
+    if display_text is None:
+        display_text = format_eu_number(float_val)
+    
+    p = odftext.P()
+    p.addText(str(display_text))
+    cell.appendChild(p)
+
+
+def clear_cell(cell):
+    """Clear all content from an ODS cell, leaving it empty.
+    
+    Removes formula, value attributes, and all child nodes.
+    """
+    if cell is None:
+        return
+    # Remove formula
+    try:
+        cell.removeAttribute("formula")
+    except Exception:
+        pass
+    # Remove value attributes
+    try:
+        cell.removeAttribute("valuetype")
+    except Exception:
+        pass
+    try:
+        cell.removeAttribute("value")
+    except Exception:
+        pass
+    # Clear children
+    try:
+        for child in list(cell.childNodes):
+            try:
+                cell.removeChild(child)
+            except (ValueError, Exception):
+                pass
+    except Exception:
+        pass
 
 
 def format_eu_number(value, decimals=2):
@@ -386,30 +472,56 @@ def get_col_b_value(cell_map):
 def update_ods_template(template_path: Path, items: List[Dict], invoice_data: Dict, output_path: Path):
     """Update ODS template with extracted invoice data.
     
-    Items are placed SEQUENTIALLY in template rows starting from row 1.
-    The code is written into column G (CODIGO).
+    Strategy:
+    - Write NUMERIC values to SOURCE cells (c6,c9,c10,c11,c14,c15)
+    - Leave FORMULA cells untouched (c7,c8 VLOOKUP; c12 V.E=J+K; c13 PESO_BR=O*R2/R4)
+    - Calculate ALL totals ourselves and write them as values to totals row
+    - R2 (PESO BRUT) and R4 (PESO NET) = copies of N52 and O52 totals
     """
     
     doc = load_ods(str(template_path))
     sheet = doc.spreadsheet.getElementsByType(table.Table)[0]
     rows = sheet.getElementsByType(table.TableRow)
     
-    COL_CODE_G = 6
-    COL_VALOR_DUA = 9
-    COL_OPR_MAT = 10
-    COL_PALETS = 11
-    COL_VE = 12
-    COL_PESO_BR = 13
-    COL_PESO_NET = 14
-    COL_UN = 15
+    COL_CODE_G = 6      # G - Code (source for VLOOKUP)
+    COL_VALOR_DUA = 9   # J - Valor DUA
+    COL_OPR_MAT = 10    # K - 7009 (OPR Material Cost)
+    COL_PALETS = 11     # L - Palets
+    # COL 12 = M - V.E  → FORMULA: J+K (don't touch)
+    COL_PESO_BR = 13    # N - Peso BR → FORMULA per row, but we WRITE the total
+    COL_PESO_NET = 14   # O - Peso Net
+    COL_UN = 15         # P - UN (quantity)
+    COL_PESO_VAL = 17   # R - Peso Brut/Net summary values
     
+    # Columns we need cell access to
     WRITABLE_COLS = {COL_CODE_G, COL_VALOR_DUA, COL_OPR_MAT, COL_PALETS,
-                     COL_VE, COL_PESO_BR, COL_PESO_NET, COL_UN}
+                     COL_PESO_BR, COL_PESO_NET, COL_UN, COL_PESO_VAL}
     
-    # Calculate brut/net ratio for PESO BR
+    # Source columns to clear on data rows (NOT formula cols c12, c13)
+    CLEAR_COLS = {COL_CODE_G, COL_VALOR_DUA, COL_OPR_MAT, COL_PALETS,
+                  COL_PESO_NET, COL_UN}
+    
+    # --- Pre-calculate totals from items ---
     peso_brut = invoice_data.get("peso_brut") or 0
-    peso_net = invoice_data.get("peso_net") or 0
-    brut_net_ratio = peso_brut / peso_net if peso_net > 0 else 1.0
+    peso_net_total = invoice_data.get("peso_net") or 0
+    brut_net_ratio = peso_brut / peso_net_total if peso_net_total > 0 else 1.0
+    
+    total_valor = 0.0
+    total_opr = 0.0
+    total_pallets = 0
+    total_peso_net = 0.0
+    total_peso_br = 0.0
+    
+    for item in items:
+        subtotal = item.get("subtotal_price") or 0
+        opr = item.get("opr_material") or 0
+        pals = item.get("project_pallets") or 0
+        pw = item.get("partial_weight") or 0
+        total_valor += subtotal
+        total_opr += opr
+        total_pallets += pals
+        total_peso_net += pw
+        total_peso_br += pw * brut_net_ratio
     
     item_idx = 0
     
@@ -420,64 +532,82 @@ def update_ods_template(template_path: Path, items: List[Dict], invoice_data: Di
         cell_map = build_cell_map(row, WRITABLE_COLS)
         col_b = get_col_b_value(cell_map)
         
-        # Handle totals row (520)
+        # --- TOTALS ROW (520) ---
         if col_b == "520":
-            if invoice_data.get("total_invoice") is not None:
-                set_cell_value(cell_map.get(COL_VALOR_DUA), format_eu_number(invoice_data["total_invoice"]))
-            if invoice_data.get("total_opr") is not None:
-                set_cell_value(cell_map.get(COL_OPR_MAT), format_eu_number(invoice_data["total_opr"]))
-            if invoice_data.get("pallets") is not None:
-                set_cell_value(cell_map.get(COL_PALETS), str(invoice_data["pallets"]))
-            if invoice_data.get("peso_brut") is not None:
-                set_cell_value(cell_map.get(COL_PESO_BR), str(int(invoice_data["peso_brut"])))
-            if invoice_data.get("peso_net") is not None:
-                set_cell_value(cell_map.get(COL_PESO_NET), str(int(invoice_data["peso_net"])))
+            # Clear all totals cells first (handles dirty templates)
+            for cc in CLEAR_COLS:
+                clear_cell(cell_map.get(cc))
+            clear_cell(cell_map.get(COL_PESO_BR))
+            
+            # Write totals — prefer PDF-extracted values (exact), fallback to calculated
+            final_valor = invoice_data.get("total_invoice") or total_valor
+            final_opr = invoice_data.get("total_opr") or total_opr
+            final_pallets = invoice_data.get("pallets") or total_pallets
+            set_numeric_value(cell_map.get(COL_VALOR_DUA), final_valor,
+                              f'{final_valor:.2f}'.replace(".", ","))
+            set_numeric_value(cell_map.get(COL_OPR_MAT), final_opr,
+                              f'{final_opr:.2f}'.replace(".", ","))
+            set_numeric_value(cell_map.get(COL_PALETS), final_pallets, str(final_pallets))
+            # PESO BR and PESO NET totals: use PDF values (exact) for consistency with R2/R4
+            peso_br_total = int(invoice_data.get("peso_brut") or round(total_peso_br))
+            peso_net_tot = int(invoice_data.get("peso_net") or round(total_peso_net))
+            set_numeric_value(cell_map.get(COL_PESO_BR), peso_br_total, str(peso_br_total))
+            set_numeric_value(cell_map.get(COL_PESO_NET), peso_net_tot, str(peso_net_tot))
             continue
+        
+        # --- DATA ROWS ---
+        # Clear source cells
+        for cc in CLEAR_COLS:
+            clear_cell(cell_map.get(cc))
+        
+        # Write PESO BRUT/NET summary (R2, R4)
+        # Use invoice PDF values directly (more accurate than summing items)
+        peso_brut_pdf = invoice_data.get("peso_brut")
+        peso_net_pdf = invoice_data.get("peso_net")
+        if row_idx == 1 and peso_brut_pdf is not None:
+            set_numeric_value(cell_map.get(COL_PESO_VAL),
+                              int(peso_brut_pdf), str(int(peso_brut_pdf)))
+        if row_idx == 3 and peso_net_pdf is not None:
+            set_numeric_value(cell_map.get(COL_PESO_VAL),
+                              int(peso_net_pdf), str(int(peso_net_pdf)))
         
         # Place next item sequentially
         if item_idx < len(items):
             item = items[item_idx]
             
-            # Write code to column G (strip leading zeros)
+            # CODE (column G) - numeric for VLOOKUP
             code = item.get("code", "")
             code_display = code.lstrip("0") or code
-            set_cell_value(cell_map.get(COL_CODE_G), code_display)
+            try:
+                set_numeric_value(cell_map.get(COL_CODE_G), int(code_display), code_display)
+            except (ValueError, TypeError):
+                set_cell_value(cell_map.get(COL_CODE_G), code_display)
             
-            # VALOR DUA
+            # VALOR DUA (column J)
             subtotal = item.get("subtotal_price")
             if subtotal is not None:
-                set_cell_value(cell_map.get(COL_VALOR_DUA), format_eu_number(subtotal))
+                set_numeric_value(cell_map.get(COL_VALOR_DUA), subtotal)
             
-            # OPR Material Cost (only last item in project)
+            # OPR Material Cost (column K) - only last item in project
             opr = item.get("opr_material")
             if opr is not None:
-                set_cell_value(cell_map.get(COL_OPR_MAT), format_eu_number(opr))
+                set_numeric_value(cell_map.get(COL_OPR_MAT), opr)
             
-            # PALETS (only last item in project)
+            # PALETS (column L) - only last item in project
             pallets = item.get("project_pallets")
             if pallets is not None:
-                set_cell_value(cell_map.get(COL_PALETS), str(pallets))
+                set_numeric_value(cell_map.get(COL_PALETS), pallets, str(pallets))
             
-            # V.E = VALOR_DUA + OPR (or just VALOR_DUA)
-            if subtotal is not None:
-                ve = subtotal + (opr if opr else 0)
-                set_cell_value(cell_map.get(COL_VE), format_eu_number(ve))
-            
-            # PESO BR (calculated)
+            # PESO NET (column O)
             partial_weight = item.get("partial_weight")
             if partial_weight is not None:
-                peso_br = partial_weight * brut_net_ratio
-                set_cell_value(cell_map.get(COL_PESO_BR), format_peso_br(peso_br))
+                set_numeric_value(cell_map.get(COL_PESO_NET), partial_weight,
+                                  f'{partial_weight:.2f}'.replace(".", ","))
             
-            # PESO NET
-            if partial_weight is not None:
-                # PESO NET always with 2 decimals
-                set_cell_value(cell_map.get(COL_PESO_NET), f'{partial_weight:.2f}'.replace(".", ","))
-            
-            # UN (quantity)
+            # UN / quantity (column P)
             quantity = item.get("quantity")
             if quantity is not None:
-                set_cell_value(cell_map.get(COL_UN), str(int(quantity)))
+                set_numeric_value(cell_map.get(COL_UN), int(quantity), str(int(quantity)))
             
             item_idx += 1
     

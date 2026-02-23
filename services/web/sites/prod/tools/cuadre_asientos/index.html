@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>[PROD] Totallogistic Tools — Lear Rabat</title>
+    <title>[PROD] Totallogistic Tools — Cuadre de Asientos</title>
     <style>
       * { margin: 0; padding: 0; box-sizing: border-box; }
       body { 
@@ -23,23 +23,11 @@
         font-weight: 600;
         letter-spacing: -0.5px;
       }
-      .version-badge {
-        display: inline-block;
-        background: rgba(255,255,255,0.18);
-        color: rgba(255,255,255,0.85);
-        padding: 0.25rem 0.6rem;
-        border-radius: 4px;
-        font-size: 0.75rem;
-        font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
-        margin-left: 0.75rem;
-        vertical-align: middle;
-        letter-spacing: 0.3px;
-      }
       .env-badge {
         position: absolute;
         top: 1rem;
         right: 1.5rem;
-        background: rgba(220, 53, 69, 0.95);
+        background: rgba(16, 185, 129, 0.95);
         color: white;
         padding: 0.375rem 0.75rem;
         border-radius: 4px;
@@ -163,19 +151,20 @@
   <body>
     <header>
       <div class="env-badge">PROD</div>
-      <h1>Lear Rabat <span class="version-badge" id="scriptVersion">…</span></h1>
+      <h1>📊 Cuadre de Asientos Contables</h1>
     </header>
     <main>
-    <p class="muted">Sube uno o varios archivos PDF, o un ZIP con múltiples PDFs. La página se queda aquí y muestra progreso/estado.</p>
+    <p class="muted">Procesa apuntes contables y elimina automáticamente aquellos que se compensan.</p>
+    <p class="muted">Sube uno o varios archivos Excel (.xlsx, .xls), o un ZIP con múltiples Excels.</p>
 
     <div class="card">
       <div class="row">
-        <input id="zip" type="file" accept=".pdf,.zip,application/pdf,application/zip" multiple />
+        <input id="zip" type="file" accept=".xlsx,.xls,.zip,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,application/zip" multiple />
         <button id="btnUpload">Subir Archivo(s)</button>
         <span id="uploadMsg" class="muted"></span>
       </div>
       <p class="muted" style="margin:10px 0 0">
-        Endpoint: <span class="mono">POST /api/lear_rabat/batches</span>
+        Endpoint: <span class="mono">POST /api/cuadre_asientos/batches</span>
       </p>
     </div>
 
@@ -236,15 +225,15 @@
 
         const stage = (st.stage || "").toUpperCase();
         if (stage === "WAITING") return 5;
-        if (stage === "EXTRACTING") return 55;
-        if (stage === "EMAILING") return 85;
+        if (stage === "RUNNING_EXTRACTOR") return 55;
+        if (stage === "SENDING_EMAIL") return 85;
         if (stage === "DONE") return 100;
         if (stage === "ERROR") return 100;
         return 10;
       }
 
       async function fetchStatus(batchId) {
-        const r = await fetch(`/api/lear_rabat/batches/${batchId}/status`, { cache: "no-store" });
+        const r = await fetch(`/api/cuadre_asientos/batches/${batchId}/status`, { cache: "no-store" });
         if (!r.ok) throw new Error(`Status HTTP ${r.status}`);
         return await r.json();
       }
@@ -269,13 +258,13 @@
 
         let html = "";
         if (stage === "DONE" || state === "DONE") {
-          html = `<div class="ok">Lote finalizado. Email enviado a: <span class="mono">${rec.join(", ") || "—"}</span></div>`;
+          html = `<div class="ok">✓ Procesamiento completado. Email enviado a: <span class="mono">${rec.join(", ") || "—"}</span></div>`;
           stopPolling();
         } else if (stage === "ERROR" || state === "ERROR") {
-          html = `<div class="error">Lote en ERROR. Revisa logs y carpeta /data/error.</div>`;
+          html = `<div class="error">✗ Error en procesamiento. Revisa logs: docker compose logs unified_processor</div>`;
           stopPolling();
         } else {
-          html = `<div class="muted">Procesando… (polling cada 2s)</div>`;
+          html = `<div class="muted">⏳ Procesando asientos contables… (polling cada 2s)</div>`;
         }
         $("finalNote").innerHTML = html;
       }
@@ -294,32 +283,26 @@
         pollTimer = setInterval(tick, 2000);
       }
 
-      // Fetch script version on load
-      fetch("/api/lear_rabat/version", { cache: "no-store" })
-        .then(r => r.ok ? r.json() : Promise.reject())
-        .then(d => { $("scriptVersion").textContent = d.version || "?"; })
-        .catch(() => { $("scriptVersion").textContent = "?"; });
-
       $("btnUpload").addEventListener("click", async () => {
         const fileInput = $("zip");
         const selectedFiles = Array.from(fileInput.files);
         
         if (selectedFiles.length === 0) {
-          return setUploadMsg("Selecciona uno o más archivos PDF, o un archivo ZIP.", true);
+          return setUploadMsg("Selecciona uno o más archivos Excel (.xlsx, .xls), o un archivo ZIP.", true);
         }
 
-        const validExtensions = ['.pdf', '.zip'];
+        const validExtensions = ['.xlsx', '.xls', '.zip'];
         const hasZip = selectedFiles.some(f => f.name.toLowerCase().endsWith('.zip'));
         
         if (selectedFiles.length > 1 && hasZip) {
-          return setUploadMsg("Cuando subes múltiples archivos, no puedes incluir ZIP. Sube solo PDFs o un único ZIP.", true);
+          return setUploadMsg("Cuando subes múltiples archivos, no puedes incluir ZIP. Sube solo Excels o un único ZIP.", true);
         }
         
         for (const file of selectedFiles) {
           const fileName = file.name.toLowerCase();
           const isValid = validExtensions.some(ext => fileName.endsWith(ext));
           if (!isValid) {
-            return setUploadMsg(`Archivo no permitido: ${file.name}. Solo se aceptan .pdf o .zip`, true);
+            return setUploadMsg(`Archivo no permitido: ${file.name}. Solo se aceptan .xlsx, .xls o .zip`, true);
           }
         }
 
@@ -334,7 +317,7 @@
             fd.append("files", file, file.name);
           });
 
-          const r = await fetch("/api/lear_rabat/batches", { method: "POST", body: fd });
+          const r = await fetch("/api/cuadre_asientos/batches", { method: "POST", body: fd });
           if (!r.ok) {
             const t = await r.text();
             throw new Error(`Upload HTTP ${r.status}: ${t}`);
@@ -342,7 +325,7 @@
           const data = await r.json();
           const batchId = data.batch_id;
           showStatusCard(batchId);
-          setUploadMsg(`OK. Batch creado: ${batchId} con ${data.extracted_pdfs} PDF(s)`);
+          setUploadMsg(`✓ Batch creado: ${batchId} con ${data.files_uploaded} archivo(s)`);
           await startPolling(batchId);
         } catch (e) {
           setUploadMsg(e.message, true);
@@ -351,3 +334,4 @@
     </script>
   </body>
 </html>
+

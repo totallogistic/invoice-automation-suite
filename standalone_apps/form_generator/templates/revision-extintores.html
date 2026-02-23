@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ form.title }}</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: linear-gradient(135deg, #dc2626 0%, #991b1b 100%);
+            min-height: 100vh;
+            padding: 2rem 1rem;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #dc2626 0%, #991b1b 100%);
+            color: white;
+            padding: 2rem;
+            text-align: center;
+        }
+        
+        .header h1 {
+            font-size: 1.8rem;
+            margin-bottom: 0.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+        }
+        
+        .header p {
+            opacity: 0.9;
+            font-size: 1rem;
+        }
+        
+        .back-button {
+            display: inline-block;
+            margin-bottom: 1rem;
+            padding: 0.5rem 1rem;
+            color: white;
+            text-decoration: none;
+            border-radius: 6px;
+            background: rgba(255,255,255,0.2);
+            transition: background 0.3s;
+        }
+        
+        .back-button:hover {
+            background: rgba(255,255,255,0.3);
+        }
+        
+        .form-content {
+            padding: 2rem;
+        }
+        
+        .metadata-section {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+            padding: 1.5rem;
+            background: #fef2f2;
+            border-radius: 8px;
+            border-left: 4px solid #dc2626;
+        }
+        
+        .form-group {
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .form-group label {
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 0.5rem;
+            font-size: 0.9rem;
+        }
+        
+        .form-group input,
+        .form-group select {
+            padding: 0.75rem;
+            border: 2px solid #e0e0e0;
+            border-radius: 6px;
+            font-size: 1rem;
+            transition: all 0.3s;
+        }
+        
+        .form-group input:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: #dc2626;
+            box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.1);
+        }
+        
+        .checklist-section {
+            margin: 2rem 0;
+        }
+        
+        .checklist-header {
+            background: linear-gradient(135deg, #dc2626 0%, #991b1b 100%);
+            color: white;
+            padding: 1rem;
+            border-radius: 8px 8px 0 0;
+            font-weight: 600;
+            font-size: 1.1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .checklist-info {
+            background: #fef2f2;
+            padding: 1rem;
+            border-left: 4px solid #dc2626;
+            margin-bottom: 1rem;
+            border-radius: 4px;
+        }
+        
+        .checklist-info strong {
+            color: #991b1b;
+        }
+        
+        .checklist-items {
+            background: white;
+            border: 2px solid #e0e0e0;
+            border-top: none;
+            border-radius: 0 0 8px 8px;
+        }
+        
+        .checklist-item {
+            padding: 1.5rem;
+            border-bottom: 1px solid #e0e0e0;
+            display: grid;
+            grid-template-columns: 80px 1fr 200px;
+            gap: 1.5rem;
+            align-items: center;
+            transition: background-color 0.2s;
+        }
+        
+        .checklist-item:hover {
+            background-color: #fafafa;
+        }
+        
+        .checklist-item:last-child {
+            border-bottom: none;
+        }
+        
+        .item-id {
+            font-weight: 700;
+            font-size: 1.1rem;
+            color: #dc2626;
+            text-align: center;
+            background: #fef2f2;
+            padding: 0.5rem;
+            border-radius: 6px;
+        }
+        
+        .item-periodicidad {
+            font-size: 0.75rem;
+            color: #666;
+            margin-top: 0.25rem;
+            text-align: center;
+        }
+        
+        .item-question {
+            color: #333;
+            font-size: 0.95rem;
+            line-height: 1.5;
+        }
+        
+        .item-response {
+            display: flex;
+            gap: 0.5rem;
+        }
+        
+        .response-button {
+            flex: 1;
+            padding: 0.75rem;
+            border: 2px solid #e0e0e0;
+            background: white;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-weight: 600;
+            font-size: 0.9rem;
+        }
+        
+        .response-button.si {
+            border-color: #22c55e;
+            color: #22c55e;
+        }
+        
+        .response-button.si.selected {
+            background: #22c55e;
+            color: white;
+        }
+        
+        .response-button.no {
+            border-color: #dc2626;
+            color: #dc2626;
+        }
+        
+        .response-button.no.selected {
+            background: #dc2626;
+            color: white;
+        }
+        
+        .response-button.na {
+            border-color: #6b7280;
+            color: #6b7280;
+        }
+        
+        .response-button.na.selected {
+            background: #6b7280;
+            color: white;
+        }
+        
+        .response-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+        
+        .observations-section {
+            margin: 2rem 0;
+        }
+        
+        .observations-section label {
+            display: block;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 0.5rem;
+        }
+        
+        .observations-section textarea {
+            width: 100%;
+            min-height: 120px;
+            padding: 1rem;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-family: inherit;
+            font-size: 1rem;
+            resize: vertical;
+            transition: all 0.3s;
+        }
+        
+        .observations-section textarea:focus {
+            outline: none;
+            border-color: #dc2626;
+            box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.1);
+        }
+        
+        .submit-section {
+            margin-top: 2rem;
+            padding-top: 2rem;
+            border-top: 2px solid #e0e0e0;
+        }
+        
+        .submit-button {
+            width: 100%;
+            padding: 1.2rem;
+            background: linear-gradient(135deg, #dc2626 0%, #991b1b 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        
+        .submit-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 16px rgba(220, 38, 38, 0.3);
+        }
+        
+        .submit-button:active {
+            transform: translateY(0);
+        }
+        
+        .submit-button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        .success-message {
+            background: #d1fae5;
+            border: 2px solid #6ee7b7;
+            color: #065f46;
+            padding: 1.5rem;
+            border-radius: 8px;
+            margin-bottom: 2rem;
+            text-align: center;
+            font-weight: 600;
+        }
+        
+        .validation-error {
+            background: #fee2e2;
+            border: 2px solid #fca5a5;
+            color: #991b1b;
+            padding: 1rem;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+            display: none;
+        }
+        
+        @media (max-width: 768px) {
+            .checklist-item {
+                grid-template-columns: 1fr;
+                gap: 1rem;
+            }
+            
+            .item-id {
+                width: fit-content;
+            }
+            
+            .response-button {
+                font-size: 0.85rem;
+                padding: 0.6rem;
+            }
+            
+            .metadata-section {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <a href="/" class="back-button">← Volver al inicio</a>
+            <h1>
+                🧯 {{ form.title }}
+            </h1>
+            <p>{{ form.description }}</p>
+        </div>
+        
+        <div class="form-content">
+            {% if success %}
+            <div class="success-message">
+                ✅ {{ form.success_message }}
+            </div>
+            {% endif %}
+            
+            <div class="validation-error" id="validationError">
+                ⚠️ Por favor, responda a todas las preguntas antes de guardar
+            </div>
+            
+            <form method="POST" id="revisionForm">
+                <!-- Metadata Section -->
+                <div class="metadata-section">
+                    <div class="form-group">
+                        <label for="fecha_revision">Fecha de revisión *</label>
+                        <input type="date" id="fecha_revision" name="fecha_revision" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="tipo_revision">Tipo de revisión *</label>
+                        <select id="tipo_revision" name="tipo_revision" required>
+                            <option value="">Seleccione tipo...</option>
+                            <option value="Trimestral">Trimestral</option>
+                            <option value="Anual">Anual</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="responsable">Responsable *</label>
+                        <select id="responsable" name="responsable" required>
+                            <option value="">Seleccione responsable...</option>
+                            <option value="DIEGO LADRÓN FONCUBIERTA">DIEGO LADRÓN FONCUBIERTA</option>
+                            <option value="JUAN CARLOS GARCÍA">JUAN CARLOS GARCÍA</option>
+                            <option value="ANTONIO LÓPEZ">ANTONIO LÓPEZ</option>
+                            <option value="MIGUEL PINO">MIGUEL PINO</option>
+                            <option value="JOSE PINO">JOSE PINO</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="instalacion">Instalación *</label>
+                        <input type="text" id="instalacion" name="instalacion" required value="TLS AGP - Delegación Algeciras">
+                    </div>
+                </div>
+                
+                <!-- Checklist Section -->
+                <div class="checklist-section">
+                    <div class="checklist-header">
+                        📋 Lista de Comprobación - Inspección Visual
+                    </div>
+                    
+                    <div class="checklist-info">
+                        <strong>PE: Periodicidad</strong> - T (Trimestral) / A (Anual)
+                    </div>
+                    
+                    <div class="checklist-items">
+                        {% if form.checklist %}
+                        {% for item in form.checklist %}
+                        <div class="checklist-item">
+                            <div>
+                                <div class="item-id">{{ item.id }}</div>
+                                <div class="item-periodicidad">{{ item.periodicidad }}</div>
+                            </div>
+                            
+                            <div class="item-question">
+                                {{ item.pregunta }}
+                            </div>
+                            
+                            <div class="item-response">
+                                <input type="hidden" name="item_{{ item.id }}" id="response_{{ item.id }}" value="">
+                                <button type="button" class="response-button si" data-item="{{ item.id }}" data-value="SI">
+                                    ✓ SI
+                                </button>
+                                <button type="button" class="response-button no" data-item="{{ item.id }}" data-value="NO">
+                                    ✗ NO
+                                </button>
+                                <button type="button" class="response-button na" data-item="{{ item.id }}" data-value="N/A">
+                                    — N/A
+                                </button>
+                            </div>
+                        </div>
+                        {% endfor %}
+                        {% endif %}
+                    </div>
+                </div>
+                
+                <!-- Observations Section -->
+                <div class="observations-section">
+                    <label for="observaciones">Observaciones generales</label>
+                    <textarea id="observaciones" name="observaciones" placeholder="Anote aquí cualquier observación, anomalía detectada o acción correctiva necesaria..."></textarea>
+                </div>
+                
+                <!-- Submit Section -->
+                <div class="submit-section">
+                    <button type="submit" class="submit-button" id="submitButton">
+                        💾 {{ form.submit_button }}
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Set current date
+            const today = new Date().toISOString().split('T')[0];
+            document.getElementById('fecha_revision').value = today;
+            
+            // Auto-focus on first field
+            document.getElementById('fecha_revision').focus();
+            
+            // Handle response buttons
+            const responseButtons = document.querySelectorAll('.response-button');
+            
+            responseButtons.forEach(button => {
+                button.addEventListener('click', function() {
+                    const itemId = this.dataset.item;
+                    const value = this.dataset.value;
+                    
+                    // Remove selected class from siblings
+                    const siblings = this.parentElement.querySelectorAll('.response-button');
+                    siblings.forEach(sibling => sibling.classList.remove('selected'));
+                    
+                    // Add selected class to clicked button
+                    this.classList.add('selected');
+                    
+                    // Set hidden input value
+                    document.getElementById('response_' + itemId).value = value;
+                });
+            });
+            
+            // Form validation
+            document.getElementById('revisionForm').addEventListener('submit', function(e) {
+                const hiddenInputs = document.querySelectorAll('input[type="hidden"][name^="item_"]');
+                let allAnswered = true;
+                
+                hiddenInputs.forEach(input => {
+                    if (!input.value) {
+                        allAnswered = false;
+                    }
+                });
+                
+                if (!allAnswered) {
+                    e.preventDefault();
+                    document.getElementById('validationError').style.display = 'block';
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                    return false;
+                }
+                
+                document.getElementById('validationError').style.display = 'none';
+            });
+        });
+    </script>
+</body>
+</html>

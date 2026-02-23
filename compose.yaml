@@ -13,6 +13,7 @@ services:
       - ${DATA_ROOT:-/data}:/data
       - ./config:/config:ro
       - ./libs/iasuite_common:/usr/local/lib/python3.12/site-packages/iasuite_common:ro
+      - ./apps:/app/apps:ro
     ports:
       - "${UNIFIED_API_PORT:-8000}:8000"  
     healthcheck:

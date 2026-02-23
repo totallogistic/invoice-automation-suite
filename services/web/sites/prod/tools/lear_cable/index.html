@@ -23,6 +23,18 @@
         font-weight: 600;
         letter-spacing: -0.5px;
       }
+      .version-badge {
+        display: inline-block;
+        background: rgba(255,255,255,0.18);
+        color: rgba(255,255,255,0.85);
+        padding: 0.25rem 0.6rem;
+        border-radius: 4px;
+        font-size: 0.75rem;
+        font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+        margin-left: 0.75rem;
+        vertical-align: middle;
+        letter-spacing: 0.3px;
+      }
       .env-badge {
         position: absolute;
         top: 1rem;
@@ -151,7 +163,7 @@
   <body>
     <header>
       <div class="env-badge">PROD</div>
-      <h1>Lear Cable</h1>
+      <h1>Lear Cable <span class="version-badge" id="scriptVersion">…</span></h1>
     </header>
     <main>
     <p class="muted">Sube uno o varios archivos PDF, o un ZIP con múltiples PDFs. La página se queda aquí y muestra progreso/estado.</p>
@@ -281,6 +293,12 @@
         await tick();
         pollTimer = setInterval(tick, 2000);
       }
+
+      // Fetch script version on load
+      fetch("/api/lear_cable/version", { cache: "no-store" })
+        .then(r => r.ok ? r.json() : Promise.reject())
+        .then(d => { $("scriptVersion").textContent = d.version || "?"; })
+        .catch(() => { $("scriptVersion").textContent = "?"; });
 
       $("btnUpload").addEventListener("click", async () => {
         const fileInput = $("zip");

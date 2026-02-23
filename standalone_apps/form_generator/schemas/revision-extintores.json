@@ -1,0 +1,118 @@
+{
+  "form_id": "revision-extintores",
+  "title": "Revisión de Extintores Portátiles",
+  "description": "Lista de comprobación para revisión de instalaciones y equipos de protección contra incendios",
+  "excel_file": "revision-extintores.xlsx",
+  "template_file": "00_-_TLS_AGP_-_Acta_revisio_n_Extintores-BIEs_y_Sen_al_lum_2020.xlsx",
+  "custom_template": "revision-extintores.html",
+  "fields": [
+    {
+      "name": "fecha_revision",
+      "label": "Fecha de la revisión",
+      "type": "date",
+      "required": true,
+      "default": "today"
+    },
+    {
+      "name": "tipo_revision",
+      "label": "Tipo de revisión",
+      "type": "select",
+      "required": true,
+      "options": ["Trimestral", "Anual"]
+    },
+    {
+      "name": "responsable",
+      "label": "Responsable de la revisión",
+      "type": "select",
+      "required": true,
+      "options": [
+        "DIEGO LADRÓN FONCUBIERTA",
+        "JUAN CARLOS GARCÍA",
+        "ANTONIO LÓPEZ",
+        "MIGUEL PINO",
+        "JOSE PINO"
+      ]
+    },
+    {
+      "name": "instalacion",
+      "label": "Instalación",
+      "type": "text",
+      "required": true,
+      "default": "TLS AGP - Delegación Algeciras"
+    }
+  ],
+  "checklist": [
+    {
+      "id": "1.1",
+      "periodicidad": "T/A",
+      "pregunta": "¿La señal de cada extintor es adecuada, visible e identificable y correctamente colocada?"
+    },
+    {
+      "id": "1.2",
+      "periodicidad": "T/A",
+      "pregunta": "¿El extintor es accesible y está correctamente ubicado para acceder a él en caso de fuego?"
+    },
+    {
+      "id": "1.3",
+      "periodicidad": "T/A",
+      "pregunta": "¿La altura desde el suelo es correcta (máximo 1,70 m)?"
+    },
+    {
+      "id": "1.4",
+      "periodicidad": "T/A",
+      "pregunta": "Aspecto externo: ¿están exentos de corrosión, golpes, abolladuras, suciedad?"
+    },
+    {
+      "id": "1.5",
+      "periodicidad": "T/A",
+      "pregunta": "¿Los precintos y seguros están intactos?"
+    },
+    {
+      "id": "1.6",
+      "periodicidad": "T/A",
+      "pregunta": "¿El anclaje y soporte de fijación es correcto y seguro?"
+    },
+    {
+      "id": "1.7",
+      "periodicidad": "T/A",
+      "pregunta": "¿Están en buen estado la manguera, boquilla, válvula y manómetro?"
+    },
+    {
+      "id": "1.8",
+      "periodicidad": "T/A",
+      "pregunta": "La identificación y etiquetas (fabricación, retimbrado y mantenimiento) ¿son correctas?"
+    },
+    {
+      "id": "1.9",
+      "periodicidad": "T/A",
+      "pregunta": "Comprobación del estado de la carga del extintor mediante pesada, ¿el peso es correcto?"
+    },
+    {
+      "id": "1.10",
+      "periodicidad": "A",
+      "pregunta": "En extintores de presión adosada, desmontaje del botellín y pesaje ¿es correcto el peso de la carga del botellín?"
+    },
+    {
+      "id": "1.11",
+      "periodicidad": "A",
+      "pregunta": "Está retimbrado el extintor (y el botellín en los extintores de presión adosada) conforme al RAP?"
+    },
+    {
+      "id": "1.12",
+      "periodicidad": "A",
+      "pregunta": "Comprobación del estado del agente extintor, ¿está exento de anomalías aparentes?"
+    },
+    {
+      "id": "1.13",
+      "periodicidad": "T/A",
+      "pregunta": "Comprobación de la presión interior (mediante pesada en los de CO2 y mediante manómetro en el resto), ¿es correcta?"
+    },
+    {
+      "id": "1.14",
+      "periodicidad": "T/A",
+      "pregunta": "¿La cantidad, tipo y eficacia de los extintores es correcto conforme al uso y zona que protege? (Su distribución será tal que el recorrido máximo horizontal, desde cualquier punto del sector de incendio hasta el extintor, no supere 15 m)"
+    }
+  ],
+  "submit_button": "Guardar revisión",
+  "success_message": "Revisión guardada correctamente"
+}

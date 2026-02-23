@@ -61,3 +61,6 @@ __pycache__/
 # Temp files
 current_services.txt
 *.tmp
+.DS_Store
+._*
+standalone_apps/form_generator/output/

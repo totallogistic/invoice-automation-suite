@@ -1,48 +1,89 @@
 {
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "form_id": "registro-visitas",
   "title": "Registro de Visitas",
-  "description": "Formulario para registrar visitas a las instalaciones",
-  "type": "object",
-  "properties": {
-    "fecha": {
-      "type": "string",
-      "format": "date",
-      "title": "Fecha de Visita"
+  "description": "Formulario de registro de visitas a las instalaciones",
+  "excel_file": "registro-visitas.xlsx",
+  "custom_template": "registro-visitas.html",
+  "fields": [
+    {
+      "name": "fecha",
+      "label": "Fecha",
+      "type": "date",
+      "required": true,
+      "default": "today"
     },
-    "nombre": {
-      "type": "string",
-      "title": "Nombre"
+    {
+      "name": "nombre",
+      "label": "Nombre",
+      "type": "text",
+      "required": true,
+      "autocomplete": true,
+      "autocomplete_source": "visitor_names"
     },
-    "apellidos": {
-      "type": "string",
-      "title": "Apellidos"
+    {
+      "name": "apellidos",
+      "label": "Apellidos",
+      "type": "text",
+      "required": true,
+      "autocomplete": true,
+      "autocomplete_source": "visitor_surnames"
     },
-    "dni": {
-      "type": "string",
-      "title": "DNI"
+    {
+      "name": "dni",
+      "label": "DNI/NIE",
+      "type": "text",
+      "required": true,
+      "pattern": "^[0-9]{8}[A-Z]$|^[XYZ][0-9]{7}[A-Z]$",
+      "autocomplete": true,
+      "autocomplete_source": "visitor_dni"
     },
-    "empresa": {
-      "type": "string",
-      "title": "Empresa"
+    {
+      "name": "empresa",
+      "label": "Empresa",
+      "type": "text",
+      "required": true
     },
-    "motivoVisita": {
-      "type": "string",
-      "title": "Motivo de la Visita",
-      "enum": ["Comercial", "Cita previa", "Entrega", "Recogida", "Otro"]
+    {
+      "name": "motivo",
+      "label": "Motivo de la visita",
+      "type": "select",
+      "required": true,
+      "options": [
+        "Reunión",
+        "Auditoría",
+        "Mantenimiento",
+        "Proveedor",
+        "Cliente",
+        "Otro"
+      ]
     },
-    "personaAtiende": {
-      "type": "string",
-      "title": "Persona que lo Atiende",
-      "enum": ["Rafael Rubiales", "Rubén Rubiales", "Javier Martínez", "Jose Luis Martínez", "Juan Antonio Martínez", "Jose Luis del Pino", "Otro"]
+    {
+      "name": "persona_contacto",
+      "label": "Persona de contacto",
+      "type": "text",
+      "required": true
     },
-    "observaciones": {
-      "type": "string",
-      "title": "Observaciones"
+    {
+      "name": "hora_entrada",
+      "label": "Hora de entrada",
+      "type": "time",
+      "required": true,
+      "default": "now"
     },
-    "aceptaGDPR": {
-      "type": "boolean",
-      "title": "Acepto el tratamiento de datos personales"
+    {
+      "name": "observaciones",
+      "label": "Observaciones",
+      "type": "textarea",
+      "required": false,
+      "rows": 3
+    },
+    {
+      "name": "rgpd_consent",
+      "label": "He leído y acepto la <a href='/politica-privacidad' target='_blank'>política de privacidad y tratamiento de datos personales</a>",
+      "type": "checkbox",
+      "required": true
     }
-  },
-  "required": ["fecha", "nombre", "apellidos", "dni", "empresa", "motivoVisita", "personaAtiende", "aceptaGDPR"]
+  ],
+  "submit_button": "Registrar visita",
+  "success_message": "Visita registrada correctamente"
 }
