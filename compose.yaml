@@ -37,6 +37,10 @@ services:
       - SMTP_PASS=${SMTP_PASS}
       - MAIL_FROM=${MAIL_FROM}
       - MAIL_TO=${MAIL_TO}
+      - MAIL_TO_LEAR_CABLE=${MAIL_TO_LEAR_CABLE:-}
+      - MAIL_TO_LEAR_RABAT=${MAIL_TO_LEAR_RABAT:-}
+      - MAIL_TO_CUADRE_ASIENTOS=${MAIL_TO_CUADRE_ASIENTOS:-}
+      - MAIL_TO_IMPORT_PARTIDA=${MAIL_TO_IMPORT_PARTIDA:-}
     volumes:
       - ${DATA_ROOT:-/data}:/data
       - ./config:/config:ro

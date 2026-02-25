@@ -307,7 +307,10 @@ async def submit_form(request: Request, schema_name: str):
         print(f"Error saving to Excel: {e}")
     
     # Send email if configured
-    email_to = os.getenv("MAIL_TO", "")
+    schema_key = schema_name.upper().replace("-", "_")
+    email_to = os.getenv(f"MAIL_TO_{schema_key}", "").strip()
+    if not email_to:
+        email_to = os.getenv("MAIL_TO", "")
     if success and email_to and SMTP_HOST:
         # Generate JSON file
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -477,15 +480,10 @@ async def save_and_email(
     
     # Determine email recipient
     if not email_to:
-        email_to = os.getenv("MAIL_TO", "")
-    
+        schema_key = schema_name.upper().replace("-", "_")
+        email_to = os.getenv(f"MAIL_TO_{schema_key}", "").strip()
     if not email_to:
-        return {
-            "success": True,
-            "message": "Formulario guardado (email no configurado)",
-            "filename": filename,
-            "email_sent": False
-        }
+        email_to = os.getenv("MAIL_TO", "")
     
     # Send email
     subject = f"Nuevo formulario: {schema.get('title', schema_name)}"

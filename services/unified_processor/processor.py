@@ -162,7 +162,7 @@ class UnifiedProcessor:
             processed_files=file_count
         )
         
-        recipients = self._get_recipients()
+        recipients = self._get_recipients(tool.name)
         if recipients:
             subject = tool.email_subject_template.format(batch_id=batch_id)
             
@@ -202,9 +202,12 @@ class UnifiedProcessor:
         
         return output_path
     
-    def _get_recipients(self) -> List[str]:
-        """Get recipients from env."""
-        mail_to = os.getenv("MAIL_TO", "").strip()
+    def _get_recipients(self, tool_name: str) -> List[str]:
+        """Get recipients: per-tool first, then global fallback."""
+        tool_key = f"MAIL_TO_{tool_name.upper()}"
+        mail_to = os.getenv(tool_key, "").strip()
+        if not mail_to:
+            mail_to = os.getenv("MAIL_TO", "").strip()
         return [e.strip() for e in mail_to.split(",") if e.strip()]
     
     def _build_email_body(self, batch_id: str, file_count: int, output_path: Path, artifacts: List[Path]) -> str:
