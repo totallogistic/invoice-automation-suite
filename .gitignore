@@ -1,10 +1,6 @@
 */credentials*.json
 .env
 *.db
-services/sftp/lear_cable/config/logs/
-services/sftp/lear_cable/config/openssh/
-services/sftp/lear_cable/config/ssh_host_keys/*_key
-services/sftp/lear_cable/config/ssh_host_keys/*_key.pub
 .venv/
 services/processor/__pycache__/
 __pycache__/
@@ -17,15 +13,12 @@ __pycache__/
 *bkp*
 *copy*
 .DS_Store
+
 # Integrity generated runs / diffs
 integrity/runs/
 integrity/compare_out/
 out_compare/
 csv_diff_out/
-# Environment
-.env
-.env.dev
-.env.prod
 
 # Python
 __pycache__/
@@ -64,3 +57,5 @@ current_services.txt
 .DS_Store
 ._*
 standalone_apps/form_generator/output/
+standalone_apps/form_generator/excel_storage/
+
