@@ -36,12 +36,16 @@ APP_DIR="$(dirname "$SCRIPT_DIR")"
 REPO_ROOT="$(cd "$APP_DIR/../.." && pwd)"
 HOST_IP=$(hostname -I | awk '{print $1}')
 FORM_PORT="8200" # Default
+ENV_FILE=""
 if [ -f "$REPO_ROOT/.env.prod" ]; then
-  FORM_PORT=$(grep "^FORM_UI_PORT=" "$REPO_ROOT/.env.prod" | cut -d'=' -f2 | tr -d ' ')
+  ENV_FILE="$REPO_ROOT/.env.prod"
 elif [ -f "$REPO_ROOT/.env.dev" ]; then
-  FORM_PORT=$(grep "^FORM_UI_PORT=" "$REPO_ROOT/.env.dev" | cut -d'=' -f2 | tr -d ' ')
+  ENV_FILE="$REPO_ROOT/.env.dev"
 elif [ -f "$REPO_ROOT/.env" ]; then
-  FORM_PORT=$(grep "^FORM_UI_PORT=" "$REPO_ROOT/.env" | cut -d'=' -f2 | tr -d ' ')
+  ENV_FILE="$REPO_ROOT/.env"
+fi
+if [ -n "$ENV_FILE" ]; then
+  FORM_PORT=$(grep "^FORM_UI_PORT=" "$ENV_FILE" | cut -d'=' -f2 | tr -d ' ')
 fi
 # Fallback to 8200 if not found or empty
 FORM_PORT=${FORM_PORT:-8200}
@@ -49,12 +53,12 @@ FORM_PORT=${FORM_PORT:-8200}
 echo -e "${BLUE}📁 Detected paths:${NC}"
 echo "   Repo root: $REPO_ROOT"
 echo "   App dir:   $APP_DIR"
-echo "   Form port: $FORM_PORT" # << AÑADIR ESTO PARA DEBUG
-echo ""
-
-echo -e "${BLUE}📁 Detected paths:${NC}"
-echo "   Repo root: $REPO_ROOT"
-echo "   App dir:   $APP_DIR"
+echo "   Form port: $FORM_PORT"
+if [ -n "$ENV_FILE" ]; then
+  echo "   Env file:  $ENV_FILE"
+else
+  echo -e "   Env file:  ${YELLOW}⚠ Not found - env vars must be set manually${NC}"
+fi
 echo ""
 
 # Detect current user (the one who called sudo)
@@ -114,11 +118,12 @@ SERVICE_FILE="/etc/systemd/system/form-generator.service"
 TEMPLATE_FILE="$SCRIPT_DIR/form-generator.service.template"
 
 if [ -f "$TEMPLATE_FILE" ]; then
-  # Use template
+  # Use template - substitute all placeholders including env file path
+  ENV_FILE_ESCAPED="${ENV_FILE:-/dev/null}"
   sed -e "s|{{USER}}|$INSTALL_USER|g" \
     -e "s|{{APP_DIR}}|$APP_DIR|g" \
     -e "s|{{PYTHON_CMD}}|$PYTHON_CMD|g" \
-    -e "s|{{FORM_UI_PORT}}|$FORM_PORT|g" \
+    -e "s|{{ENV_FILE}}|$ENV_FILE_ESCAPED|g" \
     "$TEMPLATE_FILE" >"$SERVICE_FILE"
 else
   # Generate service file directly
@@ -137,9 +142,9 @@ RestartSec=10
 StandardOutput=journal
 StandardError=journal
 
-# Environment
+# Environment - load all variables from env file (MAIL_TO_*, SMTP_*, etc.)
 Environment="PYTHONUNBUFFERED=1"
-Environment="FORM_UI_PORT=$FORM_PORT"
+EnvironmentFile=${ENV_FILE:-/dev/null}
 
 [Install]
 WantedBy=multi-user.target

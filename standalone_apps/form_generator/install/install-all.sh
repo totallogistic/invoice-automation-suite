@@ -72,14 +72,9 @@ while IFS= read -r ENV_FILE; do
   echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
   echo ""
 
-  # Read configuration from env file - EXPLICIT PARSING
+  # Read only FORM_UI_PORT to check if this env file is meant for the form generator
   FORM_PORT=$(grep "^FORM_UI_PORT=" "$ENV_FILE" 2>/dev/null | head -1 | cut -d'=' -f2 | tr -d ' "'"'"'')
   SMTP_HOST=$(grep "^SMTP_HOST=" "$ENV_FILE" 2>/dev/null | head -1 | cut -d'=' -f2 | tr -d ' "'"'"'')
-  SMTP_PORT=$(grep "^SMTP_PORT=" "$ENV_FILE" 2>/dev/null | head -1 | cut -d'=' -f2 | tr -d ' "'"'"'')
-  SMTP_USER=$(grep "^SMTP_USER=" "$ENV_FILE" 2>/dev/null | head -1 | cut -d'=' -f2 | tr -d ' "'"'"'')
-  SMTP_PASS=$(grep "^SMTP_PASS=" "$ENV_FILE" 2>/dev/null | head -1 | cut -d'=' -f2 | tr -d ' "'"'"'')
-  MAIL_FROM=$(grep "^MAIL_FROM=" "$ENV_FILE" 2>/dev/null | head -1 | cut -d'=' -f2 | tr -d ' "'"'"'')
-  MAIL_TO=$(grep "^MAIL_TO=" "$ENV_FILE" 2>/dev/null | head -1 | cut -d'=' -f2 | tr -d ' "'"'"'')
 
   if [ -z "$FORM_PORT" ]; then
     echo -e "${YELLOW}⚠️  No FORM_UI_PORT in $ENV_FILE, skipping${NC}"
@@ -89,8 +84,9 @@ while IFS= read -r ENV_FILE; do
 
   echo -e "${BLUE}   Environment: ${GREEN}$ENV_NAME${NC}"
   echo -e "${BLUE}   Port:        ${GREEN}$FORM_PORT${NC}"
+  echo -e "${BLUE}   Env file:    ${GREEN}$ENV_FILE${NC}"
   if [ -n "$SMTP_HOST" ]; then
-    echo -e "${BLUE}   Email:       ${GREEN}Configured → ${MAIL_TO}${NC}"
+    echo -e "${BLUE}   Email:       ${GREEN}Configured (all MAIL_TO_* vars loaded from env file)${NC}"
   else
     echo -e "${BLUE}   Email:       ${YELLOW}Not configured${NC}"
   fi
@@ -107,7 +103,7 @@ while IFS= read -r ENV_FILE; do
     continue
   fi
 
-  # Generate service file with email variables - USE HEREDOC WITHOUT QUOTES
+  # Generate service file with EnvironmentFile to load ALL variables from env file
   cat >"$SERVICE_FILE" <<SERVICEEOF
 [Unit]
 Description=JSON Schema Form Generator [$ENV_NAME]
@@ -129,16 +125,10 @@ StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=${SERVICE_NAME}
 
-# Environment
+# Environment - load ALL variables from env file (MAIL_TO_*, SMTP_*, etc.)
 Environment="PYTHONUNBUFFERED=1"
 Environment="PYTHONDONTWRITEBYTECODE=1"
-Environment="FORM_UI_PORT=$FORM_PORT"
-Environment="SMTP_HOST=$SMTP_HOST"
-Environment="SMTP_PORT=$SMTP_PORT"
-Environment="SMTP_USER=$SMTP_USER"
-Environment="SMTP_PASS=$SMTP_PASS"
-Environment="MAIL_FROM=$MAIL_FROM"
-Environment="MAIL_TO=$MAIL_TO"
+EnvironmentFile=$ENV_FILE
 
 # Security
 NoNewPrivileges=true

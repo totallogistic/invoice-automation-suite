@@ -429,14 +429,26 @@ async def save_to_excel(
         "row_number": None  # Could calculate this
     }
     
-    # Send email if requested
-    if send_email and email_to and SMTP_HOST:
-        try:
-            # TODO: Implement email sending
-            response["email_sent"] = True
-        except Exception as e:
-            response["email_sent"] = False
-            response["email_error"] = str(e)
+    # Send email if configured (per-form env var or explicit recipient)
+    schema_key = schema_name.upper().replace("-", "_")
+    recipient = email_to or os.getenv(f"MAIL_TO_{schema_key}", "").strip()
+    if not recipient:
+        recipient = os.getenv("MAIL_TO", "")
+    if recipient and SMTP_HOST:
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"{schema_name}_{timestamp}.json"
+        filepath = OUTPUT_DIR / filename
+        with open(filepath, 'w', encoding='utf-8') as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+        subject = f"Nuevo formulario: {schema.get('title', schema_name)}"
+        email_sent = send_email_with_json(
+            to_email=recipient,
+            subject=subject,
+            schema_name=schema_name,
+            data=data,
+            json_path=str(filepath)
+        )
+        response["email_sent"] = email_sent
     
     return response
 

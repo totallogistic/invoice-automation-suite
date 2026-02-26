@@ -18,10 +18,10 @@ StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=form-generator
 
-# Environment
+# Environment - load all variables from the env file (MAIL_TO_*, SMTP_*, etc.)
 Environment="PYTHONUNBUFFERED=1"
 Environment="PYTHONDONTWRITEBYTECODE=1"
-Environment="FORM_UI_PORT={{FORM_UI_PORT}}"
+EnvironmentFile={{ENV_FILE}}
 
 # Security hardening (optional)
 NoNewPrivileges=true
@@ -29,11 +29,3 @@ PrivateTmp=true
 
 [Install]
 WantedBy=multi-user.target
-
-# Email configuration - AÑADIR ESTO
-Environment="SMTP_HOST={{SMTP_HOST}}"
-Environment="SMTP_PORT={{SMTP_PORT}}"
-Environment="SMTP_USER={{SMTP_USER}}"
-Environment="SMTP_PASS={{SMTP_PASS}}"
-Environment="MAIL_FROM={{MAIL_FROM}}"
-Environment="MAIL_TO={{MAIL_TO}}"
