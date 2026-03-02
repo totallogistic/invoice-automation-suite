@@ -253,7 +253,8 @@ async def index(request: Request):
                 schemas.append({
                     "name": schema_file.stem,
                     "title": schema.get("title", schema_file.stem),
-                    "description": schema.get("description", "")
+                    "description": schema.get("description", ""),
+                    "category": schema.get("category", "📋 Sin Categoría")
                 })
             except Exception as e:
                 print(f"Error loading {schema_file}: {e}")
@@ -535,6 +536,469 @@ async def health():
     return {
         "status": "ok",
         "schemas_available": len(list(SCHEMAS_DIR.glob("*.json"))) if SCHEMAS_DIR.exists() else 0
+    }
+
+# ========================================
+# MODIFICAR ENDPOINT EXISTENTE: /api/save-estanterias-completo
+# Reemplazar el endpoint actual con este código
+# ========================================
+
+@app.post("/api/save-estanterias-completo")
+async def save_estanterias_completo(data: dict, sede: str = "alg"):
+    """
+    Guarda una revisión completa de estanterías:
+    1. Guarda cada fila en el Excel de log (registro general)
+    2. Crea/actualiza una hoja con el formato bonito por nave+trimestre
+    3. Envía UN SOLO EMAIL al final
+    
+    Parámetros:
+    - data: datos del formulario
+    - sede: 'alg' o 'mlg' (por defecto 'alg')
+    """
+    from datetime import datetime
+    from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+    
+    # Extraer datos
+    fecha_revision = data.get('fechaRevision')
+    responsable = data.get('responsable')
+    nave = data.get('nave')
+    trimestre = data.get('trimestre')
+    obs_generales = data.get('observacionesGenerales', '')
+    filas = data.get('filas', [])
+    
+    if not filas:
+        raise HTTPException(status_code=400, detail="No hay filas para guardar")
+    
+    # Archivo Excel específico por sede
+    excel_file = EXCEL_STORAGE_DIR / f"revision-estanterias-{sede}.xlsx"
+    
+    # 1. Guardar en hoja de LOG (registro general de todas las revisiones)
+    if excel_file.exists():
+        wb = load_workbook(excel_file)
+    else:
+        wb = Workbook()
+        wb.remove(wb.active)  # Eliminar hoja por defecto
+    
+    # Asegurar que existe la hoja LOG
+    if "LOG" not in wb.sheetnames:
+        ws_log = wb.create_sheet("LOG", 0)
+        # Headers
+        headers = ["Fecha", "Responsable", "Nave", "Fila", "Trimestre", 
+                   "Colocación", "Accesibilidad", "Corrosión", "Anclajes", 
+                   "Protecciones", "Observaciones"]
+        ws_log.append(headers)
+        
+        # Estilo headers
+        header_fill = PatternFill(start_color="1a4d7e", end_color="1a4d7e", fill_type="solid")
+        header_font = Font(bold=True, color="FFFFFF")
+        for cell in ws_log[1]:
+            cell.fill = header_fill
+            cell.font = header_font
+            cell.alignment = Alignment(horizontal="center")
+    else:
+        ws_log = wb["LOG"]
+    
+    # Añadir filas al LOG
+    for fila_data in filas:
+        ws_log.append([
+            fecha_revision,
+            responsable,
+            nave,
+            fila_data['fila'],
+            trimestre,
+            fila_data['colocacion'],
+            fila_data['accesibilidad'],
+            fila_data['corrosion'],
+            fila_data['anclajes'],
+            fila_data['protecciones'],
+            fila_data.get('observaciones', obs_generales)
+        ])
+    
+    # 2. Crear/actualizar hoja con formato bonito
+    sheet_name = f"{nave} {trimestre[:3]}".upper()  # Ej: "NAVE 1T25 1ER"
+    
+    # Nombre de delegación según sede
+    delegacion = "ALGECIRAS" if sede == "alg" else "MÁLAGA"
+    
+    if sheet_name not in wb.sheetnames:
+        ws = wb.create_sheet(sheet_name)
+        
+        # Título (con nombre de delegación dinámico)
+        ws.merge_cells('B2:K2')
+        ws['B2'] = f'REVISIÓN DE ESTANTERIAS EN DELEGACION DE {delegacion}'
+        ws['B2'].font = Font(size=14, bold=True, color="1a4d7e")
+        ws['B2'].alignment = Alignment(horizontal="center")
+        
+        # Subtítulo
+        ws.merge_cells('B9:K9')
+        ws['B9'] = f'ESTANTERIAS - {nave.upper()}, REVISIÓN TRIMESTRAL (mantenimiento mínimo por parte del usuario)'
+        ws['B9'].font = Font(size=12, bold=True)
+        
+        # Responsable
+        ws.merge_cells('B11:D11')
+        ws['B11'] = 'Responsable de la comprobación:'
+        ws.merge_cells('E11:K11')
+        ws['E11'] = responsable
+        ws['E11'].font = Font(bold=True)
+        
+        # Headers tabla
+        headers_tabla = ['* ZONA ALMACEN', 'COLOCACION', 'Accesibilidad y señalización', 
+                        'CORROSION PATAS', 'ANCLAJES AL SUELO', 'PROTECCIONES CONTRA GOLPES', 
+                        'Observaciones', f'{trimestre} (fecha)']
+        
+        for idx, header in enumerate(headers_tabla, start=2):
+            cell = ws.cell(row=13, column=idx)
+            cell.value = header
+            cell.font = Font(bold=True, size=9)
+            cell.fill = PatternFill(start_color="d9e1f2", end_color="d9e1f2", fill_type="solid")
+            cell.alignment = Alignment(horizontal="center", wrap_text=True)
+            cell.border = Border(
+                left=Side(style='thin'), right=Side(style='thin'),
+                top=Side(style='thin'), bottom=Side(style='thin')
+            )
+    else:
+        ws = wb[sheet_name]
+    
+    # Añadir datos de filas
+    start_row = 14
+    thin_border = Border(
+        left=Side(style='thin'), right=Side(style='thin'),
+        top=Side(style='thin'), bottom=Side(style='thin')
+    )
+    
+    for idx, fila_data in enumerate(filas):
+        row_num = start_row + idx
+        
+        ws.cell(row=row_num, column=2, value=fila_data['fila'])  # FILA 1, etc
+        ws.cell(row=row_num, column=3, value=fila_data['colocacion'])
+        ws.cell(row=row_num, column=4, value=fila_data['accesibilidad'])
+        ws.cell(row=row_num, column=5, value=fila_data['corrosion'])
+        ws.cell(row=row_num, column=6, value=fila_data['anclajes'])
+        ws.cell(row=row_num, column=7, value=fila_data['protecciones'])
+        ws.cell(row=row_num, column=8, value=fila_data.get('observaciones', ''))
+        ws.cell(row=row_num, column=9, value=datetime.strptime(fecha_revision, '%Y-%m-%d'))
+        ws.cell(row=row_num, column=9).number_format = 'DD/MM/YYYY'
+        
+        # Aplicar bordes y centrado
+        for col in range(2, 10):
+            cell = ws.cell(row=row_num, column=col)
+            cell.border = thin_border
+            if col > 2:  # Centrar excepto la primera columna (nombre fila)
+                cell.alignment = Alignment(horizontal="center")
+    
+    # Leyenda al final
+    last_row = start_row + len(filas) + 2
+    ws.merge_cells(f'B{last_row}:K{last_row}')
+    ws.cell(row=last_row, column=2, value='* según lo indicado en plano de situación.')
+    
+    ws.merge_cells(f'B{last_row+1}:D{last_row+1}')
+    ws.cell(row=last_row+1, column=2, value='√    Correcto')
+    ws.merge_cells(f'E{last_row+1}:F{last_row+1}')
+    ws.cell(row=last_row+1, column=5, value='x   Incorrecto')
+    
+    # Ajustar anchos de columna
+    ws.column_dimensions['B'].width = 15
+    ws.column_dimensions['C'].width = 12
+    ws.column_dimensions['D'].width = 18
+    ws.column_dimensions['E'].width = 15
+    ws.column_dimensions['F'].width = 16
+    ws.column_dimensions['G'].width = 20
+    ws.column_dimensions['H'].width = 25
+    ws.column_dimensions['I'].width = 18
+    
+    # Guardar Excel
+    wb.save(excel_file)
+    
+    # 3. Enviar UN SOLO EMAIL
+    # Primero intenta variable específica de sede, luego genérica
+    email_var = f"MAIL_TO_REVISION_ESTANTERIAS_{sede.upper()}"
+    email_to = os.getenv(email_var, "").strip()
+    if not email_to:
+        email_to = os.getenv("MAIL_TO_REVISION_ESTANTERIAS", "").strip()
+    if not email_to:
+        email_to = os.getenv("MAIL_TO", "")
+    
+    email_sent = False
+    
+    if email_to and SMTP_HOST:
+        # Crear JSON temporal para adjuntar
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        json_filename = f"revision-estanterias-{sede}_{timestamp}.json"
+        json_path = OUTPUT_DIR / json_filename
+        
+        with open(json_path, 'w', encoding='utf-8') as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+        
+        subject = f"[{sede.upper()}] Revisión Estanterías - {nave} - {trimestre} ({fecha_revision})"
+        email_sent = send_email_with_json(
+            to_email=email_to,
+            subject=subject,
+            schema_name=f"revision-estanterias-{sede}",
+            data=data,
+            json_path=str(json_path)
+        )
+    
+    return {
+        "success": True,
+        "message": f"Revisión guardada: {len(filas)} filas",
+        "excel_file": excel_file.name,
+        "sheet_created": sheet_name,
+        "email_sent": email_sent,
+        "email_to": email_to if email_sent else None,
+        "sede": sede.upper()
+    }
+
+# ========================================
+# ENDPOINT ESPECÍFICO PARA MANTENIMIENTO MAQUINARIA MLG
+# Añadir este código a app.py
+# ========================================
+
+@app.post("/api/save-maquinaria-mlg")
+async def save_maquinaria_mlg(data: dict):
+    """
+    Guarda mantenimiento de maquinaria de Málaga:
+    1. Guarda cada revisión en hoja LOG
+    2. Actualiza hoja ANUAL con formato tabla por meses
+    """
+    from datetime import datetime
+    from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+    
+    # Extraer datos
+    mes = data.get('mes')
+    año = data.get('año')
+    fecha_revision = data.get('fecha_revision')
+    responsable = data.get('responsable')
+    
+    # Mapeo de meses a columnas (columna 6 = ENERO, 7 = FEBRERO, etc.)
+    mes_to_col = {
+        'ENERO': 6, 'FEBRERO': 7, 'MARZO': 8, 'ABRIL': 9,
+        'MAYO': 10, 'JUNIO': 11, 'JULIO': 12, 'AGOSTO': 13,
+        'SEPTIEMBRE': 14, 'OCTUBRE': 15, 'NOVIEMBRE': 16, 'DICIEMBRE': 17
+    }
+    
+    # Definir máquinas y sus filas en la hoja ANUAL
+    maquinas_config = [
+        {'nombre': 'TRASPALETA ELECTRICA', 'modelo': '7PML20/6-736980-2005', 'fila_baterias': 14, 'fila_engrase': 15, 'key': 'traspaleta1'},
+        {'nombre': 'TRASPALETA ELECTRICA', 'modelo': '7PML20/6-723382-2004', 'fila_baterias': 16, 'fila_engrase': 17, 'key': 'traspaleta2'},
+        {'nombre': 'CARRETILLA ELECTRICA', 'modelo': '7FBMF25', 'fila_baterias': 18, 'fila_engrase': 19, 'key': 'carretilla'},
+        {'nombre': 'APILADORA STILL', 'modelo': 'FM14', 'fila_baterias': 20, 'fila_engrase': 21, 'key': 'apiladora'},
+        {'nombre': 'FURGON CITROEN', 'modelo': '5516GDV', 'fila_engrase': 22, 'key': 'furgon'},
+    ]
+    
+    excel_file = EXCEL_STORAGE_DIR / "mantenimiento-maquinas-mlg.xlsx"
+    
+    # 1. Cargar o crear workbook
+    if excel_file.exists():
+        wb = load_workbook(excel_file)
+    else:
+        wb = Workbook()
+        wb.remove(wb.active)
+    
+    # 2. Asegurar hoja LOG
+    if "LOG" not in wb.sheetnames:
+        ws_log = wb.create_sheet("LOG", 0)
+        headers = ["Fecha", "Mes", "Año", "Responsable", "Máquina", "Modelo", "Revisión", "Estado", "Observaciones"]
+        ws_log.append(headers)
+        
+        # Estilo headers
+        header_fill = PatternFill(start_color="1a4d7e", end_color="1a4d7e", fill_type="solid")
+        header_font = Font(bold=True, color="FFFFFF")
+        for cell in ws_log[1]:
+            cell.fill = header_fill
+            cell.font = header_font
+            cell.alignment = Alignment(horizontal="center")
+    else:
+        ws_log = wb["LOG"]
+    
+    # 3. Asegurar hoja ANUAL
+    if "ANUAL" not in wb.sheetnames:
+        ws_anual = wb.create_sheet("ANUAL")
+        
+        # Título
+        ws_anual.merge_cells('B2:Q2')
+        ws_anual['B2'] = f'HOJA DE MANTENIMIENTO DE MAQUINARIA DE ALMACEN DELEGACION DE MÁLAGA'
+        ws_anual['B2'].font = Font(size=14, bold=True, color="1a4d7e")
+        ws_anual['B2'].alignment = Alignment(horizontal="center")
+        
+        # Subtítulo
+        ws_anual.merge_cells('B9:N9')
+        ws_anual['B9'] = 'EQUIPO DE ALMACEN – MANTENIMIENTO PERIODICO'
+        ws_anual['B9'].font = Font(size=12, bold=True)
+        
+        # Año
+        ws_anual['P9'] = 'AÑO'
+        ws_anual['P9'].font = Font(bold=True)
+        ws_anual['Q9'] = año
+        ws_anual['Q9'].font = Font(bold=True)
+        
+        # Responsable
+        ws_anual['B11'] = 'Responsable del mantenimiento :'
+        ws_anual['D11'] = responsable
+        ws_anual['D11'].font = Font(bold=True)
+        
+        # Headers tabla
+        headers = ['MAQUINA', 'MODELO', '', 'REVISIONES', 'ENERO', 'FEB', 'MARZO', 'ABRIL', 
+                   'MAYO', 'JUN', 'JUL', 'AGO', 'SEPT', 'OCT', 'NOV', 'DIC']
+        for idx, header in enumerate(headers, start=2):
+            cell = ws_anual.cell(row=13, column=idx)
+            cell.value = header
+            cell.font = Font(bold=True, size=10)
+            cell.fill = PatternFill(start_color="d9e1f2", end_color="d9e1f2", fill_type="solid")
+            cell.alignment = Alignment(horizontal="center", wrap_text=True)
+            cell.border = Border(
+                left=Side(style='thin'), right=Side(style='thin'),
+                top=Side(style='thin'), bottom=Side(style='thin')
+            )
+        
+        # Crear filas de máquinas
+        thin_border = Border(
+            left=Side(style='thin'), right=Side(style='thin'),
+            top=Side(style='thin'), bottom=Side(style='thin')
+        )
+        
+        for maquina in maquinas_config:
+            if maquina['key'] == 'furgon':
+                # Furgón solo tiene ENGRASE
+                row = maquina['fila_engrase']
+                ws_anual.cell(row=row, column=2, value=maquina['nombre']).border = thin_border
+                ws_anual.cell(row=row, column=3, value=maquina['modelo']).border = thin_border
+                ws_anual.cell(row=row, column=5, value='ENGRASE').border = thin_border
+                for col in range(6, 18):
+                    ws_anual.cell(row=row, column=col).border = thin_border
+                    ws_anual.cell(row=row, column=col).alignment = Alignment(horizontal="center")
+            else:
+                # Otras máquinas tienen BATERIAS y ENGRASE
+                # Fila BATERIAS
+                row_bat = maquina['fila_baterias']
+                ws_anual.cell(row=row_bat, column=2, value=maquina['nombre']).border = thin_border
+                ws_anual.cell(row=row_bat, column=3, value=maquina['modelo']).border = thin_border
+                ws_anual.cell(row=row_bat, column=5, value='NIVELES BATERIAS').border = thin_border
+                for col in range(6, 18):
+                    ws_anual.cell(row=row_bat, column=col).border = thin_border
+                    ws_anual.cell(row=row_bat, column=col).alignment = Alignment(horizontal="center")
+                
+                # Fila ENGRASE
+                row_eng = maquina['fila_engrase']
+                ws_anual.cell(row=row_eng, column=5, value='ENGRASE').border = thin_border
+                for col in range(6, 18):
+                    ws_anual.cell(row=row_eng, column=col).border = thin_border
+                    ws_anual.cell(row=row_eng, column=col).alignment = Alignment(horizontal="center")
+        
+        # Leyenda
+        ws_anual['B24'] = '√    Correcto'
+        ws_anual['B25'] = 'X       Necesita intervencion (rellenado de agua destilada y/o engrase)'
+        
+        # Ajustar anchos
+        ws_anual.column_dimensions['B'].width = 25
+        ws_anual.column_dimensions['C'].width = 25
+        ws_anual.column_dimensions['D'].width = 3
+        ws_anual.column_dimensions['E'].width = 18
+        for col_letter in ['F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q']:
+            ws_anual.column_dimensions[col_letter].width = 10
+    else:
+        ws_anual = wb["ANUAL"]
+    
+    # 4. Procesar cada revisión
+    revisiones_guardadas = 0
+    
+    for maquina in maquinas_config:
+        key = maquina['key']
+        
+        # Revisar BATERIAS (si la máquina tiene)
+        if 'fila_baterias' in maquina:
+            campo_bat = f"{key}_baterias"
+            campo_bat_obs = f"{key}_baterias_obs"
+            
+            if campo_bat in data:
+                estado = data[campo_bat]
+                obs = data.get(campo_bat_obs, '')
+                
+                # Añadir a LOG
+                ws_log.append([
+                    fecha_revision,
+                    mes,
+                    año,
+                    responsable,
+                    maquina['nombre'],
+                    maquina['modelo'],
+                    'NIVELES BATERIAS',
+                    estado,
+                    obs
+                ])
+                
+                # Actualizar ANUAL
+                if mes in mes_to_col:
+                    fila = maquina['fila_baterias']
+                    columna = mes_to_col[mes]
+                    ws_anual.cell(row=fila, column=columna, value=estado)
+                    ws_anual.cell(row=fila, column=columna).alignment = Alignment(horizontal="center")
+                
+                revisiones_guardadas += 1
+        
+        # Revisar ENGRASE
+        campo_eng = f"{key}_engrase"
+        campo_eng_obs = f"{key}_engrase_obs"
+        
+        if campo_eng in data:
+            estado = data[campo_eng]
+            obs = data.get(campo_eng_obs, '')
+            
+            # Añadir a LOG
+            ws_log.append([
+                fecha_revision,
+                mes,
+                año,
+                responsable,
+                maquina['nombre'],
+                maquina['modelo'],
+                'ENGRASE',
+                estado,
+                obs
+            ])
+            
+            # Actualizar ANUAL
+            if mes in mes_to_col:
+                fila = maquina['fila_engrase']
+                columna = mes_to_col[mes]
+                ws_anual.cell(row=fila, column=columna, value=estado)
+                ws_anual.cell(row=fila, column=columna).alignment = Alignment(horizontal="center")
+            
+            revisiones_guardadas += 1
+    
+    # 5. Guardar Excel
+    wb.save(excel_file)
+    
+    # 6. Email (opcional)
+    email_to = os.getenv("MAIL_TO_MANTENIMIENTO_MAQUINAS_MLG", "").strip()
+    if not email_to:
+        email_to = os.getenv("MAIL_TO", "")
+    
+    email_sent = False
+    
+    if email_to and SMTP_HOST:
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        json_filename = f"mantenimiento-maquinas-mlg_{timestamp}.json"
+        json_path = OUTPUT_DIR / json_filename
+        
+        with open(json_path, 'w', encoding='utf-8') as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+        
+        subject = f"[MLG] Mantenimiento Maquinaria - {mes} {año}"
+        email_sent = send_email_with_json(
+            to_email=email_to,
+            subject=subject,
+            schema_name="mantenimiento-maquinas-mlg",
+            data=data,
+            json_path=str(json_path)
+        )
+    
+    return {
+        "success": True,
+        "message": f"Mantenimiento guardado: {revisiones_guardadas} revisiones",
+        "excel_file": excel_file.name,
+        "mes": mes,
+        "año": año,
+        "email_sent": email_sent
     }
 
 

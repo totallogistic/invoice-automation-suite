@@ -169,7 +169,7 @@
     <div class="form-container">
         <div class="form-header">
             <a href="/" class="back-button">← Volver al inicio</a>
-            <h1>{{ form.title }}</h1>
+            <h1>[MLG] {{ form.title }}</h1>
             <p>{{ form.description }}</p>
         </div>
         
@@ -229,18 +229,28 @@
                     <label for="motivo">Motivo de la visita <span class="required">*</span></label>
                     <select id="motivo" name="motivo" required>
                         <option value="">Seleccione un motivo...</option>
-                        <option value="Reunión">Reunión</option>
+                        <option value="Comercial">Comercial</option>
+                        <option value="Cita previa">Cita previa</option>
                         <option value="Auditoría">Auditoría</option>
-                        <option value="Mantenimiento">Mantenimiento</option>
-                        <option value="Proveedor">Proveedor</option>
-                        <option value="Cliente">Cliente</option>
-                        <option value="Otro">Otro</option>
+                        <option value="Otros">Otros</option>
                     </select>
                 </div>
                 
                 <div class="form-group">
                     <label for="persona_contacto">Persona de contacto <span class="required">*</span></label>
-                    <input type="text" id="persona_contacto" name="persona_contacto" required>
+                    <select id="persona_contacto" name="persona_contacto" required>
+                        <option value="">Seleccione...</option>
+                        <option value="Rafael Rubiales Mejias">Rafael Rubiales Mejias</option>
+                        <option value="Rubén Rubiales Montero">Rubén Rubiales Montero</option>
+                        <option value="Palma Almagro Guerrero">Palma Almagro Guerrero</option>
+                        <option value="José Luis Martínez Lázaro">José Luis Martínez Lázaro</option>
+                        <option value="Javier Martínez Lázaro">Javier Martínez Lázaro</option>
+                        <option value="Juan Antonio Martínez Lázaro">Juan Antonio Martínez Lázaro</option>
+                        <option value="Gonzalo Baeza Torres">Gonzalo Baeza Torres</option>
+                        <option value="Juan José López Martínez">Juan José López Martínez</option>
+                        <option value="Mª José Gómez Carmona">Mª José Gómez Carmona</option>
+                        <option value="Jose Luis del Pino Maya">Jose Luis del Pino Maya</option>
+                    </select>
                 </div>
             </div>
             

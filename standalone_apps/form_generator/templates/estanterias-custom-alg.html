@@ -139,7 +139,7 @@
 </head>
 <body>
     <header>
-        <h1>📋 Revisión de Estanterías - Trimestral</h1>
+        <h1>📋 [ALG] Revisión de Estanterías - Trimestral</h1>
         <p class="description">Delegación Algeciras</p>
     </header>
 
@@ -311,7 +311,7 @@
             };
             
             try {
-                const response = await fetch('/api/save-estanterias-completo', {
+                const response = await fetch('/api/save-estanterias-completo?sede=alg', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify(payload)

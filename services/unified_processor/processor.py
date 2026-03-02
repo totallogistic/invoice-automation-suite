@@ -196,10 +196,13 @@ class UnifiedProcessor:
         
         logger.info(f"[{tool.name}] Running extractor...")
         result = subprocess.run(cmd, capture_output=True, text=True)
-        
+
         if result.returncode != 0:
             raise RuntimeError(f"Extractor failed: {result.stderr}")
         
+        report_path = output_path / f"reporte_{batch_id}.txt"
+        report_path.write_text(result.stdout, encoding="utf-8")
+
         return output_path
     
     def _get_recipients(self, tool_name: str) -> List[str]:
@@ -211,20 +214,13 @@ class UnifiedProcessor:
         return [e.strip() for e in mail_to.split(",") if e.strip()]
     
     def _build_email_body(self, batch_id: str, file_count: int, output_path: Path, artifacts: List[Path]) -> str:
-        """
-        Build email body. If a .txt report file exists in artifacts, use it as body.
-        Otherwise use default message.
-        """
-        # Look for text report file (e.g., *_reporte_*.txt)
-        txt_reports = [a for a in artifacts if a.suffix == '.txt' and 'report' in a.name.lower() or 'reporte' in a.name.lower()]
-        
-        if txt_reports:
-            # Use the first text report as email body
+        # Look for report file directly in output_path (not in artifacts list)
+        report_path = output_path / f"reporte_{batch_id}.txt"
+        if report_path.exists():
             try:
-                report_content = txt_reports[0].read_text(encoding='utf-8')
-                return report_content
+                return report_path.read_text(encoding="utf-8")
             except Exception as e:
-                logger.warning(f"Failed to read report file {txt_reports[0]}: {e}")
+                logger.warning(f"Failed to read report file {report_path}: {e}")
         
         # Default body if no report found
         return f"Batch {batch_id} processed.\n{file_count} file(s) processed."

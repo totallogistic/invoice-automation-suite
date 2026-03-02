@@ -1,7 +1,7 @@
 #!/bin/bash
 #
 # Form Generator - Uninstallation Script
-# Removes the systemd service
+# Removes all form-generator systemd services
 #
 # Usage:
 #   cd standalone_apps/form_generator
@@ -24,50 +24,72 @@ echo "============================================================"
 echo -e "${NC}"
 
 # Check if running as root
-if [ "$EUID" -ne 0 ]; then 
-    echo -e "${RED}❌ Please run as root (use sudo)${NC}"
-    exit 1
+if [ "$EUID" -ne 0 ]; then
+  echo -e "${RED}❌ Please run as root (use sudo)${NC}"
+  exit 1
 fi
 
-SERVICE_FILE="/etc/systemd/system/form-generator.service"
+# Find all form-generator services
+SERVICES=$(systemctl list-units --all --type=service --plain --no-legend | grep 'form-generator' | awk '{print $1}' || true)
 
-# Check if service exists
-if [ ! -f "$SERVICE_FILE" ]; then
-    echo -e "${YELLOW}⚠ Service not found. Nothing to uninstall.${NC}"
-    exit 0
+if [ -z "$SERVICES" ]; then
+  echo -e "${YELLOW}⚠ No form-generator services found. Nothing to uninstall.${NC}"
+  exit 0
 fi
+
+# Show services to be removed
+echo -e "${BLUE}📋 Found services:${NC}"
+echo "$SERVICES" | sed 's/^/   /'
+echo ""
 
 # Confirm uninstallation
-echo -e "${YELLOW}⚠️  This will remove the form-generator service.${NC}"
+echo -e "${YELLOW}⚠️  This will remove all form-generator services.${NC}"
 echo -e "${YELLOW}   The application files will NOT be deleted.${NC}"
 echo ""
 read -p "Continue? [y/N] " -n 1 -r
 echo
 if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-    echo -e "${BLUE}Cancelled.${NC}"
-    exit 0
+  echo -e "${BLUE}Cancelled.${NC}"
+  exit 0
 fi
 
 echo ""
-echo -e "${BLUE}🛑 Stopping service...${NC}"
-if systemctl is-active --quiet form-generator.service; then
-    systemctl stop form-generator.service
-    echo -e "${GREEN}   ✓ Service stopped${NC}"
-else
-    echo -e "${YELLOW}   ⚠ Service was not running${NC}"
-fi
 
-echo -e "${BLUE}🔓 Disabling service...${NC}"
-if systemctl is-enabled --quiet form-generator.service 2>/dev/null; then
-    systemctl disable form-generator.service
-    echo -e "${GREEN}   ✓ Service disabled${NC}"
-else
-    echo -e "${YELLOW}   ⚠ Service was not enabled${NC}"
-fi
+# Stop, disable and remove each service
+while IFS= read -r service; do
+  if [ -z "$service" ]; then
+    continue
+  fi
 
-echo -e "${BLUE}🗑️  Removing service file...${NC}"
-rm -f "$SERVICE_FILE"
-echo -e "${GREEN}   ✓ Removed $SERVICE_FILE${NC}"
+  service_name=$(basename "$service" .service)
+  service_file="/etc/systemd/system/$service"
+
+  echo -e "${BLUE}Processing: ${GREEN}$service${NC}"
+
+  # Stop service
+  if systemctl is-active --quiet "$service" 2>/dev/null; then
+    systemctl stop "$service"
+    echo -e "   ${GREEN}✓ Stopped${NC}"
+  else
+    echo -e "   ${YELLOW}⚠ Was not running${NC}"
+  fi
+
+  # Disable service
+  if systemctl is-enabled --quiet "$service" 2>/dev/null; then
+    systemctl disable "$service" 2>/dev/null || true
+    echo -e "   ${GREEN}✓ Disabled${NC}"
+  else
+    echo -e "   ${YELLOW}⚠ Was not enabled${NC}"
+  fi
+
+  # Remove service file
+  if [ -f "$service_file" ]; then
+    rm -f "$service_file"
+    echo -e "   ${GREEN}✓ Removed service file${NC}"
+  fi
+
+  echo ""
+done <<<"$SERVICES"
 
 echo -e "${BLUE}🔄 Reloading systemd...${NC}"
 systemctl daemon-reload
@@ -82,5 +104,6 @@ echo -e "${BLUE}📝 Note:${NC}"
 echo "   Application files remain in:"
 echo "   $(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 echo ""
-echo -e "${YELLOW}💡 To reinstall: sudo ./install/install.sh${NC}"
+echo -e "${YELLOW}💡 To reinstall: sudo ./install/install-all.sh${NC}"
 echo ""
+

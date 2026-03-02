@@ -3,13 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{{ form.title }}</title>
+    <title>[MLG] Mantenimiento de Maquinaria de Almacén</title>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
         
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
@@ -34,19 +30,23 @@
             text-align: center;
         }
         
-        .header h1 {
-            font-size: 1.8rem;
-            margin-bottom: 0.5rem;
+        .header h1 { font-size: 1.8rem; margin-bottom: 0.5rem; }
+        .header p { opacity: 0.9; font-size: 1rem; }
+        
+        .back-button {
+            display: inline-block;
+            margin-bottom: 1rem;
+            padding: 0.5rem 1rem;
+            color: white;
+            text-decoration: none;
+            border-radius: 6px;
+            background: rgba(255,255,255,0.2);
+            transition: background 0.3s;
         }
         
-        .header p {
-            opacity: 0.9;
-            font-size: 1rem;
-        }
+        .back-button:hover { background: rgba(255,255,255,0.3); }
         
-        .form-content {
-            padding: 2rem;
-        }
+        .form-content { padding: 2rem; }
         
         .metadata-section {
             display: grid;
@@ -70,8 +70,7 @@
             font-size: 0.9rem;
         }
         
-        .form-group input,
-        .form-group select {
+        .form-group input, .form-group select {
             padding: 0.75rem;
             border: 2px solid #e0e0e0;
             border-radius: 6px;
@@ -79,8 +78,7 @@
             transition: all 0.3s;
         }
         
-        .form-group input:focus,
-        .form-group select:focus {
+        .form-group input:focus, .form-group select:focus {
             outline: none;
             border-color: #2563a8;
             box-shadow: 0 0 0 3px rgba(37, 99, 168, 0.1);
@@ -104,47 +102,43 @@
             padding: 1rem;
             text-align: left;
             font-weight: 600;
-            font-size: 0.9rem;
-        }
-        
-        .machines-table tbody tr {
-            border-bottom: 1px solid #e0e0e0;
-            transition: background-color 0.2s;
-        }
-        
-        .machines-table tbody tr:hover {
-            background-color: #f8f9fa;
-        }
-        
-        .machines-table tbody tr:last-child {
-            border-bottom: none;
+            font-size: 0.95rem;
         }
         
         .machines-table td {
             padding: 1rem;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        
+        .machines-table tbody tr:hover {
+            background: #f8f9fa;
         }
         
         .machine-info {
             display: flex;
             flex-direction: column;
+            gap: 0.3rem;
         }
         
         .machine-name {
             font-weight: 600;
-            color: #333;
-            font-size: 0.95rem;
+            color: #1a4d7e;
+            font-size: 1rem;
         }
         
         .machine-model {
             color: #666;
-            font-size: 0.85rem;
-            margin-top: 0.25rem;
+            font-size: 0.9rem;
         }
         
         .revision-type {
-            color: #2563a8;
-            font-size: 0.9rem;
-            font-weight: 500;
+            display: inline-block;
+            padding: 0.4rem 0.8rem;
+            background: #e3f2fd;
+            color: #1976d2;
+            border-radius: 6px;
+            font-size: 0.85rem;
+            font-weight: 600;
         }
         
         .status-select {
@@ -163,13 +157,8 @@
             box-shadow: 0 0 0 3px rgba(37, 99, 168, 0.1);
         }
         
-        .status-select option[value="✓"] {
-            color: #28a745;
-        }
-        
-        .status-select option[value="X"] {
-            color: #dc3545;
-        }
+        .status-select option[value="✓"] { color: #28a745; }
+        .status-select option[value="X"] { color: #dc3545; }
         
         .observations-textarea {
             width: 100%;
@@ -215,13 +204,8 @@
             margin-right: 0.5rem;
         }
         
-        .legend-symbol.correct {
-            color: #28a745;
-        }
-        
-        .legend-symbol.needs-intervention {
-            color: #dc3545;
-        }
+        .legend-symbol.correct { color: #28a745; }
+        .legend-symbol.needs-intervention { color: #dc3545; }
         
         .submit-section {
             margin-top: 2rem;
@@ -247,54 +231,32 @@
             box-shadow: 0 8px 16px rgba(37, 99, 168, 0.3);
         }
         
-        .submit-button:active {
-            transform: translateY(0);
-        }
+        .submit-button:active { transform: translateY(0); }
         
-        .success-message {
-            background: #d4edda;
-            border: 2px solid #c3e6cb;
-            color: #155724;
+        .message {
             padding: 1.5rem;
             border-radius: 8px;
             margin-bottom: 2rem;
             text-align: center;
             font-weight: 600;
+            display: none;
         }
         
-        .back-button {
-            display: inline-block;
-            margin-bottom: 1rem;
-            padding: 0.5rem 1rem;
-            color: white;
-            text-decoration: none;
-            border-radius: 6px;
-            background: rgba(255,255,255,0.2);
-            transition: background 0.3s;
+        .message.success {
+            background: #d4edda;
+            border: 2px solid #c3e6cb;
+            color: #155724;
         }
         
-        .back-button:hover {
-            background: rgba(255,255,255,0.3);
+        .message.error {
+            background: #f8d7da;
+            border: 2px solid #f5c6cb;
+            color: #721c24;
         }
         
         @media (max-width: 768px) {
-            .machines-table {
-                font-size: 0.85rem;
-            }
-            
-            .machines-table th,
-            .machines-table td {
-                padding: 0.75rem 0.5rem;
-            }
-            
-            .status-select {
-                min-width: 150px;
-                font-size: 0.85rem;
-            }
-            
-            .metadata-section {
-                grid-template-columns: 1fr;
-            }
+            .machines-table { font-size: 0.85rem; }
+            .status-select { min-width: 150px; }
         }
     </style>
 </head>
@@ -302,18 +264,14 @@
     <div class="container">
         <div class="header">
             <a href="/" class="back-button">← Volver al inicio</a>
-            <h1>{{ form.title }}</h1>
-            <p>{{ form.description }}</p>
+            <h1>🔧 [MLG] Mantenimiento de Maquinaria de Almacén</h1>
+            <p>Registro mensual de mantenimiento - Delegación Málaga</p>
         </div>
         
         <div class="form-content">
-            {% if success %}
-            <div class="success-message">
-                ✅ {{ form.success_message }}
-            </div>
-            {% endif %}
+            <div id="message" class="message"></div>
             
-            <form method="POST" id="maintenanceForm">
+            <form id="maintenanceForm">
                 <!-- Metadata Section -->
                 <div class="metadata-section">
                     <div class="form-group">
@@ -349,8 +307,8 @@
                         <label for="responsable">Responsable *</label>
                         <select id="responsable" name="responsable" required>
                             <option value="">Seleccione responsable...</option>
-                            <option value="DIEGO LADRÓN FONCUBIERTA" selected>DIEGO LADRÓN FONCUBIERTA</option>
-                            <option value="DANIEL ALFARO DIAZ ">DANIEL ALFARO DIAZ </option>
+                            <option value="MANUEL RODRIGUEZ SANTANA">MANUEL RODRIGUEZ SANTANA</option>
+                            <option value="ANTONIO RODRIGUEZ SANTANA">ANTONIO RODRIGUEZ SANTANA</option>
                         </select>
                     </div>
                 </div>
@@ -366,160 +324,160 @@
                         </tr>
                     </thead>
                     <tbody>
-                        <!-- CARRETILLA TOYOTA -->
+                        <!-- TRASPALETA ELECTRICA 7PML20/6-736980-2005 -->
                         <tr>
                             <td rowspan="2">
                                 <div class="machine-info">
-                                    <span class="machine-name">CARRETILLA TOYOTA</span>
+                                    <span class="machine-name">TRASPALETA ELECTRICA</span>
+                                    <span class="machine-model">7PML20/6-736980-2005</span>
+                                </div>
+                            </td>
+                            <td><span class="revision-type">NIVELES BATERÍAS</span></td>
+                            <td>
+                                <select name="traspaleta1_baterias" class="status-select" required>
+                                    <option value="">Seleccionar...</option>
+                                    <option value="✓">✓ Correcto</option>
+                                    <option value="X">X Necesita intervención</option>
+                                </select>
+                            </td>
+                            <td>
+                                <textarea name="traspaleta1_baterias_obs" class="observations-textarea" placeholder="Observaciones opcionales..."></textarea>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td><span class="revision-type">ENGRASE</span></td>
+                            <td>
+                                <select name="traspaleta1_engrase" class="status-select" required>
+                                    <option value="">Seleccionar...</option>
+                                    <option value="✓">✓ Correcto</option>
+                                    <option value="X">X Necesita intervención</option>
+                                </select>
+                            </td>
+                            <td>
+                                <textarea name="traspaleta1_engrase_obs" class="observations-textarea" placeholder="Observaciones opcionales..."></textarea>
+                            </td>
+                        </tr>
+                        
+                        <!-- TRASPALETA ELECTRICA 7PML20/6-723382-2004 -->
+                        <tr>
+                            <td rowspan="2">
+                                <div class="machine-info">
+                                    <span class="machine-name">TRASPALETA ELECTRICA</span>
+                                    <span class="machine-model">7PML20/6-723382-2004</span>
+                                </div>
+                            </td>
+                            <td><span class="revision-type">NIVELES BATERÍAS</span></td>
+                            <td>
+                                <select name="traspaleta2_baterias" class="status-select" required>
+                                    <option value="">Seleccionar...</option>
+                                    <option value="✓">✓ Correcto</option>
+                                    <option value="X">X Necesita intervención</option>
+                                </select>
+                            </td>
+                            <td>
+                                <textarea name="traspaleta2_baterias_obs" class="observations-textarea" placeholder="Observaciones opcionales..."></textarea>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td><span class="revision-type">ENGRASE</span></td>
+                            <td>
+                                <select name="traspaleta2_engrase" class="status-select" required>
+                                    <option value="">Seleccionar...</option>
+                                    <option value="✓">✓ Correcto</option>
+                                    <option value="X">X Necesita intervención</option>
+                                </select>
+                            </td>
+                            <td>
+                                <textarea name="traspaleta2_engrase_obs" class="observations-textarea" placeholder="Observaciones opcionales..."></textarea>
+                            </td>
+                        </tr>
+                        
+                        <!-- CARRETILLA ELECTRICA 7FBMF25 -->
+                        <tr>
+                            <td rowspan="2">
+                                <div class="machine-info">
+                                    <span class="machine-name">CARRETILLA ELECTRICA</span>
                                     <span class="machine-model">7FBMF25</span>
                                 </div>
                             </td>
                             <td><span class="revision-type">NIVELES BATERÍAS</span></td>
                             <td>
-                                <select name="toyota_baterias" class="status-select" required>
+                                <select name="carretilla_baterias" class="status-select" required>
                                     <option value="">Seleccionar...</option>
                                     <option value="✓">✓ Correcto</option>
                                     <option value="X">X Necesita intervención</option>
                                 </select>
                             </td>
                             <td>
-                                <textarea name="toyota_baterias_obs" class="observations-textarea" placeholder="Observaciones opcionales..."></textarea>
+                                <textarea name="carretilla_baterias_obs" class="observations-textarea" placeholder="Observaciones opcionales..."></textarea>
                             </td>
                         </tr>
                         <tr>
                             <td><span class="revision-type">ENGRASE</span></td>
                             <td>
-                                <select name="toyota_engrase" class="status-select" required>
+                                <select name="carretilla_engrase" class="status-select" required>
                                     <option value="">Seleccionar...</option>
                                     <option value="✓">✓ Correcto</option>
                                     <option value="X">X Necesita intervención</option>
                                 </select>
                             </td>
                             <td>
-                                <textarea name="toyota_engrase_obs" class="observations-textarea" placeholder="Observaciones opcionales..."></textarea>
+                                <textarea name="carretilla_engrase_obs" class="observations-textarea" placeholder="Observaciones opcionales..."></textarea>
                             </td>
                         </tr>
                         
-                        <!-- CARRETILLA LATERAL STILL -->
+                        <!-- APILADORA STILL FM14 -->
                         <tr>
                             <td rowspan="2">
                                 <div class="machine-info">
-                                    <span class="machine-name">CARRETILLA LATERAL STILL</span>
-                                    <span class="machine-model">FM 14</span>
+                                    <span class="machine-name">APILADORA STILL</span>
+                                    <span class="machine-model">FM14</span>
                                 </div>
                             </td>
                             <td><span class="revision-type">NIVELES BATERÍAS</span></td>
                             <td>
-                                <select name="still_baterias" class="status-select" required>
+                                <select name="apiladora_baterias" class="status-select" required>
                                     <option value="">Seleccionar...</option>
                                     <option value="✓">✓ Correcto</option>
                                     <option value="X">X Necesita intervención</option>
                                 </select>
                             </td>
                             <td>
-                                <textarea name="still_baterias_obs" class="observations-textarea" placeholder="Observaciones opcionales..."></textarea>
+                                <textarea name="apiladora_baterias_obs" class="observations-textarea" placeholder="Observaciones opcionales..."></textarea>
                             </td>
                         </tr>
                         <tr>
                             <td><span class="revision-type">ENGRASE</span></td>
                             <td>
-                                <select name="still_engrase" class="status-select" required>
+                                <select name="apiladora_engrase" class="status-select" required>
                                     <option value="">Seleccionar...</option>
                                     <option value="✓">✓ Correcto</option>
                                     <option value="X">X Necesita intervención</option>
                                 </select>
                             </td>
                             <td>
-                                <textarea name="still_engrase_obs" class="observations-textarea" placeholder="Observaciones opcionales..."></textarea>
+                                <textarea name="apiladora_engrase_obs" class="observations-textarea" placeholder="Observaciones opcionales..."></textarea>
                             </td>
                         </tr>
                         
-                        <!-- TRASPALETA ELECTRICA - A -->
-                        <tr>
-                            <td rowspan="2">
-                                <div class="machine-info">
-                                    <span class="machine-name">TRASPALETA ELECTRICA - A</span>
-                                    <span class="machine-model">7PML20/6</span>
-                                </div>
-                            </td>
-                            <td><span class="revision-type">NIVELES BATERÍAS</span></td>
-                            <td>
-                                <select name="traspaleta_a_baterias" class="status-select" required>
-                                    <option value="">Seleccionar...</option>
-                                    <option value="✓">✓ Correcto</option>
-                                    <option value="X">X Necesita intervención</option>
-                                </select>
-                            </td>
-                            <td>
-                                <textarea name="traspaleta_a_baterias_obs" class="observations-textarea" placeholder="Observaciones opcionales..."></textarea>
-                            </td>
-                        </tr>
-                        <tr>
-                            <td><span class="revision-type">ENGRASE</span></td>
-                            <td>
-                                <select name="traspaleta_a_engrase" class="status-select" required>
-                                    <option value="">Seleccionar...</option>
-                                    <option value="✓">✓ Correcto</option>
-                                    <option value="X">X Necesita intervención</option>
-                                </select>
-                            </td>
-                            <td>
-                                <textarea name="traspaleta_a_engrase_obs" class="observations-textarea" placeholder="Observaciones opcionales..."></textarea>
-                            </td>
-                        </tr>
-                        
-                        <!-- TRASPALETA ELECTRICA - C -->
-                        <tr>
-                            <td rowspan="2">
-                                <div class="machine-info">
-                                    <span class="machine-name">TRASPALETA ELECTRICA – C</span>
-                                    <span class="machine-model">LPE200</span>
-                                </div>
-                            </td>
-                            <td><span class="revision-type">NIVELES BATERÍAS</span></td>
-                            <td>
-                                <select name="traspaleta_c_baterias" class="status-select" required>
-                                    <option value="">Seleccionar...</option>
-                                    <option value="✓">✓ Correcto</option>
-                                    <option value="X">X Necesita intervención</option>
-                                </select>
-                            </td>
-                            <td>
-                                <textarea name="traspaleta_c_baterias_obs" class="observations-textarea" placeholder="Observaciones opcionales..."></textarea>
-                            </td>
-                        </tr>
-                        <tr>
-                            <td><span class="revision-type">ENGRASE</span></td>
-                            <td>
-                                <select name="traspaleta_c_engrase" class="status-select" required>
-                                    <option value="">Seleccionar...</option>
-                                    <option value="✓">✓ Correcto</option>
-                                    <option value="X">X Necesita intervención</option>
-                                </select>
-                            </td>
-                            <td>
-                                <textarea name="traspaleta_c_engrase_obs" class="observations-textarea" placeholder="Observaciones opcionales..."></textarea>
-                            </td>
-                        </tr>
-                        
-                        <!-- RETRACTILADORA ELECT. -->
+                        <!-- FURGON CITROEN 5516GDV -->
                         <tr>
                             <td>
                                 <div class="machine-info">
-                                    <span class="machine-name">RETRACTILADORA ELECT.</span>
-                                    <span class="machine-model">MA 00</span>
+                                    <span class="machine-name">FURGON CITROEN</span>
+                                    <span class="machine-model">5516GDV</span>
                                 </div>
                             </td>
                             <td><span class="revision-type">ENGRASE</span></td>
                             <td>
-                                <select name="retractiladora_engrase" class="status-select" required>
+                                <select name="furgon_engrase" class="status-select" required>
                                     <option value="">Seleccionar...</option>
                                     <option value="✓">✓ Correcto</option>
                                     <option value="X">X Necesita intervención</option>
                                 </select>
                             </td>
                             <td>
-                                <textarea name="retractiladora_engrase_obs" class="observations-textarea" placeholder="Observaciones opcionales..."></textarea>
+                                <textarea name="furgon_engrase_obs" class="observations-textarea" placeholder="Observaciones opcionales..."></textarea>
                             </td>
                         </tr>
                     </tbody>
@@ -527,7 +485,7 @@
                 
                 <!-- Legend -->
                 <div class="legend">
-                    <h3>Leyenda:</h3>
+                    <h3>Leyenda</h3>
                     <div class="legend-item">
                         <span class="legend-symbol correct">✓</span>
                         <span>Correcto</span>
@@ -538,36 +496,81 @@
                     </div>
                 </div>
                 
+                <div class="legend">
+                    <h3>NOTA</h3>
+                    <ul style="margin-left: 1.5rem; font-size: 0.9rem;">
+                        <li>Comprobación de los niveles de agua destilada en las baterías, incluye la comprobación de la densidad de las mismas.</li>
+                        <li>Lubricación de partes móviles y puntos de engrase según especificaciones del fabricante.</li>
+                    </ul>
+                </div>
+                
                 <!-- Submit Section -->
                 <div class="submit-section">
-                    <button type="submit" class="submit-button">
-                        💾 {{ form.submit_button }}
-                    </button>
+                    <button type="submit" class="submit-button">💾 Guardar Mantenimiento Mensual</button>
                 </div>
             </form>
         </div>
     </div>
-    
+
     <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            // Set current year
-            const currentYear = new Date().getFullYear();
-            document.getElementById('año').value = currentYear;
+        // Auto-fill current date and year
+        const today = new Date();
+        document.getElementById('fecha_revision').valueAsDate = today;
+        document.getElementById('año').value = today.getFullYear();
+        
+        // Auto-select current month
+        const months = ['ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO', 
+                        'JULIO', 'AGOSTO', 'SEPTIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE'];
+        document.getElementById('mes').value = months[today.getMonth()];
+        
+        document.getElementById('maintenanceForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
             
-            // Set current date
-            const today = new Date().toISOString().split('T')[0];
-            document.getElementById('fecha_revision').value = today;
+            const formData = new FormData(e.target);
+            const data = {};
             
-            // Set current month
-            const monthNames = ['ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO',
-                              'JULIO', 'AGOSTO', 'SEPTIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE'];
-            const currentMonth = monthNames[new Date().getMonth()];
-            document.getElementById('mes').value = currentMonth;
+            // Convert FormData to object
+            for (let [key, value] of formData.entries()) {
+                data[key] = value;
+            }
             
-            // Auto-focus on first select
-            setTimeout(() => {
-                document.getElementById('mes').focus();
-            }, 100);
+            // Convert año to integer
+            if (data.año) {
+                data.año = parseInt(data.año);
+            }
+            
+            try {
+                const response = await fetch('/api/save-maquinaria-mlg', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                
+                const messageDiv = document.getElementById('message');
+                
+                if (response.ok) {
+                    messageDiv.textContent = '✅ Mantenimiento guardado correctamente';
+                    messageDiv.className = 'message success';
+                    messageDiv.style.display = 'block';
+                    
+                    // Scroll to top
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                    
+                    setTimeout(() => {
+                        location.reload();
+                    }, 2000);
+                } else {
+                    throw new Error('Error al guardar');
+                }
+            } catch (error) {
+                const messageDiv = document.getElementById('message');
+                messageDiv.textContent = '❌ Error al guardar el mantenimiento';
+                messageDiv.className = 'message error';
+                messageDiv.style.display = 'block';
+                
+                // Scroll to top
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            }
         });
     </script>
 </body>

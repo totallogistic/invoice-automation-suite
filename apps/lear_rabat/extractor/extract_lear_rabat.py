@@ -3,9 +3,6 @@
 Lear Rabat Invoice Extractor - Unified Architecture Version
 Extracts data from Lear Rabat invoices and generates ODS files with DUA data.
 
-This extractor processes Lear Automotive Morocco invoices and populates
-a template ODS file with customs clearance data.
-
 Usage (unified processor interface):
   extract_lear_rabat.py <pdf1> <pdf2> ... -o <output_dir> [-t <template.ods>]
 """
@@ -13,10 +10,11 @@ Usage (unified processor interface):
 import argparse
 import re
 import sys
+from collections import defaultdict
 from pathlib import Path
 from typing import Dict, List, Optional
 
-SCRIPT_VERSION = "2026-02-21.v9"
+SCRIPT_VERSION = "2026-03-02.v23"
 
 try:
     import pdfplumber
@@ -27,13 +25,17 @@ except ImportError:
 try:
     from odf import opendocument, table, text as odftext
     from odf.opendocument import load as load_ods
+    from odf.namespaces import TABLENS, OFFICENS
 except ImportError:
     print("ERROR: missing dependency. Install with: pip install odfpy", file=sys.stderr)
     sys.exit(1)
 
 
+# ---------------------------------------------------------------------------
+# PDF extraction helpers
+# ---------------------------------------------------------------------------
+
 def read_pdf_text(pdf_path: Path) -> str:
-    """Extract text from all pages."""
     parts = []
     with pdfplumber.open(str(pdf_path)) as pdf:
         for page in pdf.pages:
@@ -44,30 +46,19 @@ def read_pdf_text(pdf_path: Path) -> str:
 
 
 def detect_number_format(text: str) -> str:
-    """Detect whether the invoice uses EU or US number format.
-    
-    EU format: spaces for thousands, comma for decimal  (e.g. "1 536,00" or "13 210,09")
-    US format: commas for thousands, dot for decimal    (e.g. "1,536.00" or "13,210.09")
-    """
     us_pattern = re.findall(r'\d{1,3},\d{3}\.\d{2}', text)
     eu_pattern = re.findall(r'\d{1,3}\s\d{3},\d{2}', text)
-    
-    if len(us_pattern) > len(eu_pattern):
-        return "US"
-    return "EU"
+    return "US" if len(us_pattern) > len(eu_pattern) else "EU"
 
 
 def parse_number(s: str, fmt: str = "EU") -> Optional[float]:
-    """Parse a number string, handling both EU and US formats."""
     if not s or s.strip() == "":
         return None
     s = s.strip()
-    
     if fmt == "US":
         s = s.replace(",", "")
     else:
         s = s.replace(" ", "").replace(",", ".")
-    
     try:
         return float(s)
     except ValueError:
@@ -75,7 +66,6 @@ def parse_number(s: str, fmt: str = "EU") -> Optional[float]:
 
 
 def extract_invoice_number(text: str) -> str:
-    """Extract invoice number from header."""
     lines = text.splitlines()
     for line in lines[:20]:
         m = re.match(r'^(\d{8})\s', line.strip())
@@ -87,42 +77,36 @@ def extract_invoice_number(text: str) -> str:
 
 
 def extract_invoice_metadata(text: str, fmt: str) -> Dict:
-    """Extract invoice header data (weights, pallets, totals)."""
     lines = text.splitlines()
-    
     invoice_no = extract_invoice_number(text)
     total_invoice = None
     peso_brut = None
     peso_net = None
     pallets = None
     total_opr = None
-    
+
     for i, line in enumerate(lines):
-        # Extract total: "Total: 110 134,51" or "Total: 94,200.01"
         m = re.search(r'Total:\s+([\d\s,\.]+)', line)
         if m:
             total_invoice = parse_number(m.group(1), fmt)
-        
-        # Extract weights
+
         if "Net:" in line and "Gross:" in line:
             m = re.search(r'Net:\s*([\d\s]+)\s*K\s+.*?Gross:\s*([\d\s]+)\s*K', line)
             if m:
                 peso_net = parse_number(m.group(1), "EU")
                 peso_brut = parse_number(m.group(2), "EU")
-        
-        # Extract pallet count from delivery conditions line
+
         if i < 15 and ("FCA" in line or "EXW" in line or "DAP" in line):
             m = re.search(r'\b(\d{1,3})\s*$', line.strip())
             if m:
                 pallets = int(m.group(1))
-    
-    # Extract total OPR from end of document
+
     for line in reversed(lines):
         m = re.search(r'OPR Material Cost:\s+([\d\s,\.]+)', line)
         if m:
             total_opr = parse_number(m.group(1), fmt)
             break
-    
+
     return {
         "invoice_no": invoice_no,
         "total_invoice": total_invoice,
@@ -134,23 +118,12 @@ def extract_invoice_metadata(text: str, fmt: str) -> Dict:
 
 
 def extract_line_items(text: str, fmt: str) -> List[Dict]:
-    """Extract line items with project grouping.
-    
-    Key insight: Items appear BEFORE their project header.
-    The project header appears after the last item in that project,
-    followed by OPR Material Cost for that project.
-    """
     lines = text.splitlines()
-    
-    # First pass: collect all FG items
     raw_items = []
-    
+
     i = 0
     while i < len(lines):
         line = lines[i].strip()
-        
-        # Detect FG lines - flexible regex for both number formats
-        # HS code is optional (some items don't have it)
         fg_match = re.match(
             r'(\d+)\s+FG\s+(\S+)\s+ESOPO\d+-\s*(\d+)I?\s+(?:(\d{7,})\s+)?([\d,\.\s]+)',
             line
@@ -159,32 +132,27 @@ def extract_line_items(text: str, fmt: str) -> List[Dict]:
             line_no = fg_match.group(1)
             part_number = fg_match.group(2)
             code = fg_match.group(3)
-            hs_code = fg_match.group(4) or ""  # may be None if no HS code
+            hs_code = fg_match.group(4) or ""
             qty_str = fg_match.group(5).strip()
             quantity = parse_number(qty_str, fmt)
-            
-            # Search forward for Subtotal FG and Partial Weight
+
             subtotal_price = None
             partial_weight = None
-            
+
             for j in range(i + 1, min(i + 50, len(lines))):
                 check_line = lines[j].strip()
-                
                 if "Subtotal FG:" in check_line:
                     m = re.search(r'Subtotal FG:\s+\S+\s+([\d\s,\.]+)', check_line)
                     if m:
                         subtotal_price = parse_number(m.group(1), fmt)
                     break
-                
                 if "Partial Weight:" in check_line:
                     m = re.search(r'Partial Weight:\s+([\d\s,\.]+)\s*K?', check_line)
                     if m:
                         partial_weight = parse_number(m.group(1), fmt)
-                
-                # Stop at next FG line
                 if re.match(r'\d+\s+FG\s+', check_line):
                     break
-            
+
             raw_items.append({
                 "line_no": line_no,
                 "line_idx": i,
@@ -195,43 +163,35 @@ def extract_line_items(text: str, fmt: str) -> List[Dict]:
                 "subtotal_price": subtotal_price,
                 "partial_weight": partial_weight,
             })
-        
         i += 1
-    
-    # Second pass: find project headers and OPR costs
+
     projects = []
     for i, line_text in enumerate(lines):
         line = line_text.strip()
-        
         project_match = re.match(r'(O_\w+)\s+Project:\s+(\d+)\s+Plts', line)
         if project_match:
             project_name = project_match.group(1)
             project_pallets = int(project_match.group(2))
-            
             opr_material = None
             for j in range(i + 1, min(i + 10, len(lines))):
                 m = re.search(r'OPR Material Cost:\s+([\d\s,\.]+)', lines[j])
                 if m:
                     opr_material = parse_number(m.group(1), fmt)
                     break
-            
             projects.append({
                 "name": project_name,
                 "pallets": project_pallets,
                 "opr_material": opr_material,
                 "line_idx": i,
             })
-    
-    # Assign projects to items: each item belongs to the NEXT project header
+
     for item in raw_items:
         item_line = item["line_idx"]
-        
         best_project = None
         for proj in projects:
             if proj["line_idx"] > item_line:
                 best_project = proj
                 break
-        
         if best_project:
             item["project"] = best_project["name"]
             item["project_pallets"] = best_project["pallets"]
@@ -240,8 +200,7 @@ def extract_line_items(text: str, fmt: str) -> List[Dict]:
             item["project"] = None
             item["project_pallets"] = None
             item["opr_material"] = None
-    
-    # Mark last item per project (only last gets OPR/pallets)
+
     project_items = {}
     for idx, item in enumerate(raw_items):
         proj = item.get("project")
@@ -249,40 +208,39 @@ def extract_line_items(text: str, fmt: str) -> List[Dict]:
             if proj not in project_items:
                 project_items[proj] = []
             project_items[proj].append(idx)
-    
+
     last_in_project = set()
     for proj, indices in project_items.items():
         last_in_project.add(indices[-1])
-    
+
     for idx, item in enumerate(raw_items):
         if idx not in last_in_project:
             item["opr_material"] = None
             item["project_pallets"] = None
-    
-    # Clean up
+
     for item in raw_items:
         item.pop("line_idx", None)
-    
+
     return raw_items
 
 
+# ---------------------------------------------------------------------------
+# ODS helpers
+# ---------------------------------------------------------------------------
+
 def get_cell_value(cell):
-    """Get text value from ODS cell."""
     for p in cell.getElementsByType(odftext.P):
         return str(p).strip()
     return ""
 
 
 def set_cell_value(cell, value):
-    """Set text value in ODS cell, removing any formula."""
     if cell is None:
         return
-    # Remove formula attribute if present (prevents formula from overriding our value)
     try:
         cell.removeAttribute("formula")
     except Exception:
         pass
-    # Remove cached value attributes
     try:
         cell.removeAttribute("valuetype")
     except Exception:
@@ -291,12 +249,11 @@ def set_cell_value(cell, value):
         cell.removeAttribute("value")
     except Exception:
         pass
-    # Clear children
     try:
         for child in list(cell.childNodes):
             try:
                 cell.removeChild(child)
-            except (ValueError, Exception):
+            except Exception:
                 pass
     except Exception:
         pass
@@ -306,56 +263,67 @@ def set_cell_value(cell, value):
 
 
 def set_numeric_value(cell, numeric_value, display_text=None):
-    """Set a proper ODS numeric value with office:value-type and office:value.
-    
-    This ensures formulas like SUM() can read the cell correctly.
-    """
+    """Set a numeric value, removing any formula (use for data cells we own)."""
     if cell is None:
         return
-    
     float_val = float(numeric_value)
-    
-    # Remove formula attribute if present
     try:
         cell.removeAttribute("formula")
     except Exception:
         pass
-    
-    # Set ODS numeric attributes
     cell.setAttribute("valuetype", "float")
     cell.setAttribute("value", str(float_val))
-    
-    # Clear children and set display text
     try:
         for child in list(cell.childNodes):
             try:
                 cell.removeChild(child)
-            except (ValueError, Exception):
+            except Exception:
                 pass
     except Exception:
         pass
-    
     if display_text is None:
         display_text = format_eu_number(float_val)
-    
+    p = odftext.P()
+    p.addText(str(display_text))
+    cell.appendChild(p)
+
+
+def update_formula_cache(cell, numeric_value, display_text=None):
+    """Update the cached office:value of a formula cell WITHOUT touching the formula.
+
+    This is critical for PESO BR and V.E cells: the formula must stay intact
+    so LibreOffice can recalculate, but the cached value must be correct so
+    pivot tables built before recalculation work correctly.
+    """
+    if cell is None:
+        return
+    float_val = float(numeric_value)
+    # Update cached value attributes only - do NOT touch table:formula
+    cell.setAttribute("valuetype", "float")
+    cell.setAttribute("value", str(float_val))
+    # Update display text
+    try:
+        for child in list(cell.childNodes):
+            try:
+                cell.removeChild(child)
+            except Exception:
+                pass
+    except Exception:
+        pass
+    if display_text is None:
+        display_text = format_eu_number(float_val)
     p = odftext.P()
     p.addText(str(display_text))
     cell.appendChild(p)
 
 
 def clear_cell(cell):
-    """Clear all content from an ODS cell, leaving it empty.
-    
-    Removes formula, value attributes, and all child nodes.
-    """
     if cell is None:
         return
-    # Remove formula
     try:
         cell.removeAttribute("formula")
     except Exception:
         pass
-    # Remove value attributes
     try:
         cell.removeAttribute("valuetype")
     except Exception:
@@ -364,86 +332,61 @@ def clear_cell(cell):
         cell.removeAttribute("value")
     except Exception:
         pass
-    # Clear children
     try:
         for child in list(cell.childNodes):
             try:
                 cell.removeChild(child)
-            except (ValueError, Exception):
+            except Exception:
                 pass
     except Exception:
         pass
 
 
 def format_eu_number(value, decimals=2):
-    """Format a number in EU style: comma as decimal separator, strip trailing zeros."""
     if value is None:
         return ""
     formatted = f'{value:.{decimals}f}'.replace(".", ",")
-    # Strip trailing zeros after comma, and strip comma if no decimals left
     if "," in formatted:
         formatted = formatted.rstrip("0").rstrip(",")
     return formatted
 
 
-def format_peso_br(value):
-    """Format PESO BR with dot as thousands separator (integer)."""
-    if value is None:
-        return ""
-    int_val = round(value)
-    if int_val >= 1000:
-        # Format with dot as thousands separator
-        s = str(int_val)
-        parts = []
-        while s:
-            parts.append(s[-3:])
-            s = s[:-3]
-        return ".".join(reversed(parts))
-    return str(int_val)
-
-
 def build_cell_map(row, writable_cols=None):
-    """Build a mapping from column index to cell, handling repeated cells.
-    
-    For columns listed in writable_cols, if the cell is repeated,
-    split it so each column has its own independent cell.
-    Returns dict of {col_index: cell}.
+    """Build a mapping from column index to cell, splitting repeated cells
+    only for columns in writable_cols.
+
+    IMPORTANT: Formula-only columns (V.E col 12, PESO BR col 13) should NOT
+    be in writable_cols for data rows - they are standalone cells and are
+    accessible without splitting.
     """
     if writable_cols is None:
         writable_cols = set()
-    
+
     cells = list(row.getElementsByType(table.TableCell))
     cell_map = {}
     col = 0
-    
+
     for cell in cells:
         rep = cell.getAttribute("numbercolumnsrepeated")
         rep = int(rep) if rep else 1
-        
-        # Check if any writable column falls within this repeated range
+
         needs_split = any((col + r) in writable_cols for r in range(rep))
-        
+
         if needs_split and rep > 1:
-            # Remove the repeat attribute
             try:
                 cell.removeAttribute("numbercolumnsrepeated")
             except Exception:
                 pass
-            
+
             cell_map[col] = cell
-            
-            # Create individual cells for the remaining repetitions
             prev = cell
             for r in range(1, rep):
-                import copy
                 new_cell = table.TableCell()
-                # Copy the text content
                 val = get_cell_value(cell)
                 if val:
                     p = odftext.P()
                     p.addText(val)
                     new_cell.appendChild(p)
-                # Insert after previous cell
                 parent = cell.parentNode
                 next_sib = prev.nextSibling
                 if next_sib:
@@ -455,192 +398,489 @@ def build_cell_map(row, writable_cols=None):
         else:
             for r in range(rep):
                 cell_map[col + r] = cell
-        
+
         col += rep
-    
+
     return cell_map
 
 
 def get_col_b_value(cell_map):
-    """Get the value of column B (index 1)."""
     cell = cell_map.get(1)
     if cell:
         return get_cell_value(cell)
     return ""
 
 
-def update_ods_template(template_path: Path, items: List[Dict], invoice_data: Dict, output_path: Path):
-    """Update ODS template with extracted invoice data.
-    
-    Strategy:
-    - Write NUMERIC values to SOURCE cells (c6,c9,c10,c11,c14,c15)
-    - Leave FORMULA cells untouched (c7,c8 VLOOKUP; c12 V.E=J+K; c13 PESO_BR=O*R2/R4)
-    - Calculate ALL totals ourselves and write them as values to totals row
-    - R2 (PESO BRUT) and R4 (PESO NET) = copies of N52 and O52 totals
+# ---------------------------------------------------------------------------
+# Template code mapping (for summary sheet)
+# ---------------------------------------------------------------------------
+
+def build_code_mapping(doc) -> Dict[int, tuple]:
+    """Read col B -> (col C DESCRIPCION, col D PARTIDA) from Sheet1.
+
+    The VLOOKUP formula in Sheet1 is: =VLOOKUP(G_row, $B$1:$D$247, 2/3, 0)
+    So col B is the lookup key, col C = DESCRIPCION, col D = PARTIDA.
+    We read all 247 rows to build the complete mapping.
     """
-    
-    doc = load_ods(str(template_path))
     sheet = doc.spreadsheet.getElementsByType(table.Table)[0]
     rows = sheet.getElementsByType(table.TableRow)
-    
-    COL_CODE_G = 6      # G - Code (source for VLOOKUP)
-    COL_VALOR_DUA = 9   # J - Valor DUA
-    COL_OPR_MAT = 10    # K - 7009 (OPR Material Cost)
-    COL_PALETS = 11     # L - Palets
-    # COL 12 = M - V.E  → FORMULA: J+K (don't touch)
-    COL_PESO_BR = 13    # N - Peso BR → FORMULA per row, but we WRITE the total
-    COL_PESO_NET = 14   # O - Peso Net
-    COL_UN = 15         # P - UN (quantity)
-    COL_PESO_VAL = 17   # R - Peso Brut/Net summary values
-    
-    # Columns we need cell access to
-    WRITABLE_COLS = {COL_CODE_G, COL_VALOR_DUA, COL_OPR_MAT, COL_PALETS,
-                     COL_PESO_BR, COL_PESO_NET, COL_UN, COL_PESO_VAL}
-    
-    # Source columns to clear on data rows (NOT formula cols c12, c13)
+    mapping = {}
+
+    for row in rows[:250]:
+        cells = list(row.getElementsByType(table.TableCell))
+        col_vals = []
+        for cell in cells:
+            rep = cell.getAttribute("numbercolumnsrepeated")
+            rep = int(rep) if rep else 1
+            val = get_cell_value(cell)
+            num_val = cell.getAttribute("value")
+            for _ in range(rep):
+                col_vals.append((val, num_val))
+
+        if len(col_vals) < 4:
+            continue
+
+        # col B = index 1, col C = index 2, col D = index 3
+        b_val, b_num = col_vals[1]
+        c_val, _ = col_vals[2]
+        d_val, _ = col_vals[3]
+
+        # Try to get numeric code from col B
+        code_str = b_num or b_val
+        if code_str:
+            try:
+                code_int = int(float(code_str))
+                if code_int > 0 and c_val:
+                    mapping[code_int] = (c_val, d_val)
+            except (ValueError, TypeError):
+                pass
+
+    return mapping
+
+
+# ---------------------------------------------------------------------------
+# Summary / pivot sheet generation
+# ---------------------------------------------------------------------------
+
+def _ensure_number_styles(doc):
+    """Add number format styles to the document for the Resumen sheet."""
+    from odf import number as odfnumber
+    from odf.style import Style
+
+    fmt2 = odfnumber.Number(decimalplaces="2", minintegerdigits="1")
+    nstyle2 = odfnumber.NumberStyle(name="resumen_n2")
+    nstyle2.addElement(fmt2)
+    doc.styles.addElement(nstyle2)
+
+    fmt0 = odfnumber.Number(decimalplaces="0", minintegerdigits="1")
+    nstyle0 = odfnumber.NumberStyle(name="resumen_n0")
+    nstyle0.addElement(fmt0)
+    doc.styles.addElement(nstyle0)
+
+    cs2 = Style(name="resumen_cell_n2", family="table-cell",
+                datastylename="resumen_n2")
+    doc.styles.addElement(cs2)
+
+    cs0 = Style(name="resumen_cell_n0", family="table-cell",
+                datastylename="resumen_n0")
+    doc.styles.addElement(cs0)
+
+    return {"n2": "resumen_cell_n2", "n0": "resumen_cell_n0"}
+
+
+def add_summary_sheet(doc, items: List[Dict], invoice_data: Dict,
+                      code_mapping: Dict[int, tuple], brut_net_ratio: float,
+                      calc_peso_br: int = 0, calc_peso_net: int = 0):
+    """Add a 'Resumen' sheet with a pivot-table-like summary grouped by
+    (DESCRIPCION, PARTIDA), mirroring the LibreOffice Tabla Dinamica.
+
+    Uses the code_mapping (col B -> col C, col D) from the template to
+    resolve each item's code to its description and customs tariff code.
+    """
+    styles = _ensure_number_styles(doc)
+
+    # --- Compute per-item PESO BR ---
+    enriched = []
+    for item in items:
+        code_raw = item.get("code", "")
+        try:
+            code_int = int(code_raw.lstrip("0") or "0")
+        except ValueError:
+            code_int = 0
+
+        descripcion, partida = code_mapping.get(code_int, ("#N/D", "#N/D"))
+
+        pw = item.get("partial_weight") or 0
+        peso_br = pw * brut_net_ratio
+
+        enriched.append({
+            "descripcion": descripcion,
+            "partida": partida,
+            "palets": item.get("project_pallets") or 0,
+            "valor_dua": item.get("subtotal_price") or 0,
+            "opr": item.get("opr_material") or 0,
+            "peso_br": peso_br,
+            "peso_net": pw,
+            "un": item.get("quantity") or 0,
+        })
+
+    # --- Group by (DESCRIPCION, PARTIDA) ---
+    groups = defaultdict(lambda: {
+        "palets": 0, "valor_dua": 0.0, "opr": 0.0,
+        "peso_br": 0.0, "peso_net": 0.0, "un": 0
+    })
+    desc_order = []  # track insertion order
+    desc_seen = set()
+
+    for e in enriched:
+        key = (e["descripcion"], e["partida"])
+        if e["descripcion"] not in desc_seen:
+            desc_order.append(e["descripcion"])
+            desc_seen.add(e["descripcion"])
+        g = groups[key]
+        g["palets"] += e["palets"]
+        g["valor_dua"] += e["valor_dua"]
+        g["opr"] += e["opr"]
+        g["peso_br"] += e["peso_br"]
+        g["peso_net"] += e["peso_net"]
+        g["un"] += int(e["un"])
+
+    # Sort alphabetically by DESCRIPCION then PARTIDA
+    sorted_keys = sorted(groups.keys(), key=lambda k: (k[0].upper(), k[1]))
+
+    # --- Build ODS table rows ---
+    summary_table = table.Table(name="Resumen")
+
+    def make_row(*cells_data):
+        """cells_data: list of (value, is_numeric, bold_header)
+        Columns: desc, partida, palets, valor_dua, opr, peso_br, peso_net, un
+        Integer cols (palets=2, un=7), float cols (rest).
+        """
+        INT_COLS = {2, 5, 7}  # 0-based positions of integer columns (palets, peso_br, un)
+        tr = table.TableRow()
+        for col_idx, (val, is_num, is_header) in enumerate(cells_data):
+            tc = table.TableCell()
+            if is_num and val is not None:
+                float_val = round(float(val), 2)
+                is_int_col = col_idx in INT_COLS
+                style_name = styles["n0"] if is_int_col else styles["n2"]
+                tc.setAttribute("stylename", style_name)
+                tc.setAttribute("valuetype", "float")
+                tc.setAttribute("value", f'{float_val:.2f}')
+                p = odftext.P()
+                if is_int_col:
+                    p.addText(str(int(float_val)))
+                else:
+                    p.addText(f'{float_val:.2f}'.replace(".", ","))
+                tc.appendChild(p)
+            else:
+                if val:
+                    tc.setAttribute("valuetype", "string")
+                    p = odftext.P()
+                    p.addText(str(val))
+                    tc.appendChild(p)
+            tr.addElement(tc)
+        return tr
+
+    def make_header_row(*labels):
+        tr = table.TableRow()
+        for label in labels:
+            tc = table.TableCell()
+            tc.setAttribute("valuetype", "string")
+            p = odftext.P()
+            p.addText(str(label))
+            tc.appendChild(p)
+            tr.addElement(tc)
+        return tr
+
+    # Header row
+    headers = ["DESCRIPCION", "PARTIDA", "Suma - PALETS", "Suma - VALOR DUA",
+               "Suma - 7009", "Suma - PESO BR", "Suma - PESO NET", "Suma - UN"]
+    summary_table.addElement(make_header_row(*headers))
+
+    # Data rows - group by DESCRIPCION (blank DESCRIPCION on 2nd+ rows of same group)
+    prev_desc = None
+    totals = {k: 0 for k in ["palets", "valor_dua", "opr", "peso_br", "peso_net", "un"]}
+
+    for key in sorted_keys:
+        desc, partida = key
+        g = groups[key]
+        display_desc = desc if desc != prev_desc else ""
+        prev_desc = desc
+
+        row_data = [
+            (display_desc, False, False),
+            (partida, False, False),
+            (g["palets"], True, False),
+            (g["valor_dua"], True, False),
+            (g["opr"], True, False),
+            (g["peso_br"], True, False),
+            (g["peso_net"], True, False),
+            (g["un"], True, False),
+        ]
+        summary_table.addElement(make_row(*row_data))
+
+        totals["palets"] += g["palets"]
+        totals["valor_dua"] += g["valor_dua"]
+        totals["opr"] += g["opr"]
+        totals["peso_br"] += g["peso_br"]
+        totals["peso_net"] += g["peso_net"]
+        totals["un"] += g["un"]
+
+    # Totals row
+    # Use calc totals from main sheet for PESO BR/NET to ensure consistency
+    final_pb = calc_peso_br if calc_peso_br else int(round(totals["peso_br"]))
+    final_pn = calc_peso_net if calc_peso_net else int(round(totals["peso_net"]))
+    total_row = [
+        ("Total Resultado", False, True),
+        ("", False, True),
+        (totals["palets"], True, True),
+        (totals["valor_dua"], True, True),
+        (totals["opr"], True, True),
+        (final_pb, True, True),
+        (final_pn, True, True),
+        (totals["un"], True, True),
+    ]
+    summary_table.addElement(make_row(*total_row))
+
+    # Remove existing Resumen sheet if present
+    for existing in doc.spreadsheet.getElementsByType(table.Table):
+        if existing.getAttribute("name") == "Resumen":
+            doc.spreadsheet.removeChild(existing)
+            break
+
+    doc.spreadsheet.addElement(summary_table)
+    print(f"  [OK] Resumen sheet: {len(sorted_keys)} product groups")
+
+
+# ---------------------------------------------------------------------------
+# Main ODS update
+# ---------------------------------------------------------------------------
+
+def update_ods_template(template_path: Path, items: List[Dict],
+                        invoice_data: Dict, output_path: Path):
+    """Update ODS template with extracted invoice data.
+
+    Column layout (0-based):
+      A=0  B=1  C=2  D=3  E=4  F=5  G=6  H=7  I=8
+      J=9  K=10 L=11 M=12 N=13 O=14 P=15 Q=16 R=17
+
+    Written by extractor:  G(6) J(9) K(10) L(11) O(14) P(15) R(17)
+    Formula cells (do NOT remove formula):  M(12)=V.E=J+K  N(13)=PESO_BR=(O*R2)/R4
+    We DO update cached office:value for M and N so pivot tables work immediately.
+    """
+
+    doc = load_ods(str(template_path))
+
+    # Build code->(DESCRIPCION, PARTIDA) mapping BEFORE writing (template is clean)
+    code_mapping = build_code_mapping(doc)
+
+    sheet = doc.spreadsheet.getElementsByType(table.Table)[0]
+    rows = sheet.getElementsByType(table.TableRow)
+
+    COL_CODE_G = 6
+    COL_VALOR_DUA = 9
+    COL_OPR_MAT = 10
+    COL_PALETS = 11
+    COL_VE = 12       # V.E = J+K  <- FORMULA, update cache only
+    COL_PESO_BR = 13  # PESO BR = (O*R2)/R4  <- FORMULA per row, value for totals
+    COL_PESO_NET = 14
+    COL_UN = 15
+    COL_PESO_VAL = 17
+
+    # Columns where we split and write direct values (no formula kept)
+    DATA_WRITE_COLS = {COL_CODE_G, COL_VALOR_DUA, COL_OPR_MAT, COL_PALETS,
+                       COL_PESO_NET, COL_UN, COL_PESO_VAL}
+
+    # For totals row: also write direct value to PESO BR (replaces formula there)
+    TOTAL_WRITE_COLS = DATA_WRITE_COLS | {COL_PESO_BR}
+
+    # Columns to clear on data rows that are not used
     CLEAR_COLS = {COL_CODE_G, COL_VALOR_DUA, COL_OPR_MAT, COL_PALETS,
                   COL_PESO_NET, COL_UN}
-    
-    # --- Pre-calculate totals from items ---
+
+    # Pre-calculate brut/net ratio for PESO BR formula cache update
     peso_brut = invoice_data.get("peso_brut") or 0
     peso_net_total = invoice_data.get("peso_net") or 0
     brut_net_ratio = peso_brut / peso_net_total if peso_net_total > 0 else 1.0
-    
-    total_valor = 0.0
-    total_opr = 0.0
-    total_pallets = 0
-    total_peso_net = 0.0
-    total_peso_br = 0.0
-    
-    for item in items:
-        subtotal = item.get("subtotal_price") or 0
-        opr = item.get("opr_material") or 0
-        pals = item.get("project_pallets") or 0
-        pw = item.get("partial_weight") or 0
-        total_valor += subtotal
-        total_opr += opr
-        total_pallets += pals
-        total_peso_net += pw
-        total_peso_br += pw * brut_net_ratio
-    
+
+    # Pre-calculate totals
+    total_valor = sum(item.get("subtotal_price") or 0 for item in items)
+    total_opr = sum(item.get("opr_material") or 0 for item in items)
+    total_pallets = sum(item.get("project_pallets") or 0 for item in items)
+    total_peso_net_items = sum(item.get("partial_weight") or 0 for item in items)
+    calc_peso_br = int(round(total_peso_net_items * brut_net_ratio))
+    calc_peso_net = int(round(total_peso_net_items))
+
     item_idx = 0
-    
+
     for row_idx, row in enumerate(rows):
         if row_idx == 0:
             continue
-        
-        cell_map = build_cell_map(row, WRITABLE_COLS)
-        col_b = get_col_b_value(cell_map)
-        
-        # --- TOTALS ROW (520) ---
+
+        # Use different writable cols for totals vs data rows to avoid
+        # splitting formula cells (M=V.E, N=PESO BR) unnecessarily
+        is_totals_row = False
+        cell_map_check = build_cell_map(row, set())  # peek without splitting
+        col_b = get_col_b_value(cell_map_check)
         if col_b == "520":
-            # Clear all totals cells first (handles dirty templates)
+            is_totals_row = True
+
+        if is_totals_row:
+            cell_map = build_cell_map(row, TOTAL_WRITE_COLS)
+        else:
+            # DATA_WRITE_COLS does NOT include COL_VE (12) or COL_PESO_BR (13)
+            # Those formula cells are standalone in the template and accessible
+            # directly without needing a split.
+            cell_map = build_cell_map(row, DATA_WRITE_COLS)
+
+        if is_totals_row:
+            # Clear source cells
             for cc in CLEAR_COLS:
                 clear_cell(cell_map.get(cc))
             clear_cell(cell_map.get(COL_PESO_BR))
-            
-            # Write totals — prefer PDF-extracted values (exact), fallback to calculated
-            final_valor = invoice_data.get("total_invoice") or total_valor
-            final_opr = invoice_data.get("total_opr") or total_opr
-            final_pallets = invoice_data.get("pallets") or total_pallets
+
+            # Always use our own calculated totals (invoice totals may be wrong)
+            final_valor = total_valor
+            final_opr = total_opr
+            final_pallets = total_pallets
+            # Use pre-calculated totals (consistent with R2/R4 and Resumen)
+            peso_br_total = calc_peso_br
+            peso_net_tot = calc_peso_net
+
             set_numeric_value(cell_map.get(COL_VALOR_DUA), final_valor,
                               f'{final_valor:.2f}'.replace(".", ","))
             set_numeric_value(cell_map.get(COL_OPR_MAT), final_opr,
                               f'{final_opr:.2f}'.replace(".", ","))
             set_numeric_value(cell_map.get(COL_PALETS), final_pallets, str(final_pallets))
-            # PESO BR and PESO NET totals: use PDF values (exact) for consistency with R2/R4
-            peso_br_total = int(invoice_data.get("peso_brut") or round(total_peso_br))
-            peso_net_tot = int(invoice_data.get("peso_net") or round(total_peso_net))
             set_numeric_value(cell_map.get(COL_PESO_BR), peso_br_total, str(peso_br_total))
             set_numeric_value(cell_map.get(COL_PESO_NET), peso_net_tot, str(peso_net_tot))
             continue
-        
+
         # --- DATA ROWS ---
-        # Clear source cells
+        # Clear source cells for this row
         for cc in CLEAR_COLS:
             clear_cell(cell_map.get(cc))
-        
-        # Write PESO BRUT/NET summary (R2, R4)
-        # Use invoice PDF values directly (more accurate than summing items)
-        peso_brut_pdf = invoice_data.get("peso_brut")
-        peso_net_pdf = invoice_data.get("peso_net")
-        if row_idx == 1 and peso_brut_pdf is not None:
-            set_numeric_value(cell_map.get(COL_PESO_VAL),
-                              int(peso_brut_pdf), str(int(peso_brut_pdf)))
-        if row_idx == 3 and peso_net_pdf is not None:
-            set_numeric_value(cell_map.get(COL_PESO_VAL),
-                              int(peso_net_pdf), str(int(peso_net_pdf)))
-        
-        # Place next item sequentially
+
+        # Write PESO BRUT/NET to R2 and R4 - always use our calculated totals
+        if row_idx == 1:
+            set_numeric_value(cell_map.get(COL_PESO_VAL), calc_peso_br, str(calc_peso_br))
+        if row_idx == 3:
+            set_numeric_value(cell_map.get(COL_PESO_VAL), calc_peso_net, str(calc_peso_net))
+
         if item_idx < len(items):
             item = items[item_idx]
-            
-            # CODE (column G) - numeric for VLOOKUP
+
+            # CODE (col G)
             code = item.get("code", "")
             code_display = code.lstrip("0") or code
             try:
-                set_numeric_value(cell_map.get(COL_CODE_G), int(code_display), code_display)
+                set_numeric_value(cell_map.get(COL_CODE_G),
+                                  int(code_display), code_display)
             except (ValueError, TypeError):
                 set_cell_value(cell_map.get(COL_CODE_G), code_display)
-            
-            # VALOR DUA (column J)
+
+            # VALOR DUA (col J)
             subtotal = item.get("subtotal_price")
             if subtotal is not None:
                 set_numeric_value(cell_map.get(COL_VALOR_DUA), subtotal)
-            
-            # OPR Material Cost (column K) - only last item in project
+
+            # OPR Material Cost (col K)
             opr = item.get("opr_material")
             if opr is not None:
                 set_numeric_value(cell_map.get(COL_OPR_MAT), opr)
-            
-            # PALETS (column L) - only last item in project
+
+            # PALETS (col L)
             pallets = item.get("project_pallets")
             if pallets is not None:
                 set_numeric_value(cell_map.get(COL_PALETS), pallets, str(pallets))
-            
-            # PESO NET (column O)
+
+            # PESO NET (col O)
             partial_weight = item.get("partial_weight")
             if partial_weight is not None:
                 set_numeric_value(cell_map.get(COL_PESO_NET), partial_weight,
                                   f'{partial_weight:.2f}'.replace(".", ","))
-            
-            # UN / quantity (column P)
+
+            # UN / quantity (col P)
             quantity = item.get("quantity")
             if quantity is not None:
                 set_numeric_value(cell_map.get(COL_UN), int(quantity), str(int(quantity)))
-            
+
+            # ----------------------------------------------------------------
+            # Update cached values of FORMULA cells so pivot tables work
+            # immediately without requiring LibreOffice to recalculate first.
+            #
+            # V.E (col M, index 12) = J + K
+            # PESO BR (col N, index 13) = (O * R2) / R4
+            #
+            # We do NOT remove the formula - update_formula_cache preserves it.
+            # LibreOffice will still recalculate on open, but the cached value
+            # will already be correct so pivot tables built without recalc work.
+            # ----------------------------------------------------------------
+            ve_val = (subtotal or 0) + (opr or 0)
+            update_formula_cache(cell_map.get(COL_VE), ve_val)
+
+            pb_val = (partial_weight or 0) * brut_net_ratio
+            update_formula_cache(cell_map.get(COL_PESO_BR), pb_val)
+
             item_idx += 1
-    
+        else:
+            # Empty row: formula cells keep their cached 0 (correct for empty O)
+            # No action needed - clear_cell above cleared the data cells
+            pass
+
+    # --- Generate Resumen summary sheet ---
+    add_summary_sheet(doc, items, invoice_data, code_mapping, brut_net_ratio, calc_peso_br, calc_peso_net)
+
     doc.save(str(output_path))
 
 
+# ---------------------------------------------------------------------------
+# Top-level invoice processor
+# ---------------------------------------------------------------------------
+
 def process_invoice(pdf_path: Path, template_path: Path, output_dir: Path) -> Path:
-    """Process a single invoice PDF and generate ODS output."""
-    
     print(f"Processing: {pdf_path.name}")
-    
     text = read_pdf_text(pdf_path)
     fmt = detect_number_format(text)
     print(f"  Number format: {fmt}")
-    
     invoice_data = extract_invoice_metadata(text, fmt)
     items = extract_line_items(text, fmt)
-    
     invoice_no = invoice_data.get("invoice_no", "UNKNOWN")
+
+    # --- Summary & difference check vs PDF ---
+    calc_valor = sum(item.get("subtotal_price") or 0 for item in items)
+    calc_opr   = sum(item.get("opr_material") or 0 for item in items)
+    calc_pnet  = sum(item.get("partial_weight") or 0 for item in items)
+    pdf_pbrut  = invoice_data.get("peso_brut") or 0
+    pdf_pnet   = invoice_data.get("peso_net") or 0
+    ratio      = pdf_pbrut / pdf_pnet if pdf_pnet > 0 else 1.0
+    calc_pbrut = round(calc_pnet * ratio)
+
+    pdf_valor = invoice_data.get("total_invoice") or 0
+    pdf_opr   = invoice_data.get("total_opr") or 0
+
+    diffs = []
+    if pdf_valor and abs(pdf_valor - calc_valor) > 0.01:
+        diffs.append(f"  Valor DUA : PDF {pdf_valor:>12.2f}  CALC {calc_valor:>12.2f}  DIFF {calc_valor-pdf_valor:+.2f}")
+    if pdf_opr and abs(pdf_opr - calc_opr) > 0.01:
+        diffs.append(f"  OPR 7009  : PDF {pdf_opr:>12.2f}  CALC {calc_opr:>12.2f}  DIFF {calc_opr-pdf_opr:+.2f}")
+    if pdf_pnet and abs(pdf_pnet - round(calc_pnet)) > 0.5:
+        diffs.append(f"  Peso Net  : PDF {pdf_pnet:>12.0f}  CALC {round(calc_pnet):>12.0f}  DIFF {round(calc_pnet)-pdf_pnet:+.0f}")
+    if pdf_pbrut and abs(pdf_pbrut - calc_pbrut) > 0.5:
+        diffs.append(f"  Peso Brut : PDF {pdf_pbrut:>12.0f}  CALC {calc_pbrut:>12.0f}  DIFF {calc_pbrut-pdf_pbrut:+.0f}")
+
     print(f"  Invoice: {invoice_no}, Items: {len(items)}, Pallets: {invoice_data.get('pallets')}")
-    print(f"  Total: {invoice_data.get('total_invoice')}, OPR: {invoice_data.get('total_opr')}")
-    print(f"  Peso Brut: {invoice_data.get('peso_brut')}, Peso Net: {invoice_data.get('peso_net')}")
-    
-    for i, item in enumerate(items):
-        print(f"  #{i+1}: code={item['code']} part={item['part_number']} "
-              f"qty={item.get('quantity')} subtotal={item.get('subtotal_price')} "
-              f"weight={item.get('partial_weight')} project={item.get('project')} "
-              f"pallets={item.get('project_pallets')} opr={item.get('opr_material')}")
-    
+    if diffs:
+        warn_msg = "AVISO - Diferencias entre totales del PDF y calculos propios:\n" + "\n".join(diffs)
+        print(f"  {warn_msg}")
+        invoice_data["_warnings"] = warn_msg
+    else:
+        print(f"  OK - Totales coinciden con PDF")
+
     output_file = output_dir / f"COMPLETADO_{invoice_no}.ods"
     update_ods_template(template_path, items, invoice_data, output_file)
-    
-    print(f"  ✔ Created: {output_file.name}")
+    print(f"  [OK] Created: {output_file.name}")
     return output_file
 
 
@@ -654,30 +894,29 @@ def main(argv: List[str]) -> int:
         "-t", "--template",
         help="ODS template file (default: COMPLETADO_TEMPLATE.ods in same dir as script)"
     )
-    parser.add_argument("--version", action="version", version=f"%(prog)s {SCRIPT_VERSION}")
-    
+    parser.add_argument("--version", action="version",
+                        version=f"%(prog)s {SCRIPT_VERSION}")
+
     args = parser.parse_args(argv)
-    
+
     output_dir = Path(args.output).resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
-    
+
     if args.template:
         template_path = Path(args.template).resolve()
     else:
         template_path = Path(__file__).parent / "COMPLETADO_TEMPLATE.ods"
-    
+
     if not template_path.exists():
         print(f"ERROR: Template not found: {template_path}", file=sys.stderr)
         return 2
-    
+
     processed_files = []
     for pdf_file in args.pdfs:
         pdf_path = Path(pdf_file).resolve()
-        
         if not pdf_path.exists():
             print(f"ERROR: File not found: {pdf_path}", file=sys.stderr)
             return 2
-        
         try:
             output_file = process_invoice(pdf_path, template_path, output_dir)
             processed_files.append(output_file)
@@ -686,8 +925,8 @@ def main(argv: List[str]) -> int:
             import traceback
             traceback.print_exc()
             return 3
-    
-    print(f"\n✔ Successfully processed {len(processed_files)} invoice(s)")
+
+    print(f"\n[OK] Successfully processed {len(processed_files)} invoice(s)")
     return 0
 
 

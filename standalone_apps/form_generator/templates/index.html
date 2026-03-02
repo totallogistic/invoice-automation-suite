@@ -3,189 +3,235 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>JSON Schema Form Generator</title>
-    <link rel="stylesheet" href="/static/style.css">
+    <title>Registros y Revisiones - Totallogistic</title>
     <style>
-        /* Estilos adicionales para agrupación */
-        .schema-section {
-            margin-bottom: 3rem;
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
         }
         
-        .section-header {
-            margin-bottom: 1.5rem;
-            padding-bottom: 0.75rem;
-            border-bottom: 2px solid #e5e7eb;
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #2563a8 0%, #1a4d7e 100%);
+            min-height: 100vh;
+            padding: 2rem 1rem;
         }
         
-        .section-title {
-            font-size: 1.25rem;
-            font-weight: 600;
-            color: #1f2937;
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        
+        .header {
+            background: white;
+            border-radius: 16px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+        
+        .header h1 {
+            color: #1a4d7e;
+            font-size: 2rem;
             margin-bottom: 0.5rem;
         }
         
-        .section-description {
-            font-size: 0.9rem;
-            color: #6b7280;
+        .header p {
+            color: #666;
+            font-size: 1.1rem;
         }
         
-        .schema-card {
+        .category {
+            background: white;
+            border-radius: 16px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+        
+        .category-header {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            margin-bottom: 1.5rem;
+            padding-bottom: 1rem;
+            border-bottom: 2px solid #e5e7eb;
+        }
+        
+        .category-header h2 {
+            color: #1a4d7e;
+            font-size: 1.5rem;
+            font-weight: 600;
+        }
+        
+        .category-description {
+            color: #666;
+            margin-bottom: 1.5rem;
+        }
+        
+        .forms-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+            gap: 1.5rem;
+        }
+        
+        .form-card {
+            background: #f8f9fa;
+            border: 2px solid #e5e7eb;
+            border-radius: 12px;
+            padding: 1.5rem;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            text-decoration: none;
+            color: inherit;
+            display: block;
             position: relative;
         }
         
-        .badge {
-            display: inline-block;
-            padding: 0.25rem 0.75rem;
-            border-radius: 12px;
-            font-size: 0.75rem;
-            font-weight: 600;
-            margin-left: 0.5rem;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
+        .form-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 8px 20px rgba(37, 99, 168, 0.15);
+            border-color: #2563a8;
         }
         
-        .badge-operativo {
-            background: #d1fae5;
-            color: #065f46;
-        }
-        
-        .badge-en-proceso {
-            background: #dbeafe;
-            color: #1e40af;
-        }
-        
-        .badge-draft {
-            background: #f3f4f6;
-            color: #6b7280;
-        }
-        
-        .badge-inactive {
-            background: #f3f4f6;
-            color: #6b7280;
-        }
-        
-        .card-badge {
+        .form-card-badge {
             position: absolute;
             top: 1rem;
             right: 1rem;
+            background: #2563a8;
+            color: white;
+            padding: 0.25rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+        
+        .form-card-badge.en-proceso {
+            background: #3b82f6;
+        }
+        
+        .form-card-badge.operativo {
+            background: #10b981;
+        }
+        
+        .form-card h3 {
+            color: #1a4d7e;
+            font-size: 1.25rem;
+            margin-bottom: 0.75rem;
+            padding-right: 100px; /* Space for badge */
+        }
+        
+        .form-card p {
+            color: #666;
+            font-size: 0.95rem;
+            line-height: 1.5;
+            margin-bottom: 1rem;
+        }
+        
+        .form-card-footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-top: 1rem;
+            border-top: 1px solid #e5e7eb;
+        }
+        
+        .form-card-schema {
+            font-family: 'Courier New', monospace;
+            font-size: 0.85rem;
+            color: #888;
+        }
+        
+        .form-card-arrow {
+            color: #2563a8;
+            font-weight: bold;
+            font-size: 1.5rem;
+        }
+        
+        @media (max-width: 768px) {
+            .forms-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .header h1 {
+                font-size: 1.5rem;
+            }
         }
     </style>
 </head>
 <body>
-    <header>
-        <h1>📋 JSON Schema Form Generator</h1>
-        <p class="description">Selecciona un formulario para comenzar</p>
-    </header>
-
-    <main>
-        {% if schemas %}
+    <div class="container">
+        <div class="header">
+            <h1>📊 Registros y Revisiones</h1>
+            <p>Formularios que registran información en archivos Excel compartidos</p>
+        </div>
         
-        <!-- Grupo 1: Registros y Revisiones (Excel) -->
-        <div class="schema-section">
-            <div class="section-header">
-                <div class="section-title">
-                    📊 Registros y Revisiones
+        <!-- Categories will be populated by JavaScript -->
+        <div id="categories-container"></div>
+    </div>
+    
+    <script>
+        // Group schemas by category
+        const schemas = {{ schemas | tojson }};
+        
+        // Organize by category
+        const categories = {};
+        schemas.forEach(schema => {
+            const category = schema.category || '📋 Sin Categoría';
+            if (!categories[category]) {
+                categories[category] = [];
+            }
+            categories[category].push(schema);
+        });
+        
+        // Render categories
+        const container = document.getElementById('categories-container');
+        
+        Object.keys(categories).sort().forEach(categoryName => {
+            const categorySchemas = categories[categoryName];
+            
+            // Determine category description
+            let categoryDesc = '';
+            if (categoryName.includes('Algeciras')) {
+                categoryDesc = 'Formularios para la delegación de Algeciras';
+            } else if (categoryName.includes('Málaga')) {
+                categoryDesc = 'Formularios para la delegación de Málaga';
+            } else {
+                categoryDesc = 'Formularios que registran información en archivos Excel compartidos';
+            }
+            
+            const categoryDiv = document.createElement('div');
+            categoryDiv.className = 'category';
+            
+            categoryDiv.innerHTML = `
+                <div class="category-header">
+                    <h2>${categoryName}</h2>
                 </div>
-                <p class="section-description">
-                    Formularios que registran información en archivos Excel compartidos
-                </p>
-            </div>
-            <div class="schema-list">
-                {% for schema in schemas %}
-                {% if schema.name == 'registro-visitas' %}
-                <a href="/form/{{ schema.name }}" class="schema-card">
-                    <span class="card-badge badge badge-operativo">Operativo</span>
-                    <h2>{{ schema.title }}</h2>
-                    <p>{{ schema.description or '' }}</p>
-                    <span class="schema-name">{{ schema.name }}</span>
-                </a>
-                {% elif schema.name == 'revision-estanterias' %}
-                <a href="/form-custom/estanterias" class="schema-card">
-                    <span class="card-badge badge badge-en-proceso">En Proceso</span>
-                    <h2>{{ schema.title }}</h2>
-                    <p>{{ schema.description or '' }}</p>
-                    <span class="schema-name">{{ schema.name }}</span>
-                </a>
-                {% elif schema.name in ['revision-vehiculos', 'mantenimiento-maquinas', 'revision-motocicletas'] %}
-                <a href="/form/{{ schema.name }}" class="schema-card">
-                    <span class="card-badge badge badge-en-proceso">En Proceso</span>
-                    <h2>{{ schema.title }}</h2>
-                    <p>{{ schema.description or '' }}</p>
-                    <span class="schema-name">{{ schema.name }}</span>
-                </a>
-                {% endif %}
-                {% endfor %}
-            </div>
-        </div>
-
-        <!-- Grupo 2: Notificaciones por Email -->
-        <div class="schema-section">
-            <div class="section-header">
-                <div class="section-title">
-                    📧 Notificaciones por Email
+                <p class="category-description">${categoryDesc}</p>
+                <div class="forms-grid">
+                    ${categorySchemas.map(schema => `
+                        <a href="/form/${schema.name}" class="form-card">
+                            <span class="form-card-badge en-proceso">EN PROCESO</span>
+                            <h3>${schema.title}</h3>
+                            <p>${schema.description}</p>
+                            <div class="form-card-footer">
+                                <span class="form-card-schema">${schema.name}</span>
+                                <span class="form-card-arrow">→</span>
+                            </div>
+                        </a>
+                    `).join('')}
                 </div>
-                <p class="section-description">
-                    Formularios que envían notificaciones automáticas por correo electrónico
-                </p>
-            </div>
-            <div class="schema-list">
-                {% for schema in schemas %}
-                {% if schema.name == 'reporte-incidencia-schema' %}
-                <a href="/form/{{ schema.name }}" class="schema-card">
-                    <span class="card-badge badge badge-operativo">Operativo</span>
-                    <h2>{{ schema.title }}</h2>
-                    <p>{{ schema.description or '' }}</p>
-                    <span class="schema-name">{{ schema.name }}</span>
-                </a>
-                {% elif schema.name in ['orden-compra-schema', 'solicitud-vacaciones-schema'] %}
-                <a href="/form/{{ schema.name }}" class="schema-card">
-                    <span class="card-badge badge badge-en-proceso">En Proceso</span>
-                    <h2>{{ schema.title }}</h2>
-                    <p>{{ schema.description or '' }}</p>
-                    <span class="schema-name">{{ schema.name }}</span>
-                </a>
-                {% endif %}
-                {% endfor %}
-            </div>
-        </div>
-
-        <!-- Grupo 3: Ejemplos/Demos -->
-        <div class="schema-section">
-            <div class="section-header">
-                <div class="section-title">
-                    📥 Generación de Documentos
-                    <span class="badge badge-draft">Ejemplos</span>
-                </div>
-                <p class="section-description">
-                    Formularios de demostración que generan documentos para descargar
-                </p>
-            </div>
-            <div class="schema-list">
-                {% for schema in schemas %}
-                {% if schema.name in ['packing_list', 'customs_clearance'] %}
-                <a href="/form/{{ schema.name }}" class="schema-card">
-                    <span class="card-badge badge badge-draft">Demo</span>
-                    <h2>{{ schema.title }}</h2>
-                    <p>{{ schema.description or '' }}</p>
-                    <span class="schema-name">{{ schema.name }}</span>
-                </a>
-                {% endif %}
-                {% endfor %}
-            </div>
-        </div>
-
-        {% else %}
-        <div class="schema-list">
-            <div style="text-align: center; padding: 3rem; color: #6b7280;">
-                <p>📂 No hay esquemas disponibles</p>
-                <p style="font-size: 0.9rem;">Añade archivos JSON Schema a la carpeta <code>schemas/</code></p>
-            </div>
-        </div>
-        {% endif %}
-    </main>
-
-    <footer>
-        <p>Generador Universal de Formularios | FastAPI + JSON Schema</p>
-    </footer>
+            `;
+            
+            container.appendChild(categoryDiv);
+        });
+        
+        // If no categories, show message
+        if (Object.keys(categories).length === 0) {
+            container.innerHTML = '<div class="category"><p style="text-align: center; color: #666;">No hay formularios disponibles</p></div>';
+        }
+    </script>
 </body>
 </html>

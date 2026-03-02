@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>[MLG] Revisión de Estanterías</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #2563a8 0%, #1a4d7e 100%);
+            min-height: 100vh;
+            padding: 2rem 1rem;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+        header {
+            background: linear-gradient(135deg, #2563a8 0%, #1a4d7e 100%);
+            color: white;
+            padding: 2rem;
+            text-align: center;
+        }
+        header h1 { font-size: 2rem; margin-bottom: 0.5rem; }
+        .back-link {
+            display: inline-block;
+            color: white;
+            text-decoration: none;
+            padding: 0.5rem 1rem;
+            background: rgba(255,255,255,0.2);
+            border-radius: 6px;
+            margin-bottom: 1rem;
+        }
+        .form-section {
+            padding: 2rem;
+            border-bottom: 2px solid #e5e7eb;
+        }
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+        label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            color: #333;
+        }
+        input, select {
+            width: 100%;
+            padding: 0.75rem;
+            border: 2px solid #e0e0e0;
+            border-radius: 6px;
+            font-size: 1rem;
+        }
+        input:focus, select:focus {
+            outline: none;
+            border-color: #2563a8;
+        }
+        .form-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1rem;
+        }
+        .checklist-section {
+            padding: 2rem;
+            background: #f8f9fa;
+        }
+        .checklist-section h2 {
+            color: #1a4d7e;
+            margin-bottom: 1.5rem;
+            font-size: 1.5rem;
+        }
+        .zone-row {
+            background: white;
+            padding: 1.5rem;
+            margin-bottom: 1rem;
+            border-radius: 8px;
+            border: 2px solid #e5e7eb;
+        }
+        .zone-row.selected {
+            border-color: #2563a8;
+            background: #f0f7ff;
+        }
+        .zone-header {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+        .zone-header input[type="checkbox"] {
+            width: 24px;
+            height: 24px;
+            cursor: pointer;
+        }
+        .zone-name {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: #1a4d7e;
+        }
+        .checks-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+        .check-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .check-item input {
+            width: auto;
+        }
+        .submit-section {
+            padding: 2rem;
+            text-align: center;
+        }
+        .btn-submit {
+            background: linear-gradient(135deg, #2563a8 0%, #1a4d7e 100%);
+            color: white;
+            padding: 1.2rem 3rem;
+            border: none;
+            border-radius: 8px;
+            font-size: 1.2rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        .btn-submit:hover {
+            transform: translateY(-2px);
+        }
+        .message {
+            margin-top: 1rem;
+            padding: 1rem;
+            border-radius: 6px;
+            display: none;
+        }
+        .message.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .message.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <a href="/" class="back-link">← Volver al inicio</a>
+            <h1>📋 [MLG] Revisión de Estanterías - Trimestral</h1>
+            <p class="description">Delegación Málaga</p>
+        </header>
+
+        <form id="estanteriasForm">
+            <div class="form-section">
+                <h2 style="color: #1a4d7e; margin-bottom: 1.5rem;">Datos Generales</h2>
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label>Fecha de Revisión *</label>
+                        <input type="date" id="fechaRevision" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Responsable *</label>
+                        <select id="responsable" required>
+                            <option value="">Seleccionar...</option>
+                            <option value="ANTONIO RODRIGUEZ SANTANA">ANTONIO RODRIGUEZ SANTANA</option>
+                            <option value="MANUEL RODRIGUEZ SANTANA">MANUEL RODRIGUEZ SANTANA</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Nave *</label>
+                        <select id="nave" required>
+                            <option value="">Seleccionar...</option>
+                            <option value="NAVE 1T">NAVE 1T</option>
+                            <option value="NAVE 2T">NAVE 2T</option>
+                            <option value="NAVE 3T">NAVE 3T</option>
+                            <option value="NAVE 4T">NAVE 4T</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Trimestre *</label>
+                        <select id="trimestre" required>
+                            <option value="">Seleccionar...</option>
+                            <option value="1ER TRIMESTRE">1ER TRIMESTRE</option>
+                            <option value="2DO TRIMESTRE">2DO TRIMESTRE</option>
+                            <option value="3ER TRIMESTRE">3ER TRIMESTRE</option>
+                            <option value="4TO TRIMESTRE">4TO TRIMESTRE</option>
+
+
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <div class="checklist-section">
+                <h2>Zonas de Almacén - Marcar las zonas a revisar</h2>
+                <p style="margin-bottom: 1.5rem; color: #666;">
+                    Marca el checkbox de cada zona para incluirla en la revisión. Luego completa los checks de cada zona marcada.
+                </p>
+
+                <!-- Zona ADT -->
+                <div class="zone-row" data-zone="ADT">
+                    <div class="zone-header">
+                        <input type="checkbox" class="zone-checkbox" data-zone="ADT">
+                        <span class="zone-name">ADT</span>
+                    </div>
+                    <div class="checks-grid">
+                        <div class="check-item">
+                            <label><input type="checkbox" class="check-colocacion" data-zone="ADT"> Colocación correcta</label>
+                        </div>
+                        <div class="check-item">
+                            <label><input type="checkbox" class="check-accesibilidad" data-zone="ADT"> Accesibilidad y señalización</label>
+                        </div>
+                        <div class="check-item">
+                            <label><input type="checkbox" class="check-corrosion" data-zone="ADT"> Sin corrosión en patas</label>
+                        </div>
+                        <div class="check-item">
+                            <label><input type="checkbox" class="check-anclajes" data-zone="ADT"> Anclajes al suelo correctos</label>
+                        </div>
+                        <div class="check-item">
+                            <label><input type="checkbox" class="check-protecciones" data-zone="ADT"> Protecciones contra golpes</label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Zonas DA-1 a DA-5 -->
+                <div class="zone-row" data-zone="DA-1">
+                    <div class="zone-header">
+                        <input type="checkbox" class="zone-checkbox" data-zone="DA-1">
+                        <span class="zone-name">DA-1</span>
+                    </div>
+                    <div class="checks-grid">
+                        <div class="check-item"><label><input type="checkbox" class="check-colocacion" data-zone="DA-1"> Colocación correcta</label></div>
+                        <div class="check-item"><label><input type="checkbox" class="check-accesibilidad" data-zone="DA-1"> Accesibilidad y señalización</label></div>
+                        <div class="check-item"><label><input type="checkbox" class="check-corrosion" data-zone="DA-1"> Sin corrosión en patas</label></div>
+                        <div class="check-item"><label><input type="checkbox" class="check-anclajes" data-zone="DA-1"> Anclajes al suelo correctos</label></div>
+                        <div class="check-item"><label><input type="checkbox" class="check-protecciones" data-zone="DA-1"> Protecciones contra golpes</label></div>
+                    </div>
+                </div>
+
+                <div class="zone-row" data-zone="DA-2">
+                    <div class="zone-header">
+                        <input type="checkbox" class="zone-checkbox" data-zone="DA-2">
+                        <span class="zone-name">DA-2</span>
+                    </div>
+                    <div class="checks-grid">
+                        <div class="check-item"><label><input type="checkbox" class="check-colocacion" data-zone="DA-2"> Colocación correcta</label></div>
+                        <div class="check-item"><label><input type="checkbox" class="check-accesibilidad" data-zone="DA-2"> Accesibilidad y señalización</label></div>
+                        <div class="check-item"><label><input type="checkbox" class="check-corrosion" data-zone="DA-2"> Sin corrosión en patas</label></div>
+                        <div class="check-item"><label><input type="checkbox" class="check-anclajes" data-zone="DA-2"> Anclajes al suelo correctos</label></div>
+                        <div class="check-item"><label><input type="checkbox" class="check-protecciones" data-zone="DA-2"> Protecciones contra golpes</label></div>
+                    </div>
+                </div>
+
+                <div class="zone-row" data-zone="DA-3">
+                    <div class="zone-header">
+                        <input type="checkbox" class="zone-checkbox" data-zone="DA-3">
+                        <span class="zone-name">DA-3</span>
+                    </div>
+                    <div class="checks-grid">
+                        <div class="check-item"><label><input type="checkbox" class="check-colocacion" data-zone="DA-3"> Colocación correcta</label></div>
+                        <div class="check-item"><label><input type="checkbox" class="check-accesibilidad" data-zone="DA-3"> Accesibilidad y señalización</label></div>
+                        <div class="check-item"><label><input type="checkbox" class="check-corrosion" data-zone="DA-3"> Sin corrosión en patas</label></div>
+                        <div class="check-item"><label><input type="checkbox" class="check-anclajes" data-zone="DA-3"> Anclajes al suelo correctos</label></div>
+                        <div class="check-item"><label><input type="checkbox" class="check-protecciones" data-zone="DA-3"> Protecciones contra golpes</label></div>
+                    </div>
+                </div>
+
+                <div class="zone-row" data-zone="DA-4">
+                    <div class="zone-header">
+                        <input type="checkbox" class="zone-checkbox" data-zone="DA-4">
+                        <span class="zone-name">DA-4</span>
+                    </div>
+                    <div class="checks-grid">
+                        <div class="check-item"><label><input type="checkbox" class="check-colocacion" data-zone="DA-4"> Colocación correcta</label></div>
+                        <div class="check-item"><label><input type="checkbox" class="check-accesibilidad" data-zone="DA-4"> Accesibilidad y señalización</label></div>
+                        <div class="check-item"><label><input type="checkbox" class="check-corrosion" data-zone="DA-4"> Sin corrosión en patas</label></div>
+                        <div class="check-item"><label><input type="checkbox" class="check-anclajes" data-zone="DA-4"> Anclajes al suelo correctos</label></div>
+                        <div class="check-item"><label><input type="checkbox" class="check-protecciones" data-zone="DA-4"> Protecciones contra golpes</label></div>
+                    </div>
+                </div>
+
+                <div class="zone-row" data-zone="DA-5">
+                    <div class="zone-header">
+                        <input type="checkbox" class="zone-checkbox" data-zone="DA-5">
+                        <span class="zone-name">DA-5</span>
+                    </div>
+                    <div class="checks-grid">
+                        <div class="check-item"><label><input type="checkbox" class="check-colocacion" data-zone="DA-5"> Colocación correcta</label></div>
+                        <div class="check-item"><label><input type="checkbox" class="check-accesibilidad" data-zone="DA-5"> Accesibilidad y señalización</label></div>
+                        <div class="check-item"><label><input type="checkbox" class="check-corrosion" data-zone="DA-5"> Sin corrosión en patas</label></div>
+                        <div class="check-item"><label><input type="checkbox" class="check-anclajes" data-zone="DA-5"> Anclajes al suelo correctos</label></div>
+                        <div class="check-item"><label><input type="checkbox" class="check-protecciones" data-zone="DA-5"> Protecciones contra golpes</label></div>
+                    </div>
+                </div>
+
+                <!-- Zona DDA-1 -->
+                <div class="zone-row" data-zone="DDA-1">
+                    <div class="zone-header">
+                        <input type="checkbox" class="zone-checkbox" data-zone="DDA-1">
+                        <span class="zone-name">DDA-1</span>
+                    </div>
+                    <div class="checks-grid">
+                        <div class="check-item"><label><input type="checkbox" class="check-colocacion" data-zone="DDA-1"> Colocación correcta</label></div>
+                        <div class="check-item"><label><input type="checkbox" class="check-accesibilidad" data-zone="DDA-1"> Accesibilidad y señalización</label></div>
+                        <div class="check-item"><label><input type="checkbox" class="check-corrosion" data-zone="DDA-1"> Sin corrosión en patas</label></div>
+                        <div class="check-item"><label><input type="checkbox" class="check-anclajes" data-zone="DDA-1"> Anclajes al suelo correctos</label></div>
+                        <div class="check-item"><label><input type="checkbox" class="check-protecciones" data-zone="DDA-1"> Protecciones contra golpes</label></div>
+                    </div>
+                </div>
+
+                <div class="form-group" style="margin-top: 2rem;">
+                    <label>Observaciones Generales</label>
+                    <textarea id="observacionesGenerales" rows="4" style="width: 100%; padding: 0.75rem; border: 2px solid #e0e0e0; border-radius: 6px;"></textarea>
+                </div>
+            </div>
+
+            <div class="submit-section">
+                <button type="submit" class="btn-submit">💾 Guardar Revisión</button>
+                <div id="message" class="message"></div>
+            </div>
+        </form>
+    </div>
+
+    <script>
+        // Establecer fecha actual
+        document.getElementById('fechaRevision').valueAsDate = new Date();
+
+        // Marcar zona automáticamente al hacer check
+        document.querySelectorAll('.zone-checkbox').forEach(cb => {
+            cb.addEventListener('change', function() {
+                const zoneRow = this.closest('.zone-row');
+                if (this.checked) {
+                    zoneRow.classList.add('selected');
+                } else {
+                    zoneRow.classList.remove('selected');
+                    // Desmarcar todos los checks de esta zona
+                    zoneRow.querySelectorAll('input[type="checkbox"]:not(.zone-checkbox)').forEach(check => {
+                        check.checked = false;
+                    });
+                }
+            });
+        });
+
+        document.getElementById('estanteriasForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const fechaRevision = document.getElementById('fechaRevision').value;
+            const responsable = document.getElementById('responsable').value;
+            const nave = document.getElementById('nave').value;
+            const trimestre = document.getElementById('trimestre').value;
+            const observacionesGenerales = document.getElementById('observacionesGenerales').value;
+
+            // Recopilar filas marcadas
+            const filas = [];
+            const zonas = ['ADT', 'DA-1', 'DA-2', 'DA-3', 'DA-4', 'DA-5', 'DDA-1'];
+
+            zonas.forEach(zona => {
+                const checkbox = document.querySelector(`.zone-checkbox[data-zone="${zona}"]`);
+                if (checkbox && checkbox.checked) {
+                    const colocacion = document.querySelector(`.check-colocacion[data-zone="${zona}"]`)?.checked ? '√' : 'X';
+                    const accesibilidad = document.querySelector(`.check-accesibilidad[data-zone="${zona}"]`)?.checked ? '√' : 'X';
+                    const corrosion = document.querySelector(`.check-corrosion[data-zone="${zona}"]`)?.checked ? '√' : 'X';
+                    const anclajes = document.querySelector(`.check-anclajes[data-zone="${zona}"]`)?.checked ? '√' : 'X';
+                    const protecciones = document.querySelector(`.check-protecciones[data-zone="${zona}"]`)?.checked ? '√' : 'X';
+
+                    filas.push({
+                        fila: zona,
+                        colocacion,
+                        accesibilidad,
+                        corrosion,
+                        anclajes,
+                        protecciones,
+                        observaciones: ''
+                    });
+                }
+            });
+
+            if (filas.length === 0) {
+                alert('Debe marcar al menos una zona para revisar');
+                return;
+            }
+
+            const data = {
+                fechaRevision,
+                responsable,
+                nave,
+                trimestre,
+                observacionesGenerales,
+                filas
+            };
+
+            try {
+                const response = await fetch('/api/save-estanterias-completo?sede=mlg', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+
+                const messageDiv = document.getElementById('message');
+                
+                if (response.ok) {
+                    messageDiv.textContent = `✅ Revisión guardada: ${filas.length} zonas registradas`;
+                    messageDiv.className = 'message success';
+                    messageDiv.style.display = 'block';
+                    setTimeout(() => {
+                        location.reload();
+                    }, 2000);
+                } else {
+                    throw new Error('Error al guardar');
+                }
+            } catch (error) {
+                const messageDiv = document.getElementById('message');
+                messageDiv.textContent = '❌ Error al guardar la revisión';
+                messageDiv.className = 'message error';
+                messageDiv.style.display = 'block';
+            }
+        });
+    </script>
+</body>
+</html>
