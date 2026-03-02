@@ -57,6 +57,7 @@ current_services.txt
 .DS_Store
 ._*
 standalone_apps/form_generator/output/
-standalone_apps/form_generator/excel_storage/*
-standalone_apps/form_generator/excel_storage/registro-visitas.xlsx
+standalone_apps/form_generator/excel_storage/
+standalone_apps/form_generator/backups/
+
 
