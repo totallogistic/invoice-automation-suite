@@ -46,6 +46,7 @@ services:
       - ./config:/config:ro
       - ./apps:/apps:ro
       - ./libs/iasuite_common:/usr/local/lib/python3.12/site-packages/iasuite_common:ro
+      - ./apps/croton:/apps/croton:ro
     depends_on:
       - unified_api
 
