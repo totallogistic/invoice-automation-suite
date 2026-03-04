@@ -69,41 +69,27 @@ tools:
     email:
       subject_template: "[Lear Rabat] Batch {batch_id} - DUA files ready"
 
-# ─────────────────────────────────────────────────────────────────────────────
-  # CROTON — Packing List ODS → Customs Summary ODS
-  # ─────────────────────────────────────────────────────────────────────────────
+  # Croton
   - name: croton
+    enabled: true
     display_name: "Croton — Packing List"
-    description: |
-      Procesa un fichero ODS de packing-list (Hoja5) de Croton/IFORTEX y genera
-      un ODS resumen agrupado por partida aduanera (equivalente a Hoja4).
+    description: "Procesa packing-list ODS de Croton/IFORTEX y genera resumen por partida aduanera"
+    
     extractor:
+      type: python
       path: /apps/croton/extractor/extract_croton.py
-      args:
-        - "{input_file}"
-        - "{output_file}"
-        - "--mapping"
-        - "/apps/croton/extractor/product_mapping.csv"
+    
     input:
       formats: [ods]
-      sheet_name: "Hoja5"
-      label: "Packing List Croton (ODS)"
+      inbox: /data/croton/inbox
+    
     output:
-      filename: "croton_resumen_{date}.ods"
+      directory: /data/out
       artifacts:
-        - "croton_resumen_{date}.ods"
+        - croton_resumen_*.ods
+    
     email:
-      subject: "Resumen partidas aduaneras — Croton {invoice_ref}"
-      body: |
-        Estimados,
-
-        Adjunto encontraréis el resumen de partidas aduaneras generado
-        automáticamente a partir del packing list recibido.
-
-        Un saludo,
-        Total Logistic
-      recipients_from_config: true
-      attach_output: true
+      subject_template: "[Croton] Batch {batch_id} - Resumen partidas listo"
 
   # Cuadre Asientos
   - name: cuadre_asientos

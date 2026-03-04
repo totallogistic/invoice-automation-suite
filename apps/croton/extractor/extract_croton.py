@@ -94,7 +94,11 @@ def _fmt(value: float) -> str:
 # ─────────────────────────────────────────────────────────────────────────────
 # Hoja5 columns (0-based, after the header rows):
 #   0=LINEA  1=NBULTO  2=DESCRIPCION  3=CODIGO  4=NPALET
-#   5=PESO_NETO  6=PESO_BRUTO  7=CANT  8=CANT_TOTAL  9=M2
+#   5=PESO_NETO  6=PESO_BRUTO  7=CANT  8=CANT_TOTAL  9=M2  10=VALOR (optional)
+#
+# Column 10 (VALOR) is the declared customs value for the group.
+# It is only filled on the last row of each group (same position as CANT_TOTAL).
+# If the column is absent or empty the field is left as 0.
 
 HOJA5_SHEET_NAME = "Hoja5"
 
@@ -164,6 +168,7 @@ def read_hoja5(ods_path: str) -> list[dict]:
         peso_bruto  = _parse_number(row[6])
         cant_total  = row[8].strip()   # non-empty → end of group
         m2          = row[9].strip()
+        valor       = row[10].strip() if len(row) > 10 else ""  # declared customs value
 
         if not in_group:
             # Start new group
@@ -185,6 +190,7 @@ def read_hoja5(ods_path: str) -> list[dict]:
                 "bruto":       round(current_bruto, 2),
                 "cant_total":  _parse_number(cant_total),
                 "m2":          _parse_number(m2),
+                "valor":       _parse_number(valor),
             })
             # Reset
             current_bx    = 0
@@ -207,6 +213,7 @@ def read_hoja5(ods_path: str) -> list[dict]:
             "bruto":       round(current_bruto, 2),
             "cant_total":  0.0,
             "m2":          0.0,
+            "valor":       0.0,
         })
 
     log.info("Read %d groups from %s.", len(groups), ods_path)
@@ -287,6 +294,7 @@ def aggregate(groups: list[dict], rules: list[dict]) -> list[dict]:
         seen[key]["bruto"] += g["bruto"]
         seen[key]["neto"]  += g["neto"]
         seen[key]["m2"]    += g["m2"]
+        seen[key]["valor"] += g["valor"]
 
     if errors:
         unmapped = "\n  ".join(errors)
@@ -299,6 +307,7 @@ def aggregate(groups: list[dict], rules: list[dict]) -> list[dict]:
         r["bruto"] = round(r["bruto"], 2)
         r["neto"]  = round(r["neto"],  2)
         r["m2"]    = round(r["m2"],    2)
+        r["valor"] = round(r["valor"], 2)
 
     log.info("Aggregated into %d MERCANCIA/PARTIDA rows.", len(result))
     return result
@@ -385,14 +394,35 @@ def main():
     parser = argparse.ArgumentParser(
         description="Croton packing-list ODS → customs summary ODS"
     )
-    parser.add_argument("input_ods",  help="Input ODS (Hoja5 format)")
-    parser.add_argument("output_ods", help="Output ODS (Hoja4 summary)")
+    # Supports the unified processor calling convention:
+    #   script.py <input_file> -o <output_file>
+    # as well as legacy positional:
+    #   script.py <input_file> <output_file>
+    parser.add_argument(
+        "input_ods",
+        help="Input ODS (Hoja5 format)",
+    )
+    parser.add_argument(
+        "-o", "--output",
+        dest="output_ods",
+        help="Output ODS path (used by unified processor)",
+    )
+    parser.add_argument(
+        "output_ods_pos",
+        nargs="?",
+        help=argparse.SUPPRESS,  # legacy second positional, kept for compatibility
+    )
     parser.add_argument(
         "--mapping",
         default=str(MAPPING_FILE),
         help="Path to product_mapping.csv (default: next to this script)",
     )
     args = parser.parse_args()
+
+    # -o flag takes priority; fall back to second positional
+    output_path = args.output_ods or args.output_ods_pos
+    if not output_path:
+        parser.error("Output path required: use -o <path> or pass as second positional argument")
 
     if not os.path.exists(args.input_ods):
         log.error("Input file not found: %s", args.input_ods)
@@ -402,12 +432,19 @@ def main():
         log.error("Mapping file not found: %s", args.mapping)
         sys.exit(1)
 
+    # If the processor passed a directory (batch dir), build the filename inside it.
+    # Other extractors follow this same pattern: write their artifact into the batch dir.
+    import datetime
+    if os.path.isdir(output_path):
+        date_str = datetime.datetime.now().strftime("%Y%m%d")
+        output_path = os.path.join(output_path, f"croton_resumen_{date_str}.ods")
+
     groups  = read_hoja5(args.input_ods)
     rules   = load_mapping(args.mapping)
     summary = aggregate(groups, rules)
-    write_output(summary, args.output_ods)
+    write_output(summary, output_path)
 
-    print(f"✅ Done — {len(summary)} partidas aduaneras → {args.output_ods}")
+    print(f"✅ Done — {len(summary)} partidas aduaneras → {output_path}")
 
 
 if __name__ == "__main__":
