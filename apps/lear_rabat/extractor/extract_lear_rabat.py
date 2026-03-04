@@ -14,7 +14,7 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Dict, List, Optional
 
-SCRIPT_VERSION = "2026-03-02.v23"
+SCRIPT_VERSION = "2026-03-04.v30"
 
 try:
     import pdfplumber
@@ -343,11 +343,15 @@ def clear_cell(cell):
 
 
 def format_eu_number(value, decimals=2):
+    """Format number EU style (comma decimal). Always shows at least 2 decimal places.
+    Extra trailing zeros beyond 2 decimals are stripped, but 2 are always kept.
+    e.g. 8647.5 -> 8647,50 | 134.75 -> 134,75 | 10761.622 -> 10761,62
+    """
     if value is None:
         return ""
-    formatted = f'{value:.{decimals}f}'.replace(".", ",")
-    if "," in formatted:
-        formatted = formatted.rstrip("0").rstrip(",")
+    # Round to 2 decimals for display consistency
+    rounded = round(float(value), decimals)
+    formatted = f'{rounded:.{decimals}f}'.replace(".", ",")
     return formatted
 
 
@@ -489,8 +493,7 @@ def _ensure_number_styles(doc):
 
 
 def add_summary_sheet(doc, items: List[Dict], invoice_data: Dict,
-                      code_mapping: Dict[int, tuple], brut_net_ratio: float,
-                      calc_peso_br: int = 0, calc_peso_net: int = 0):
+                      code_mapping: Dict[int, tuple], brut_net_ratio: float):
     """Add a 'Resumen' sheet with a pivot-table-like summary grouped by
     (DESCRIPCION, PARTIDA), mirroring the LibreOffice Tabla Dinamica.
 
@@ -554,24 +557,22 @@ def add_summary_sheet(doc, items: List[Dict], invoice_data: Dict,
     def make_row(*cells_data):
         """cells_data: list of (value, is_numeric, bold_header)
         Columns: desc, partida, palets, valor_dua, opr, peso_br, peso_net, un
-        Integer cols (palets=2, un=7), float cols (rest).
+        Integer cols: palets(2), un(7). All others keep natural decimals.
         """
-        INT_COLS = {2, 5, 7}  # 0-based positions of integer columns (palets, peso_br, un)
+        INT_COLS = {2, 5, 7}  # palets, peso_br, UN - all shown as integers
         tr = table.TableRow()
         for col_idx, (val, is_num, is_header) in enumerate(cells_data):
             tc = table.TableCell()
             if is_num and val is not None:
-                float_val = round(float(val), 2)
+                float_val = float(val)  # no rounding
                 is_int_col = col_idx in INT_COLS
-                style_name = styles["n0"] if is_int_col else styles["n2"]
-                tc.setAttribute("stylename", style_name)
                 tc.setAttribute("valuetype", "float")
-                tc.setAttribute("value", f'{float_val:.2f}')
+                tc.setAttribute("value", str(float_val))
                 p = odftext.P()
                 if is_int_col:
                     p.addText(str(int(float_val)))
                 else:
-                    p.addText(f'{float_val:.2f}'.replace(".", ","))
+                    p.addText(format_eu_number(float_val))
                 tc.appendChild(p)
             else:
                 if val:
@@ -629,16 +630,14 @@ def add_summary_sheet(doc, items: List[Dict], invoice_data: Dict,
 
     # Totals row
     # Use calc totals from main sheet for PESO BR/NET to ensure consistency
-    final_pb = calc_peso_br if calc_peso_br else int(round(totals["peso_br"]))
-    final_pn = calc_peso_net if calc_peso_net else int(round(totals["peso_net"]))
     total_row = [
         ("Total Resultado", False, True),
         ("", False, True),
         (totals["palets"], True, True),
         (totals["valor_dua"], True, True),
         (totals["opr"], True, True),
-        (final_pb, True, True),
-        (final_pn, True, True),
+        (round(totals["peso_br"]), True, True),
+        (totals["peso_net"], True, True),
         (totals["un"], True, True),
     ]
     summary_table.addElement(make_row(*total_row))
@@ -709,8 +708,8 @@ def update_ods_template(template_path: Path, items: List[Dict],
     total_opr = sum(item.get("opr_material") or 0 for item in items)
     total_pallets = sum(item.get("project_pallets") or 0 for item in items)
     total_peso_net_items = sum(item.get("partial_weight") or 0 for item in items)
-    calc_peso_br = int(round(total_peso_net_items * brut_net_ratio))
-    calc_peso_net = int(round(total_peso_net_items))
+    calc_peso_br = round(total_peso_net_items * brut_net_ratio)  # integer, matches template style
+    calc_peso_net = round(total_peso_net_items, 2)
 
     item_idx = 0
 
@@ -745,16 +744,13 @@ def update_ods_template(template_path: Path, items: List[Dict],
             final_opr = total_opr
             final_pallets = total_pallets
             # Use pre-calculated totals (consistent with R2/R4 and Resumen)
-            peso_br_total = calc_peso_br
-            peso_net_tot = calc_peso_net
-
-            set_numeric_value(cell_map.get(COL_VALOR_DUA), final_valor,
-                              f'{final_valor:.2f}'.replace(".", ","))
-            set_numeric_value(cell_map.get(COL_OPR_MAT), final_opr,
-                              f'{final_opr:.2f}'.replace(".", ","))
+            set_numeric_value(cell_map.get(COL_VALOR_DUA), final_valor)
+            set_numeric_value(cell_map.get(COL_OPR_MAT), final_opr)
             set_numeric_value(cell_map.get(COL_PALETS), final_pallets, str(final_pallets))
-            set_numeric_value(cell_map.get(COL_PESO_BR), peso_br_total, str(peso_br_total))
-            set_numeric_value(cell_map.get(COL_PESO_NET), peso_net_tot, str(peso_net_tot))
+            set_numeric_value(cell_map.get(COL_PESO_BR), calc_peso_br,
+                              f'{calc_peso_br:.2f}'.replace(".", ","))
+            set_numeric_value(cell_map.get(COL_PESO_NET), calc_peso_net,
+                              f'{calc_peso_net:.2f}'.replace(".", ","))
             continue
 
         # --- DATA ROWS ---
@@ -764,9 +760,11 @@ def update_ods_template(template_path: Path, items: List[Dict],
 
         # Write PESO BRUT/NET to R2 and R4 - always use our calculated totals
         if row_idx == 1:
-            set_numeric_value(cell_map.get(COL_PESO_VAL), calc_peso_br, str(calc_peso_br))
+            set_numeric_value(cell_map.get(COL_PESO_VAL), calc_peso_br,
+                              f'{calc_peso_br:.2f}'.replace(".", ","))
         if row_idx == 3:
-            set_numeric_value(cell_map.get(COL_PESO_VAL), calc_peso_net, str(calc_peso_net))
+            set_numeric_value(cell_map.get(COL_PESO_VAL), calc_peso_net,
+                              f'{calc_peso_net:.2f}'.replace(".", ","))
 
         if item_idx < len(items):
             item = items[item_idx]
@@ -830,7 +828,7 @@ def update_ods_template(template_path: Path, items: List[Dict],
             pass
 
     # --- Generate Resumen summary sheet ---
-    add_summary_sheet(doc, items, invoice_data, code_mapping, brut_net_ratio, calc_peso_br, calc_peso_net)
+    add_summary_sheet(doc, items, invoice_data, code_mapping, brut_net_ratio)
 
     doc.save(str(output_path))
 
@@ -865,8 +863,9 @@ def process_invoice(pdf_path: Path, template_path: Path, output_dir: Path) -> Pa
         diffs.append(f"  Valor DUA : PDF {pdf_valor:>12.2f}  CALC {calc_valor:>12.2f}  DIFF {calc_valor-pdf_valor:+.2f}")
     if pdf_opr and abs(pdf_opr - calc_opr) > 0.01:
         diffs.append(f"  OPR 7009  : PDF {pdf_opr:>12.2f}  CALC {calc_opr:>12.2f}  DIFF {calc_opr-pdf_opr:+.2f}")
-    if pdf_pnet and abs(pdf_pnet - round(calc_pnet)) > 0.5:
-        diffs.append(f"  Peso Net  : PDF {pdf_pnet:>12.0f}  CALC {round(calc_pnet):>12.0f}  DIFF {round(calc_pnet)-pdf_pnet:+.0f}")
+    if pdf_pnet and abs(pdf_pnet - calc_pnet) > 0.01:
+        diff_pn = calc_pnet - pdf_pnet
+        diffs.append(f"  Peso Net  : PDF {pdf_pnet:>12.2f}  CALC {calc_pnet:>12.2f}  DIFF {diff_pn:+.2f}")
     if pdf_pbrut and abs(pdf_pbrut - calc_pbrut) > 0.5:
         diffs.append(f"  Peso Brut : PDF {pdf_pbrut:>12.0f}  CALC {calc_pbrut:>12.0f}  DIFF {calc_pbrut-pdf_pbrut:+.0f}")
 
