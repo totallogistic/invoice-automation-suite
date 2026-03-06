@@ -11,7 +11,7 @@ from decimal import Decimal, ROUND_HALF_UP
 from pathlib import Path
 from typing import Iterable, Optional
 
-SCRIPT_VERSION = "2026-02-6.v20"
+SCRIPT_VERSION = "2026-03-5.v21"
 
 try:
     from pypdf import PdfReader
@@ -30,6 +30,7 @@ except ImportError:
 class InvoiceExtract:
     file: str
     invoice_no: Optional[str]
+    date: Optional[str]
     pallets: Optional[int]
     boxes: Optional[int]
     gross_weight: Optional[float]
@@ -120,7 +121,7 @@ def sum_optional_decimal(values: Iterable[Optional[float]]) -> Decimal:
 def _normalize_extracted_text(text: str) -> str:
     """Normaliza texto extraido (sin OCR) para hacer los regex mas fiables."""
     # normaliza espacios no-separables
-    text = text.replace(" ", " ").replace(" ", " ")
+    text = text.replace("\u00a0", " ").replace("\u202f", " ")
     # elimina caracteres de ancho cero y BOM
     text = re.sub(r"[\u200B\u200C\u200D\u200E\u200F\u2060\uFEFF]", "", text)
     # elimina controles bidi
@@ -152,6 +153,82 @@ def find_invoice_no(text: str, filename_stem: str | None = None) -> Optional[str
     if not stem:
         return None
     return stem.upper()
+
+
+def find_date(text: str) -> Optional[str]:
+    """Extract invoice date from PDF text.
+
+    Handles the date formats observed across all invoice models:
+
+    Model A (DM043899, 02343986, DS307207):
+        Numeric date after 'Date' label:
+        e.g.  12/2/2025 | 11/11/2025 | 1/31/2026
+
+    Model B (S122412):
+        Numeric date in 'Date' column of a table row:
+        e.g.  18/11/25   (2-digit year)
+
+    Model C (inv-211125):
+        Short date after 'Date :' label:
+        e.g.  21-Nov
+
+    Strategy:
+      1. Look for a numeric date (d/m/y or m/d/y, 2- or 4-digit year)
+         within a window following any 'Date' label.
+      2. Fall back to a short month-name date (e.g. 21-Nov or Nov-21)
+         near a 'Date' label.
+      3. Last resort: first plausible date-like token in the whole document.
+
+    The raw string is returned as-is (no normalisation to ISO) so callers
+    can decide how to interpret ambiguous formats.
+    """
+    # ------------------------------------------------------------------ #
+    # Pattern definitions
+    # ------------------------------------------------------------------ #
+    # Full numeric date: 1-2 digit day-or-month, separator, 1-2 digit
+    # day-or-month, separator, 2- or 4-digit year.
+    # Separators: / - .
+    PAT_NUMERIC = r"\d{1,2}[/\-.]\d{1,2}[/\-.]\d{2,4}"
+
+    # Short month-name date: "21-Nov", "21/Nov", "Nov-21", "21 Nov 2025", …
+    PAT_SHORT_MONTH = (
+        r"\d{1,2}[\s\-/](?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)"
+        r"(?:[\s\-/]\d{2,4})?"
+        r"|(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[\s\-/]\d{1,2}"
+        r"(?:[\s\-/]\d{2,4})?"
+    )
+
+    COMBINED = rf"(?:{PAT_NUMERIC}|{PAT_SHORT_MONTH})"
+
+    # ------------------------------------------------------------------ #
+    # 1. Search in a window after every 'Date' label (robust to repetition)
+    # ------------------------------------------------------------------ #
+    # Labels can appear repeated (e.g. "Date\nDate\n12/2/2025") or with colon.
+    for m_label in re.finditer(
+        r"\bDate\s*:?\s*(?:Date\s*:?\s*)*",
+        text,
+        flags=re.IGNORECASE,
+    ):
+        # Look ahead up to 80 chars for a date token
+        window = text[m_label.end(): m_label.end() + 80]
+        m = re.search(COMBINED, window, flags=re.IGNORECASE)
+        if m:
+            candidate = m.group(0).strip()
+            # Exclude obviously wrong hits like lone "Date" repeated
+            if re.search(r"\d", candidate):
+                return candidate
+
+    # ------------------------------------------------------------------ #
+    # 2. Last resort: first date-like token in the whole document
+    # ------------------------------------------------------------------ #
+    m = re.search(COMBINED, text, flags=re.IGNORECASE)
+    if m:
+        candidate = m.group(0).strip()
+        if re.search(r"\d", candidate):
+            return candidate
+
+    return None
+
 
 def find_int_after_label_variants(text: str, labels: list[str]) -> Optional[int]:
     """Find integer after any of the label regex variants like 'Pallets' / 'Nombre de Palettes'.
@@ -203,8 +280,6 @@ def find_float_after_label_variants(text: str, labels: list[str]) -> Optional[fl
         if v is not None:
             return v
     return None
-
-
 
 
 def parse_weight_token(token: str) -> Optional[float]:
@@ -267,6 +342,8 @@ def find_weight_after_label_variants(text: str, labels: list[str]) -> Optional[f
         if v is not None:
             return v
     return None
+
+
 def find_float_before_marker(text: str, marker_regex: str) -> Optional[float]:
     # admite , . y espacios
     m = re.search(rf"([0-9][0-9.,\s]+)\s*{marker_regex}", text, flags=re.IGNORECASE)
@@ -307,7 +384,7 @@ def find_total_invoice(text: str) -> Optional[float]:
             if v is None:
                 continue
             # Heuristica: prioriza importes con 2 decimales en el token original (típico de totales)
-            tok_s = str(tok).replace(" ", "").replace(" ", "")
+            tok_s = str(tok).replace(" ", "").replace(" ", "")
             has_2dp = bool(re.search(r"[\.,]\d{2}$", tok_s))
             candidates.append((has_2dp, v))
 
@@ -327,7 +404,7 @@ def find_total_invoice(text: str) -> Optional[float]:
         if v is None:
             continue
         # evita capturar enteros enormes sin decimales si hay alternativas con decimales
-        tok_s = str(tok).replace(" ", "").replace(" ", "")
+        tok_s = str(tok).replace(" ", "").replace(" ", "")
         has_2dp = bool(re.search(r"[\.,]\d{2}$", tok_s))
         parsed.append((has_2dp, v))
 
@@ -345,6 +422,7 @@ def extract_one(pdf_path: Path) -> InvoiceExtract:
     stem = pdf_path.stem
 
     invoice_no = find_invoice_no(text, filename_stem=stem)
+    date = find_date(text)
 
     # common EN vs FR
     pallets = find_int_after_label_variants(text, [r"Pallets", r"Nombre\s+de\s+Palettes"])
@@ -355,11 +433,10 @@ def extract_one(pdf_path: Path) -> InvoiceExtract:
 
     total_invoice = find_total_invoice(text)
 
-
-
     return InvoiceExtract(
         file=pdf_path.name,
         invoice_no=invoice_no,
+        date=date,
         pallets=pallets,
         boxes=boxes,
         gross_weight=gross_weight,
@@ -429,6 +506,7 @@ def main() -> int:
     fieldnames = [
         "file",
         "invoice_no",
+        "date",
         "pallets",
         "boxes",
         "gross_weight",
@@ -446,6 +524,7 @@ def main() -> int:
             {
                 "file": "TOTAL",
                 "invoice_no": None,
+                "date": None,
                 "pallets": total_pallets,
                 "boxes": total_boxes,
                 "gross_weight": f"{total_gross_weight_r:.4f}",
@@ -457,21 +536,22 @@ def main() -> int:
     print(f"OK -> {json_path}")
     print(f"OK -> {summary_path}")
     print(f"OK -> {csv_path}")
-    
+
     # XLSX con la misma estructura que CSV
     xlsx_path = out_dir / "invoices_extracted.xlsx"
     wb = Workbook()
     ws = wb.active
     ws.title = "Invoices"
-    
+
     # Header
     ws.append(fieldnames)
-    
+
     # Data rows
     for r in rows:
         row_data = [
             r.file,
             r.invoice_no,
+            r.date,
             r.pallets,
             r.boxes,
             r.gross_weight,
@@ -479,10 +559,11 @@ def main() -> int:
             r.total_invoice,
         ]
         ws.append(row_data)
-    
+
     # TOTAL row
     total_row = [
         "TOTAL",
+        None,
         None,
         total_pallets,
         total_boxes,
@@ -491,10 +572,10 @@ def main() -> int:
         float(total_total_invoice_r),
     ]
     ws.append(total_row)
-    
+
     wb.save(str(xlsx_path))
     print(f"OK -> {xlsx_path}")
-    
+
     print(f"SUM pallets: {total_pallets}")
     print(f"SUM boxes: {total_boxes}")
     print(f"SUM gross_weight: {total_gross_weight_r:.4f}")
@@ -505,5 +586,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
-
