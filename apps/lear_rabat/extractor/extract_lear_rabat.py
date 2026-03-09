@@ -14,7 +14,7 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Dict, List, Optional
 
-SCRIPT_VERSION = "2026-03-04.v30"
+SCRIPT_VERSION = "2026-03-07.v31"
 
 try:
     import pdfplumber
@@ -91,10 +91,11 @@ def extract_invoice_metadata(text: str, fmt: str) -> Dict:
             total_invoice = parse_number(m.group(1), fmt)
 
         if "Net:" in line and "Gross:" in line:
-            m = re.search(r'Net:\s*([\d\s]+)\s*K\s+.*?Gross:\s*([\d\s]+)\s*K', line)
+            # K unit is optional (some invoices omit it)
+            m = re.search(r'Net:\s*([\d\s,\.]+?)\s*K?\s+.*?Gross:\s*([\d\s,\.]+?)\s*K?\s*$', line)
             if m:
-                peso_net = parse_number(m.group(1), "EU")
-                peso_brut = parse_number(m.group(2), "EU")
+                peso_net = parse_number(m.group(1).strip(), "EU")
+                peso_brut = parse_number(m.group(2).strip(), "EU")
 
         if i < 15 and ("FCA" in line or "EXW" in line or "DAP" in line):
             m = re.search(r'\b(\d{1,3})\s*$', line.strip())
