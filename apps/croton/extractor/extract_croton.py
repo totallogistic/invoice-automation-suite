@@ -655,10 +655,16 @@ def main():
         log.error("FACTURA file not found: %s", args.factura)
         sys.exit(1)
 
-    import datetime
+    # Validate output path is a file path, not a directory.
+    # The unified processor always passes a full file path via -o.
+    # Passing a directory would silently produce a wrong filename — fail fast instead.
     if os.path.isdir(output_path):
-        date_str = datetime.datetime.now().strftime("%Y%m%d")
-        output_path = os.path.join(output_path, f"croton_resumen_{date_str}.ods")
+        log.error(
+            "Output path '%s' is a directory. Pass a full file path with -o, "
+            "e.g. -o /data/croton/out/batch_id/CROTON_my_file.ods",
+            output_path,
+        )
+        sys.exit(1)
 
     # ── Pipeline ────────────────────────────────────────────────────────────
     groups = read_hoja5(args.input_ods)
