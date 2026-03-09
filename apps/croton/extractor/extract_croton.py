@@ -43,6 +43,7 @@ Summary rows are identified by col8 having a numeric value
 
 import os
 import sys
+import csv
 import shutil
 import logging
 import argparse
@@ -51,6 +52,9 @@ from collections import OrderedDict, defaultdict
 from pathlib import Path
 from xml.etree import ElementTree as ET
 from typing import Optional
+
+EXTRACTOR_DIR = Path(__file__).parent
+MAPPING_FILE  = EXTRACTOR_DIR / "product_mapping.csv"
 
 import openpyxl
 from odf.opendocument import load, OpenDocumentSpreadsheet
@@ -201,7 +205,81 @@ def read_hoja1_2(ods_path: str) -> list:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Step 2 – load FACTURA XLSX and enrich VALOR
+# Step 2 – load product_mapping.csv and resolve MERCANCIA + PARTIDA arancelaria
+# ─────────────────────────────────────────────────────────────────────────────
+
+def load_mapping(csv_path: str) -> list:
+    """
+    Load product_mapping.csv and return list of rule dicts.
+    Columns: CODIGO, DESCRIPCION_CONTAINS, MERCANCIA, PARTIDA
+    """
+    rules = []
+    with open(csv_path, newline='', encoding='utf-8') as f:
+        for row in csv.DictReader(f):
+            codigo = row.get('CODIGO', '').strip()
+            if not codigo or codigo.startswith('#'):
+                continue
+            rules.append({
+                'codigo':    codigo.upper(),
+                'contains':  row.get('DESCRIPCION_CONTAINS', '').strip().upper(),
+                'mercancia': row.get('MERCANCIA', '').strip(),
+                'partida':   row.get('PARTIDA', '').strip(),
+            })
+    log.info("Loaded %d mapping rules from %s.", len(rules), csv_path)
+    return rules
+
+
+def lookup(referencia: str, descripcion: str, rules: list):
+    """
+    Return (mercancia, partida) for a line.
+    Match priority: exact CODIGO + DESCRIPCION_CONTAINS → exact CODIGO (no contains).
+    Raises ValueError if not found.
+    """
+    ref_up  = referencia.strip().upper()
+    desc_up = descripcion.strip().upper()
+    # First pass: rules that have a DESCRIPCION_CONTAINS filter
+    for rule in rules:
+        if rule['codigo'] != ref_up:
+            continue
+        if rule['contains'] and rule['contains'] in desc_up:
+            return rule['mercancia'], rule['partida']
+    # Second pass: rules with no filter (catch-all for that CODIGO)
+    for rule in rules:
+        if rule['codigo'] != ref_up:
+            continue
+        if not rule['contains']:
+            return rule['mercancia'], rule['partida']
+    raise ValueError(
+        f"No mapping for REFERENCIA='{referencia}' DESCRIPCION='{descripcion}'"
+    )
+
+
+def apply_mapping(lineas: list, rules: list) -> list:
+    """
+    Add 'mercancia' and 'partida_arancel' to each line using the mapping.
+    Lines that cannot be resolved are dropped with a warning.
+    """
+    result = []
+    errors = []
+    for l in lineas:
+        try:
+            merc, part = lookup(l['referencia'], l['descripcion'], rules)
+            l['mercancia']      = merc
+            l['partida_arancel'] = part
+            result.append(l)
+        except ValueError as e:
+            errors.append(str(e))
+            log.warning(str(e))
+    if errors:
+        log.warning(
+            "%d line(s) dropped — add to product_mapping.csv:\n  %s",
+            len(errors), "\n  ".join(errors)
+        )
+    return result
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Step 3 – load FACTURA XLSX and enrich VALOR
 # ─────────────────────────────────────────────────────────────────────────────
 
 def load_factura(xlsx_path: str) -> dict:
@@ -293,30 +371,26 @@ def enrich_valor_from_factura(lineas: list, factura: dict) -> list:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Step 3 – aggregate by (descripcion, referencia)
+# Step 4 – aggregate by (mercancia, partida arancelaria)
 # ─────────────────────────────────────────────────────────────────────────────
 
 def aggregate(lineas: list) -> list:
     """
-    Group lines by (descripcion, referencia) and sum numeric fields.
-    In the new format each line is already a product summary row, but the
-    same (descripcion, referencia) pair could theoretically appear on
-    multiple rows — this collapses them cleanly.
+    Group lines by (mercancia, partida_arancel) and sum numeric fields.
     """
     seen = OrderedDict()
 
     for l in lineas:
-        key = (l['descripcion'], l['referencia'])
+        key = (l['mercancia'], l['partida_arancel'])
         if key not in seen:
             seen[key] = {
-                'mercancia':    l['descripcion'],
-                'partida':      l['referencia'],
-                'bx':           0.0,
-                'valor':        0.0,
-                'bruto':        0.0,
-                'neto':         0.0,
-                'm2':           0.0,
-                'valor_fuente': set(),
+                'mercancia': l['mercancia'],
+                'partida':   l['partida_arancel'],
+                'bx':        0.0,
+                'valor':     0.0,
+                'bruto':     0.0,
+                'neto':      0.0,
+                'm2':        0.0,
             }
         g = seen[key]
         g['bx']    += l['bultos']
@@ -325,11 +399,9 @@ def aggregate(lineas: list) -> list:
         g['m2']    += l['m2']
         if l['valor'] is not None:
             g['valor'] += l['valor']
-        g['valor_fuente'].add(l.get('valor_fuente', '?'))
 
     result = []
     for g in seen.values():
-        g['valor_fuente'] = '/'.join(sorted(g['valor_fuente']))
         g['bx']    = int(round(g['bx']))
         g['bruto'] = round(g['bruto'], 2)
         g['neto']  = round(g['neto'],  2)
@@ -438,27 +510,36 @@ def process(
     ods_path: str,
     output_path: str,
     factura_path: Optional[str] = None,
+    mapping_path: Optional[str] = None,
     inject: bool = True,
 ) -> list:
     """
-    Full pipeline: ODS + optional FACTURA -> Resumen_Partidas ODS.
+    Full pipeline: ODS + FACTURA + mapping → Resumen_Partidas ODS.
 
     Parameters
     ----------
     ods_path     : path to the input ODS (Hoja1 + Hoja1_2)
     output_path  : where to write the result ODS
     factura_path : path to FACTURA XLSX (optional but recommended)
+    mapping_path : path to product_mapping.csv (default: next to this script)
     inject       : True  -> copy source ODS and add Resumen_Partidas sheet
                    False -> write standalone ODS with only the summary
-
-    Returns the summary list[dict] for further use if needed.
     """
     if not os.path.exists(ods_path):
         raise FileNotFoundError(f"ODS not found: {ods_path}")
     if factura_path and not os.path.exists(factura_path):
         raise FileNotFoundError(f"FACTURA not found: {factura_path}")
 
-    lineas = read_hoja1_2(ods_path)
+    csv_path = mapping_path or str(MAPPING_FILE)
+    if not os.path.exists(csv_path):
+        raise FileNotFoundError(
+            f"product_mapping.csv not found: {csv_path}\n"
+            f"Place it next to extract_croton.py or pass --mapping <path>"
+        )
+
+    lineas  = read_hoja1_2(ods_path)
+    rules   = load_mapping(csv_path)
+    lineas  = apply_mapping(lineas, rules)
 
     if factura_path:
         factura = load_factura(factura_path)
@@ -467,7 +548,7 @@ def process(
         log.info("No FACTURA provided — VALOR taken from ODS only.")
         for l in lineas:
             if l['valor'] is None:
-                l['valor_fuente'] = 'SIN_FACTURA'
+                l['valor'] = 0.0
 
     summary = aggregate(lineas)
 
@@ -502,13 +583,13 @@ def main():
                         help="Output ODS path")
     parser.add_argument("--factura", default=None,
                         help="FACTURA XLSX path (optional but recommended)")
+    parser.add_argument("--mapping", default=None,
+                        help="product_mapping.csv path (default: next to this script)")
     parser.add_argument("--no-inject", action="store_true", default=False,
                         help="Write standalone ODS instead of injecting into source")
-    # Legacy flags kept for backward compatibility with existing processor.py calls
+    # Legacy flag kept for backward compatibility with existing processor.py calls
     parser.add_argument("--inject", action="store_true", default=False,
                         help="(legacy, now default) Inject sheet into source ODS")
-    parser.add_argument("--mapping", default=None,
-                        help="(legacy, ignored) product_mapping.csv is no longer needed")
     args = parser.parse_args()
 
     if os.path.isdir(args.output_ods):
@@ -518,6 +599,7 @@ def main():
         ods_path     = args.input_ods,
         output_path  = args.output_ods,
         factura_path = args.factura,
+        mapping_path = args.mapping,
         inject       = not args.no_inject,
     )
 
