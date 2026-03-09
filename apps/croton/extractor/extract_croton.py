@@ -250,6 +250,10 @@ def read_hoja1_2(ods_path: str) -> list:
             })
     else:
         # Format A: col2=DESCRIPCION, col3=ref_interna
+        # Each consecutive run of rows terminated by a summary row (col8 non-empty)
+        # forms one product group.  Bultos = col13 of summary row when present,
+        # otherwise count the number of rows in the group.
+        row_count = 0
         for row in rows[1:]:
             while len(row) < 15:
                 row.append('')
@@ -257,10 +261,12 @@ def read_hoja1_2(ods_path: str) -> list:
             desc = row[2].strip()
             if not ref or not desc:
                 continue
+            row_count += 1
             cur_neto  += _parse_num(row[5]) or 0.0
             cur_bruto += _parse_num(row[6]) or 0.0
             cant_total = _parse_num(row[8])
             if cant_total is not None:
+                bultos_col = _parse_num(row[13])
                 result.append({
                     'referencia':  ref,
                     'descripcion': desc,
@@ -268,11 +274,12 @@ def read_hoja1_2(ods_path: str) -> list:
                     'm2':          _parse_num(row[9])  or 0.0,
                     'neto':        round(cur_neto,  2),
                     'bruto':       round(cur_bruto, 2),
-                    'bultos':      _parse_num(row[13]) or 0.0,
+                    'bultos':      bultos_col if bultos_col is not None else float(row_count),
                     'valor':       _parse_num(row[14]),
                 })
                 cur_neto  = 0.0
                 cur_bruto = 0.0
+                row_count = 0
 
     log.info("Read %d groups from sheet '%s'.", len(result), sheet_name)
     return result
