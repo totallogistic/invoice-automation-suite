@@ -85,7 +85,7 @@ tools:
       formats: [ods, xlsx]
 
     extractor:
-      path: /app/apps/croton/extractor/extract_croton.py
+      path: /apps/croton/extractor/extract_croton.py
       # Signals the processor to use _build_inject_cmd instead of the
       # default single-file command builder.
       inject_mode: true
