@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import yaml
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import List, Optional
 
@@ -22,6 +22,15 @@ class ToolConfig:
     email_subject_template: str
     max_file_size_mb: int = 200
     enabled: bool = True
+    # ── Inject mode (e.g. Croton) ────────────────────────────────────────────
+    # When True, the extractor receives:
+    #   - the primary ODS as the first positional argument
+    #   - the XLSX invoice via --factura <path>
+    #   - --inject  (appends Resumen_Partidas sheet to the ODS instead of
+    #                writing a separate output file)
+    # input_formats must include both accepted extensions, e.g. ["ods", "xlsx"]
+    inject_mode: bool = False
+    filename_pattern: str = ""   # e.g. "CROTON_{stem}.ods"
 
 
 class ToolRegistry:
@@ -67,7 +76,9 @@ class ToolRegistry:
                     f"[{tool_name}] Batch {{batch_id}} processed"
                 ),
                 max_file_size_mb=tool_data.get("max_file_size_mb", 200),
-                enabled=True
+                enabled=True,
+                inject_mode=tool_data.get("extractor", {}).get("inject_mode", False),
+                filename_pattern=tool_data.get("output", {}).get("filename_pattern", ""),
             )
             
             # Ensure directories exist

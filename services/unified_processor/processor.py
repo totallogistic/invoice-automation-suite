@@ -187,12 +187,15 @@ class UnifiedProcessor:
         # Get files with the tool's accepted formats
         files = BatchOperations.get_files(processing_path, tool.input_formats)
         
-        cmd = [
-            "python3",
-            str(tool.extractor_path)
-        ] + [str(p) for p in files] + [
-            "-o", str(output_path)
-        ]
+        if tool.inject_mode:
+            cmd = self._build_inject_cmd(tool, files, output_path)
+        else:
+            cmd = [
+                "python3",
+                str(tool.extractor_path)
+            ] + [str(p) for p in files] + [
+                "-o", str(output_path)
+            ]
         
         logger.info(f"[{tool.name}] Running extractor...")
         result = subprocess.run(cmd, capture_output=True, text=True)
@@ -204,6 +207,47 @@ class UnifiedProcessor:
         report_path.write_text(result.stdout, encoding="utf-8")
 
         return output_path
+    
+    def _build_inject_cmd(self, tool: ToolConfig, files: List[Path], output_path: Path) -> List[str]:
+        """Build CLI command for inject-mode extractors (e.g. Croton).
+
+        Expects two files among *files*:
+          - one .ods  → packing-list (primary input)
+          - one .xlsx / .xls → commercial invoice (--factura)
+
+        The extractor is called with --inject so it appends the summary sheet
+        directly to the ODS instead of writing a separate output file.
+        """
+        ods_files  = [f for f in files if f.suffix.lower() == ".ods"]
+        xlsx_files = [f for f in files if f.suffix.lower() in (".xlsx", ".xls")]
+
+        if not ods_files:
+            raise RuntimeError(f"[{tool.name}] inject_mode requires an ODS file in the batch.")
+        if not xlsx_files:
+            raise RuntimeError(f"[{tool.name}] inject_mode requires an XLSX/XLS file in the batch.")
+
+        ods_file  = ods_files[0]
+        xlsx_file = xlsx_files[0]
+
+        # Resolve output filename using optional pattern, e.g. "CROTON_{stem}.ods"
+        stem = ods_file.stem
+        out_filename = (
+            tool.filename_pattern.format(stem=stem)
+            if tool.filename_pattern
+            else f"CROTON_{stem}.ods"
+        )
+        out_file = output_path / out_filename
+
+        mapping = tool.extractor_path.parent / "product_mapping.csv"
+
+        return [
+            "python3", str(tool.extractor_path),
+            str(ods_file),
+            "--factura", str(xlsx_file),
+            "--mapping", str(mapping),
+            "--inject",
+            "-o",        str(out_file),
+        ]
     
     def _get_recipients(self, tool_name: str) -> List[str]:
         """Get recipients: per-tool first, then global fallback."""
@@ -252,4 +296,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
