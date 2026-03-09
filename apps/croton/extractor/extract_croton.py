@@ -504,6 +504,11 @@ def main():
                         help="FACTURA XLSX path (optional but recommended)")
     parser.add_argument("--no-inject", action="store_true", default=False,
                         help="Write standalone ODS instead of injecting into source")
+    # Legacy flags kept for backward compatibility with existing processor.py calls
+    parser.add_argument("--inject", action="store_true", default=False,
+                        help="(legacy, now default) Inject sheet into source ODS")
+    parser.add_argument("--mapping", default=None,
+                        help="(legacy, ignored) product_mapping.csv is no longer needed")
     args = parser.parse_args()
 
     if os.path.isdir(args.output_ods):
