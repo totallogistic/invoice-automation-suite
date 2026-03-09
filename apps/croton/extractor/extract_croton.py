@@ -77,10 +77,25 @@ log = logging.getLogger(__name__)
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _parse_num(value: str) -> Optional[float]:
-    """Parse Spanish-formatted number string to float. Returns None if not a number."""
+    """
+    Parse number string to float. Handles both notations:
+      - Spanish/EU: dot = thousands sep, comma = decimal  (e.g. '1.234,56' → 1234.56)
+      - English/ODS: dot = decimal                         (e.g. '1234.56' → 1234.56)
+
+    Disambiguation rule:
+      - If the string contains a comma → Spanish format → strip dots, replace comma with dot
+      - If the string contains a dot but no comma → English format → use as-is
+      - Otherwise → integer
+    """
     if not value or value.strip() in ('#\xa1DIV/0!', '#DIV/0!', '#N/A', '#REF!', ''):
         return None
-    clean = value.strip().replace('\xa0', '').replace('.', '').replace(',', '.')
+    clean = value.strip().replace('\xa0', '')
+    if not clean:
+        return None
+    if ',' in clean:
+        # Spanish format: '1.234,56' or '1,60'
+        clean = clean.replace('.', '').replace(',', '.')
+    # else: English/plain format — use as-is (dots are decimal points)
     try:
         return float(clean)
     except ValueError:
@@ -164,43 +179,102 @@ def _detect_enriched_sheet(path: str) -> str:
 def read_hoja1_2(ods_path: str) -> list:
     """
     Read Hoja1_2 (or equivalent enriched sheet) and return one dict per
-    product-group summary row.
+    product group.
 
-    A row is a 'summary row' when col8 (CANT.TOTAL MT/UD) contains a
-    numeric value.  Individual bulto rows (col8 empty or error) are skipped.
+    Two ODS formats are supported, auto-detected from the sub-header row:
 
-    Returns list of dicts:
-      referencia, descripcion, cant_total, m2, neto, bruto, bultos, valor
+    FORMAT A — new format (MFMP-26 style, ref interna in col3):
+      col2 = DESCRIPCION, col3 = ref_interna (RF004, RFCANALE…)
+      col5 = NETO kg/bulto,  col6 = BRUTO kg/bulto
+      col8 = CANT.TOTAL (summary row), col9 = m², col13 = bultos, col14 = valor
+
+    FORMAT B — classic format (MFMP-25 manual style, arancelario already in col2):
+      col0 = BULTO, col1 = MERCANCIA, col2 = PARTIDA arancelaria, col3 = ORDEN
+      col4 = NETO kg/bulto, col5 = BRUTO kg/bulto
+      col7 = CANT.TOTAL (summary row), col8 = m², col12 = bultos, col13 = valor
+
+    In Format B the mapping step is skipped — MERCANCIA and PARTIDA are injected
+    directly into the output dict.
     """
     sheet_name = _detect_enriched_sheet(ods_path)
     rows = _read_ods_sheet(ods_path, sheet_name)
 
+    # Auto-detect format by inspecting sub-header row (row index 2 when present)
+    # Format B sub-header has 'PARTIDA' in col2 and the first data rows have numeric col2
+    fmt_b = False
+    for r in rows[2:6]:
+        if len(r) > 2 and r[2].strip().replace('.','').isdigit() and len(r[2].strip()) >= 8:
+            fmt_b = True
+            break
+
+    if fmt_b:
+        log.info("Detected FORMAT B (classic/manual style — arancelario already in col2).")
+    else:
+        log.info("Detected FORMAT A (new style — ref interna in col3).")
+
     result = []
-    for row in rows[1:]:   # skip header (row 0)
-        while len(row) < 15:
-            row.append('')
+    cur_neto  = 0.0
+    cur_bruto = 0.0
 
-        cant_total = _parse_num(row[8])
-        if cant_total is None:
-            continue   # individual bulto row -> skip
+    if fmt_b:
+        # Format B: ONE ROW per product group (each row = complete group summary).
+        # col0=BULTO(last), col1=MERCANCIA, col2=PARTIDA, col3=ORDEN
+        # col4=NETO/last-bulto, col5=BRUTO/last-bulto  ← NOT the group total
+        # col7=CANT.TOTAL, col8=m²
+        # col10=NETO_group_total, col11=BRUTO_group_total  ← USE THESE
+        # col12=BX (nº bultos), col13=VALOR
+        for row in rows[3:]:   # skip 3 header rows
+            while len(row) < 14:
+                row.append('')
+            bulto = row[0].strip()
+            if not bulto.isdigit():
+                continue
+            mercancia = row[1].strip()
+            partida   = row[2].strip()
+            if not mercancia or not partida.replace('.','').isdigit():
+                continue
+            cant_total = _parse_num(row[7])
+            if cant_total is None:
+                continue
+            result.append({
+                'referencia':      partida,
+                'descripcion':     mercancia,
+                'mercancia':       mercancia,
+                'partida_arancel': partida,
+                'cant_total':      cant_total,
+                'm2':              _parse_num(row[8])  or 0.0,
+                'neto':            _parse_num(row[10]) or 0.0,
+                'bruto':           _parse_num(row[11]) or 0.0,
+                'bultos':          _parse_num(row[12]) or 0.0,
+                'valor':           _parse_num(row[13]),
+            })
+    else:
+        # Format A: col2=DESCRIPCION, col3=ref_interna
+        for row in rows[1:]:
+            while len(row) < 15:
+                row.append('')
+            ref  = row[3].strip()
+            desc = row[2].strip()
+            if not ref or not desc:
+                continue
+            cur_neto  += _parse_num(row[5]) or 0.0
+            cur_bruto += _parse_num(row[6]) or 0.0
+            cant_total = _parse_num(row[8])
+            if cant_total is not None:
+                result.append({
+                    'referencia':  ref,
+                    'descripcion': desc,
+                    'cant_total':  cant_total,
+                    'm2':          _parse_num(row[9])  or 0.0,
+                    'neto':        round(cur_neto,  2),
+                    'bruto':       round(cur_bruto, 2),
+                    'bultos':      _parse_num(row[13]) or 0.0,
+                    'valor':       _parse_num(row[14]),
+                })
+                cur_neto  = 0.0
+                cur_bruto = 0.0
 
-        referencia  = row[3].strip()
-        descripcion = row[2].strip()
-        if not referencia or not descripcion:
-            continue
-
-        result.append({
-            'referencia':  referencia,
-            'descripcion': descripcion,
-            'cant_total':  cant_total,
-            'm2':          _parse_num(row[9])  or 0.0,
-            'neto':        _parse_num(row[11]) or 0.0,
-            'bruto':       _parse_num(row[12]) or 0.0,
-            'bultos':      _parse_num(row[13]) or 0.0,
-            'valor':       _parse_num(row[14]),   # None if empty
-        })
-
-    log.info("Read %d summary rows from sheet '%s'.", len(result), sheet_name)
+    log.info("Read %d groups from sheet '%s'.", len(result), sheet_name)
     return result
 
 
@@ -539,7 +613,17 @@ def process(
 
     lineas  = read_hoja1_2(ods_path)
     rules   = load_mapping(csv_path)
-    lineas  = apply_mapping(lineas, rules)
+
+    # Format B lines already have mercancia + partida_arancel populated — skip mapping
+    fmt_b_lines = [l for l in lineas if 'mercancia' in l]
+    fmt_a_lines = [l for l in lineas if 'mercancia' not in l]
+
+    if fmt_b_lines:
+        log.info("Format B: %d lines already have MERCANCIA/PARTIDA — skipping mapping.", len(fmt_b_lines))
+    if fmt_a_lines:
+        fmt_a_lines = apply_mapping(fmt_a_lines, rules)
+
+    lineas = fmt_b_lines + fmt_a_lines
 
     if factura_path:
         factura = load_factura(factura_path)
