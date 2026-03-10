@@ -73,33 +73,31 @@ tools:
 # Append this block to config/tools.yaml under the  tools:  list
 # ─────────────────────────────────────────────────────────────────────────────
   - name: croton
-    display_name: "Croton  Resumen Partidas Aduaneras"
+    display_name: "Croton Resumen Partidas Aduaneras"
     description: >
-      Genera el resumen de partidas aduaneras a partir del packing-list ODS
-      y la factura XLSX. El resultado se añade como hoja "Resumen_Partidas"
-      al propio ODS de entrada.
+      Genera el resumen de partidas aduaneras a partir del packing-list
+      (.ods o .xlsx) y la factura (.xlsx/.xls). El resultado se añade como
+      hoja "Resumen_Partidas" a una copia enriquecida del fichero de packing.
     enabled: true
 
     input:
-      # Both file types accepted; the processor identifies each by extension.
-      formats: [ods, xlsx]
+      formats: [ods, xlsx, xls]
 
     extractor:
+      type: python
       path: /apps/croton/extractor/extract_croton.py
-      # Signals the processor to use _build_inject_cmd instead of the
-      # default single-file command builder.
       inject_mode: true
 
     output:
-      # The enriched ODS lands here; glob pattern picks it up as artifact.
       directory: /data/croton/out
       artifacts:
         - "CROTON_*.ods"
-      # {stem} is replaced with the stem of the uploaded ODS filename.
-      filename_pattern: "CROTON_{stem}.ods"
+        - "CROTON_*.xlsx"
+        - "CROTON_*.xls"
+      filename_pattern: "CROTON_{stem}{ext}"
 
     email:
-      subject_template: "[Croton] Batch {batch_id}  Resumen Partidas listo"
+      subject_template: "[Croton] Batch {batch_id} - Resumen Partidas listo"
 
     status_dir: /data/croton/status
 

@@ -209,44 +209,74 @@ class UnifiedProcessor:
         return output_path
     
     def _build_inject_cmd(self, tool: ToolConfig, files: List[Path], output_path: Path) -> List[str]:
-        """Build CLI command for inject-mode extractors (e.g. Croton).
+        """Build CLI command for Croton-like inject extractors.
 
-        Expects two files among *files*:
-          - one .ods  → packing-list (primary input)
-          - one .xlsx / .xls → commercial invoice (--factura)
+        Accepted batch:
+        - packing: .ods or .xlsx
+        - factura: .xlsx / .xls
 
-        The extractor is called with --inject so it appends the summary sheet
-        directly to the ODS instead of writing a separate output file.
+        Resolution rules:
+        1. If there is one .ods, that is packing; one spreadsheet xlsx/xls is factura.
+        2. If there are two spreadsheet files, infer by filename:
+            - packing/invoice keywords
+        3. Fail loudly if ambiguous.
         """
-        ods_files  = [f for f in files if f.suffix.lower() == ".ods"]
-        xlsx_files = [f for f in files if f.suffix.lower() in (".xlsx", ".xls")]
+        ods_files = [f for f in files if f.suffix.lower() == ".ods"]
+        excel_files = [f for f in files if f.suffix.lower() in (".xlsx", ".xls")]
 
-        if not ods_files:
-            raise RuntimeError(f"[{tool.name}] inject_mode requires an ODS file in the batch.")
-        if not xlsx_files:
-            raise RuntimeError(f"[{tool.name}] inject_mode requires an XLSX/XLS file in the batch.")
+        packing_file = None
+        factura_file = None
 
-        ods_file  = ods_files[0]
-        xlsx_file = xlsx_files[0]
+        # Case 1: ODS + XLSX
+        if len(ods_files) == 1:
+            packing_file = ods_files[0]
+            remaining_excels = [f for f in excel_files if f != packing_file]
+            if len(remaining_excels) != 1:
+                raise RuntimeError(
+                    f"[{tool.name}] Expected exactly one invoice XLSX/XLS when packing is ODS."
+                )
+            factura_file = remaining_excels[0]
 
-        # Resolve output filename using optional pattern, e.g. "CROTON_{stem}.ods"
-        stem = ods_file.stem
-        out_filename = (
-            tool.filename_pattern.format(stem=stem)
-            if tool.filename_pattern
-            else f"CROTON_{stem}.ods"
-        )
+        # Case 2: XLSX packing + XLSX factura
+        elif len(ods_files) == 0 and len(excel_files) == 2:
+            for f in excel_files:
+                name = f.name.lower()
+                if any(k in name for k in ("packing", "packing list", "packing_list")):
+                    packing_file = f
+                elif any(k in name for k in ("factura", "invoice")):
+                    factura_file = f
+
+            if not packing_file or not factura_file:
+                raise RuntimeError(
+                    f"[{tool.name}] Could not infer packing/factura from filenames. "
+                    f"Use names containing 'packing' and 'factura'/'invoice'."
+                )
+
+        else:
+            raise RuntimeError(
+                f"[{tool.name}] inject_mode expects either "
+                f"(1 ODS + 1 XLSX/XLS) or (2 XLSX/XLS files: packing + factura)."
+            )
+
+        stem = packing_file.stem
+        output_ext = packing_file.suffix.lower()
+        filename_pattern = tool.filename_pattern or "CROTON_{stem}{ext}"
+        out_filename = filename_pattern.format(stem=stem, ext=output_ext)
         out_file = output_path / out_filename
 
         mapping = tool.extractor_path.parent / "product_mapping.csv"
 
         return [
-            "python3", str(tool.extractor_path),
-            str(ods_file),
-            "--factura", str(xlsx_file),
-            "--mapping", str(mapping),
+            "python3",
+            str(tool.extractor_path),
+            str(packing_file),
+            "--factura",
+            str(factura_file),
+            "--mapping",
+            str(mapping),
             "--inject",
-            "-o",        str(out_file),
+            "-o",
+            str(out_file),
         ]
     
     def _get_recipients(self, tool_name: str) -> List[str]:
