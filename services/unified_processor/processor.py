@@ -209,17 +209,18 @@ class UnifiedProcessor:
         return output_path
     
     def _build_inject_cmd(self, tool: ToolConfig, files: List[Path], output_path: Path) -> List[str]:
-        """Build CLI command for Croton-like inject extractors.
+        """Build CLI command for inject-mode extractors (Croton).
 
-        Accepted batch:
-        - packing: .ods or .xlsx
-        - factura: .xlsx / .xls
+        Supported batch layouts:
+        - packing .ods + factura .xlsx/.xls
+        - packing .xlsx/.xls + factura .xlsx/.xls
 
         Resolution rules:
-        1. If there is one .ods, that is packing; one spreadsheet xlsx/xls is factura.
-        2. If there are two spreadsheet files, infer by filename:
-            - packing/invoice keywords
-        3. Fail loudly if ambiguous.
+        1) If exactly one .ods is present, that file is the packing.
+        2) Otherwise infer packing/factura from the filename.
+            Packing keywords: packing, parking
+            Factura keywords: factura, invoice
+        3) If still ambiguous, fail loudly.
         """
         ods_files = [f for f in files if f.suffix.lower() == ".ods"]
         excel_files = [f for f in files if f.suffix.lower() in (".xlsx", ".xls")]
@@ -227,7 +228,6 @@ class UnifiedProcessor:
         packing_file = None
         factura_file = None
 
-        # Case 1: ODS + XLSX
         if len(ods_files) == 1:
             packing_file = ods_files[0]
             remaining_excels = [f for f in excel_files if f != packing_file]
@@ -237,11 +237,10 @@ class UnifiedProcessor:
                 )
             factura_file = remaining_excels[0]
 
-        # Case 2: XLSX packing + XLSX factura
         elif len(ods_files) == 0 and len(excel_files) == 2:
             for f in excel_files:
                 name = f.name.lower()
-                if any(k in name for k in ("packing", "packing list", "packing_list")):
+                if any(k in name for k in ("packing", "parking", "packing_list", "parking_list")):
                     packing_file = f
                 elif any(k in name for k in ("factura", "invoice")):
                     factura_file = f
@@ -249,7 +248,7 @@ class UnifiedProcessor:
             if not packing_file or not factura_file:
                 raise RuntimeError(
                     f"[{tool.name}] Could not infer packing/factura from filenames. "
-                    f"Use names containing 'packing' and 'factura'/'invoice'."
+                    f"Use names containing 'packing'/'parking' and 'factura'/'invoice'."
                 )
 
         else:
@@ -259,24 +258,20 @@ class UnifiedProcessor:
             )
 
         stem = packing_file.stem
-        output_ext = packing_file.suffix.lower()
-        filename_pattern = tool.filename_pattern or "CROTON_{stem}{ext}"
-        out_filename = filename_pattern.format(stem=stem, ext=output_ext)
+        out_ext = packing_file.suffix.lower()
+        out_filename = (
+            tool.filename_pattern.format(stem=stem, ext=out_ext)
+            if tool.filename_pattern
+            else f"CROTON_{stem}{out_ext}"
+        )
         out_file = output_path / out_filename
 
-        mapping = tool.extractor_path.parent / "product_mapping.csv"
-
         return [
-            "python3",
-            str(tool.extractor_path),
+            "python3", str(tool.extractor_path),
             str(packing_file),
-            "--factura",
-            str(factura_file),
-            "--mapping",
-            str(mapping),
+            "--factura", str(factura_file),
             "--inject",
-            "-o",
-            str(out_file),
+            "-o", str(out_file),
         ]
     
     def _get_recipients(self, tool_name: str) -> List[str]:

@@ -76,15 +76,15 @@ tools:
     display_name: "Croton Resumen Partidas Aduaneras"
     description: >
       Genera el resumen de partidas aduaneras a partir del packing-list
-      (.ods o .xlsx) y la factura (.xlsx/.xls). El resultado se añade como
-      hoja "Resumen_Partidas" a una copia enriquecida del fichero de packing.
+      (.ods o .xlsx) y la factura (.xlsx o .xls). El resultado se añade
+      como hoja "Resumen_Partidas" a una copia enriquecida del fichero
+      de packing de entrada.
     enabled: true
 
     input:
       formats: [ods, xlsx, xls]
 
     extractor:
-      type: python
       path: /apps/croton/extractor/extract_croton.py
       inject_mode: true
 
