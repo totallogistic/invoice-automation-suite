@@ -14,7 +14,7 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Dict, List, Optional
 
-SCRIPT_VERSION = "2026-03-07.v33"
+SCRIPT_VERSION = "2026-03-07.v34"
 
 try:
     import pdfplumber
@@ -758,31 +758,12 @@ def update_ods_template(template_path: Path, items: List[Dict],
         for cc in CLEAR_COLS:
             clear_cell(cell_map.get(cc))
 
-        # R2 = PESO BRUT, R4 = PESO NET: formula referencing the totals row
-        # so that if any data cell is edited, R2/R4 update automatically.
-        # Totals row is row 52 in the sheet (row index 51, 0-based).
+        # R2 = PESO BRUT, R4 = PESO NET: static values (cannot use formula
+        # referencing col N because N uses R2 -> circular reference)
         if row_idx == 1:
-            cell = cell_map.get(COL_PESO_VAL)
-            if cell is not None:
-                cell.setAttribute("formula", "of:=[.N52]")
-                cell.setAttribute("valuetype", "float")
-                cell.setAttribute("value", str(calc_peso_br))
-                for p in cell.getElementsByType(odftext.P):
-                    cell.removeChild(p)
-                p = odftext.P()
-                p.addText(str(calc_peso_br))
-                cell.appendChild(p)
+            set_numeric_value(cell_map.get(COL_PESO_VAL), calc_peso_br, str(calc_peso_br))
         if row_idx == 3:
-            cell = cell_map.get(COL_PESO_VAL)
-            if cell is not None:
-                cell.setAttribute("formula", "of:=[.O52]")
-                cell.setAttribute("valuetype", "float")
-                cell.setAttribute("value", str(calc_peso_net))
-                for p in cell.getElementsByType(odftext.P):
-                    cell.removeChild(p)
-                p = odftext.P()
-                p.addText(str(calc_peso_net))
-                cell.appendChild(p)
+            set_numeric_value(cell_map.get(COL_PESO_VAL), calc_peso_net, str(calc_peso_net))
 
         if item_idx < len(items):
             item = items[item_idx]
