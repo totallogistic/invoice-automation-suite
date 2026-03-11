@@ -14,7 +14,7 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Dict, List, Optional
 
-SCRIPT_VERSION = "2026-03-07.v34"
+SCRIPT_VERSION = "2026-03-07.v35"
 
 try:
     import pdfplumber
@@ -709,8 +709,8 @@ def update_ods_template(template_path: Path, items: List[Dict],
     total_opr = sum(item.get("opr_material") or 0 for item in items)
     total_pallets = sum(item.get("project_pallets") or 0 for item in items)
     total_peso_net_items = sum(item.get("partial_weight") or 0 for item in items)
-    calc_peso_br = round(total_peso_net_items * brut_net_ratio)  # integer, matches template style
     calc_peso_net = sum(round(item.get("partial_weight") or 0) for item in items)  # sum of per-row integers
+    calc_peso_br = round(calc_peso_net * brut_net_ratio)  # use integer net to match R2/R4 formula result
 
     item_idx = 0
 
