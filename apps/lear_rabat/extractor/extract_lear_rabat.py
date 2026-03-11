@@ -14,7 +14,7 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Dict, List, Optional
 
-SCRIPT_VERSION = "2026-03-07.v31"
+SCRIPT_VERSION = "2026-03-07.v32"
 
 try:
     import pdfplumber
@@ -514,7 +514,7 @@ def add_summary_sheet(doc, items: List[Dict], invoice_data: Dict,
 
         descripcion, partida = code_mapping.get(code_int, ("#N/D", "#N/D"))
 
-        pw = item.get("partial_weight") or 0
+        pw = round(item.get("partial_weight") or 0)  # integer, matches template
         peso_br = pw * brut_net_ratio
 
         enriched.append({
@@ -560,7 +560,7 @@ def add_summary_sheet(doc, items: List[Dict], invoice_data: Dict,
         Columns: desc, partida, palets, valor_dua, opr, peso_br, peso_net, un
         Integer cols: palets(2), un(7). All others keep natural decimals.
         """
-        INT_COLS = {2, 5, 7}  # palets, peso_br, UN - all shown as integers
+        INT_COLS = {2, 5, 6, 7}  # palets, peso_br, peso_net, UN - all integers
         tr = table.TableRow()
         for col_idx, (val, is_num, is_header) in enumerate(cells_data):
             tc = table.TableCell()
@@ -710,7 +710,7 @@ def update_ods_template(template_path: Path, items: List[Dict],
     total_pallets = sum(item.get("project_pallets") or 0 for item in items)
     total_peso_net_items = sum(item.get("partial_weight") or 0 for item in items)
     calc_peso_br = round(total_peso_net_items * brut_net_ratio)  # integer, matches template style
-    calc_peso_net = round(total_peso_net_items, 2)
+    calc_peso_net = sum(round(item.get("partial_weight") or 0) for item in items)  # sum of per-row integers
 
     item_idx = 0
 
@@ -735,23 +735,22 @@ def update_ods_template(template_path: Path, items: List[Dict],
             cell_map = build_cell_map(row, DATA_WRITE_COLS)
 
         if is_totals_row:
-            # Clear source cells
-            for cc in CLEAR_COLS:
-                clear_cell(cell_map.get(cc))
-            clear_cell(cell_map.get(COL_PESO_BR))
-
-            # Always use our own calculated totals (invoice totals may be wrong)
-            final_valor = total_valor
-            final_opr = total_opr
-            final_pallets = total_pallets
-            # Use pre-calculated totals (consistent with R2/R4 and Resumen)
-            set_numeric_value(cell_map.get(COL_VALOR_DUA), final_valor)
-            set_numeric_value(cell_map.get(COL_OPR_MAT), final_opr)
-            set_numeric_value(cell_map.get(COL_PALETS), final_pallets, str(final_pallets))
-            set_numeric_value(cell_map.get(COL_PESO_BR), calc_peso_br,
-                              f'{calc_peso_br:.2f}'.replace(".", ","))
-            set_numeric_value(cell_map.get(COL_PESO_NET), calc_peso_net,
-                              f'{calc_peso_net:.2f}'.replace(".", ","))
+            # Preserve the SUM() formulas the template has in this row.
+            # We only update the cached office:value so the file opens correctly
+            # without recalculation, while letting LibreOffice/Excel recompute
+            # the real sum from the data rows we just wrote.
+            total_valor = sum(item.get("subtotal_price") or 0 for item in items)
+            total_opr   = sum(item.get("opr_material") or 0 for item in items)
+            total_pallets = sum(item.get("project_pallets") or 0 for item in items)
+            total_peso_net_int = sum(round(item.get("partial_weight") or 0) for item in items)
+            update_formula_cache(cell_map.get(COL_VALOR_DUA), total_valor,
+                                 format_eu_number(total_valor))
+            update_formula_cache(cell_map.get(COL_OPR_MAT), total_opr,
+                                 format_eu_number(total_opr))
+            update_formula_cache(cell_map.get(COL_PALETS), total_pallets, str(total_pallets))
+            update_formula_cache(cell_map.get(COL_PESO_BR), calc_peso_br, str(calc_peso_br))
+            update_formula_cache(cell_map.get(COL_PESO_NET), total_peso_net_int,
+                                 str(total_peso_net_int))
             continue
 
         # --- DATA ROWS ---
@@ -794,11 +793,11 @@ def update_ods_template(template_path: Path, items: List[Dict],
             if pallets is not None:
                 set_numeric_value(cell_map.get(COL_PALETS), pallets, str(pallets))
 
-            # PESO NET (col O)
+            # PESO NET (col O) - stored as integer to match template style
             partial_weight = item.get("partial_weight")
             if partial_weight is not None:
-                set_numeric_value(cell_map.get(COL_PESO_NET), partial_weight,
-                                  f'{partial_weight:.2f}'.replace(".", ","))
+                pw_int = round(partial_weight)
+                set_numeric_value(cell_map.get(COL_PESO_NET), pw_int, str(pw_int))
 
             # UN / quantity (col P)
             quantity = item.get("quantity")
