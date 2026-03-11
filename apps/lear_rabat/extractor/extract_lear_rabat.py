@@ -14,7 +14,7 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Dict, List, Optional
 
-SCRIPT_VERSION = "2026-03-07.v35"
+SCRIPT_VERSION = "2026-03-07.v36"
 
 try:
     import pdfplumber
@@ -751,6 +751,8 @@ def update_ods_template(template_path: Path, items: List[Dict],
             update_formula_cache(cell_map.get(COL_PESO_BR), calc_peso_br, str(calc_peso_br))
             update_formula_cache(cell_map.get(COL_PESO_NET), total_peso_net_int,
                                  str(total_peso_net_int))
+            total_un = sum(int(item.get("quantity") or 0) for item in items)
+            update_formula_cache(cell_map.get(COL_UN), total_un, str(total_un))
             continue
 
         # --- DATA ROWS ---
