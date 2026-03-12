@@ -10,11 +10,55 @@ Usage (unified processor interface):
 import argparse
 import re
 import sys
+
+SCRIPT_VERSION = "2026-03-12.v40"
+
+SCRIPT_CHANGELOG = """
+## 2026-03-12.v40
+
+### Logica general
+Extrae datos de facturas PDF de Lear Rabat (Marruecos) y genera archivos ODS
+listos para tramitacion DUA, usando una plantilla ODS como base.
+
+### Extraccion PDF
+- Detecta automaticamente formato de numeros US (1,234.56) o EU (1.234,56)
+- Extrae por factura: numero, fecha, pallets, peso bruto/neto totales
+- Extrae por linea: codigo parte, descripcion, codigo HS, cantidad, precio
+  unitario, subtotal, OPR Material Cost, Partial Weight, pallets por proyecto
+
+### Columnas generadas en Sheet1
+- G: Codigo parte (numerico, sin ceros iniciales)
+- J: Valor DUA (subtotal FG)
+- K: OPR Material Cost (7009)
+- L: Pallets por proyecto
+- M: V.E = J + K  (formula preservada del template)
+- N: PESO BR = (O * R2) / R4  (formula preservada, cache actualizado)
+- O: PESO NET por linea (2 decimales, del PDF)
+- P: Unidades (cantidad)
+- R: FACTURA - valores totales segun el PDF (R2=PESO BRUT, R4=PESO NET)
+- S: CALCULO - nuestros totales calculados (pre-ajuste)
+- T: DIFF - diferencia CALCULO - FACTURA
+- U: Nota de ajuste automatico (registro, valor antes y despues)
+
+### Ajuste automatico de pesos
+Si la suma de PESO NET de las lineas no coincide exactamente con el total
+del PDF, la diferencia se suma al ultimo registro para que la columna O
+sume exactamente el total de la factura. PESO BR se recalcula
+automaticamente via la formula de la columna N al abrir el archivo.
+La columna R/S/T/U documenta el ajuste para trazabilidad.
+
+### Hoja Resumen
+Agrupa por (DESCRIPCION, PARTIDA) con totales de:
+PALETS, VALOR DUA, 7009, PESO BR, PESO NET, UN.
+- PESO NET por grupo: suma de decimales de Sheet1
+- PESO BR total: total_peso_net * ratio (evita acumulacion de redondeos)
+- Fila Total Resultado refleja los mismos totales que Sheet1
+""".strip()
 from collections import defaultdict
 from pathlib import Path
 from typing import Dict, List, Optional
 
-SCRIPT_VERSION = "2026-03-07.v36"
+SCRIPT_VERSION = "2026-03-07.v31"
 
 try:
     import pdfplumber
@@ -514,8 +558,8 @@ def add_summary_sheet(doc, items: List[Dict], invoice_data: Dict,
 
         descripcion, partida = code_mapping.get(code_int, ("#N/D", "#N/D"))
 
-        pw = round(item.get("partial_weight") or 0)  # integer, matches template
-        peso_br = pw * brut_net_ratio
+        pw = round(item.get("partial_weight") or 0, 2)
+        peso_br = round(pw * brut_net_ratio, 2)
 
         enriched.append({
             "descripcion": descripcion,
@@ -533,14 +577,11 @@ def add_summary_sheet(doc, items: List[Dict], invoice_data: Dict,
         "palets": 0, "valor_dua": 0.0, "opr": 0.0,
         "peso_br": 0.0, "peso_net": 0.0, "un": 0
     })
-    desc_order = []  # track insertion order
     desc_seen = set()
 
     for e in enriched:
         key = (e["descripcion"], e["partida"])
-        if e["descripcion"] not in desc_seen:
-            desc_order.append(e["descripcion"])
-            desc_seen.add(e["descripcion"])
+        desc_seen.add(e["descripcion"])
         g = groups[key]
         g["palets"] += e["palets"]
         g["valor_dua"] += e["valor_dua"]
@@ -557,20 +598,18 @@ def add_summary_sheet(doc, items: List[Dict], invoice_data: Dict,
 
     def make_row(*cells_data):
         """cells_data: list of (value, is_numeric, bold_header)
-        Columns: desc, partida, palets, valor_dua, opr, peso_br, peso_net, un
-        Integer cols: palets(2), un(7). All others keep natural decimals.
+        Integer cols: palets(2), peso_br(5), peso_net(6), UN(7).
         """
-        INT_COLS = {2, 5, 6, 7}  # palets, peso_br, peso_net, UN - all integers
+        INT_COLS = {2, 7}  # palets and UN as integers; peso_br/net keep 2 decimals
         tr = table.TableRow()
         for col_idx, (val, is_num, is_header) in enumerate(cells_data):
             tc = table.TableCell()
             if is_num and val is not None:
-                float_val = float(val)  # no rounding
-                is_int_col = col_idx in INT_COLS
+                float_val = float(val)
                 tc.setAttribute("valuetype", "float")
                 tc.setAttribute("value", str(float_val))
                 p = odftext.P()
-                if is_int_col:
+                if col_idx in INT_COLS:
                     p.addText(str(round(float_val)))
                 else:
                     p.addText(format_eu_number(float_val))
@@ -600,7 +639,7 @@ def add_summary_sheet(doc, items: List[Dict], invoice_data: Dict,
                "Suma - 7009", "Suma - PESO BR", "Suma - PESO NET", "Suma - UN"]
     summary_table.addElement(make_header_row(*headers))
 
-    # Data rows - group by DESCRIPCION (blank DESCRIPCION on 2nd+ rows of same group)
+    # Data rows
     prev_desc = None
     totals = {k: 0 for k in ["palets", "valor_dua", "opr", "peso_br", "peso_net", "un"]}
 
@@ -610,7 +649,7 @@ def add_summary_sheet(doc, items: List[Dict], invoice_data: Dict,
         display_desc = desc if desc != prev_desc else ""
         prev_desc = desc
 
-        row_data = [
+        summary_table.addElement(make_row(
             (display_desc, False, False),
             (partida, False, False),
             (g["palets"], True, False),
@@ -619,29 +658,28 @@ def add_summary_sheet(doc, items: List[Dict], invoice_data: Dict,
             (g["peso_br"], True, False),
             (g["peso_net"], True, False),
             (g["un"], True, False),
-        ]
-        summary_table.addElement(make_row(*row_data))
+        ))
 
-        totals["palets"] += g["palets"]
+        totals["palets"]    += g["palets"]
         totals["valor_dua"] += g["valor_dua"]
-        totals["opr"] += g["opr"]
-        totals["peso_br"] += g["peso_br"]
-        totals["peso_net"] += g["peso_net"]
-        totals["un"] += g["un"]
+        totals["opr"]       += g["opr"]
+        totals["peso_br"]   += g["peso_br"]
+        totals["peso_net"]  += g["peso_net"]
+        totals["un"]        += g["un"]
 
     # Totals row
-    # Use calc totals from main sheet for PESO BR/NET to ensure consistency
-    total_row = [
+    summary_table.addElement(make_row(
         ("Total Resultado", False, True),
         ("", False, True),
-        (totals["palets"], True, True),
-        (totals["valor_dua"], True, True),
-        (totals["opr"], True, True),
-        (round(totals["peso_br"]), True, True),
-        (totals["peso_net"], True, True),
-        (totals["un"], True, True),
-    ]
-    summary_table.addElement(make_row(*total_row))
+        (totals["palets"],            True, True),
+        (totals["valor_dua"],         True, True),
+        (totals["opr"],               True, True),
+        # Use total_net * ratio to avoid accumulated rounding errors across rows
+        # This gives exactly peso_brut since NET was auto-adjusted to match invoice
+        (round(totals["peso_net"] * brut_net_ratio, 2), True, True),
+        (round(totals["peso_net"], 2), True, True),
+        (totals["un"],                True, True),
+    ))
 
     # Remove existing Resumen sheet if present
     for existing in doc.spreadsheet.getElementsByType(table.Table):
@@ -686,11 +724,14 @@ def update_ods_template(template_path: Path, items: List[Dict],
     COL_PESO_BR = 13  # PESO BR = (O*R2)/R4  <- FORMULA per row, value for totals
     COL_PESO_NET = 14
     COL_UN = 15
-    COL_PESO_VAL = 17
+    COL_PESO_VAL = 17   # R: FACTURA values (PDF)
+    COL_CALCULO  = 18   # S: our calculated values
+    COL_DIFF     = 19   # T: difference CALCULO - FACTURA
+    COL_NOTE     = 20   # U: adjustment note
 
     # Columns where we split and write direct values (no formula kept)
     DATA_WRITE_COLS = {COL_CODE_G, COL_VALOR_DUA, COL_OPR_MAT, COL_PALETS,
-                       COL_PESO_NET, COL_UN, COL_PESO_VAL}
+                       COL_PESO_NET, COL_UN, COL_PESO_VAL, COL_CALCULO, COL_DIFF, COL_NOTE}
 
     # For totals row: also write direct value to PESO BR (replaces formula there)
     TOTAL_WRITE_COLS = DATA_WRITE_COLS | {COL_PESO_BR}
@@ -704,13 +745,32 @@ def update_ods_template(template_path: Path, items: List[Dict],
     peso_net_total = invoice_data.get("peso_net") or 0
     brut_net_ratio = peso_brut / peso_net_total if peso_net_total > 0 else 1.0
 
+    # Auto-adjust last item's partial_weight so NET sum == PDF total exactly.
+    # This means PESO BR (formula =(O*R2)/R4) will also recalculate to match
+    # the invoice total automatically when the file is opened in LibreOffice.
+    if items and peso_net_total:
+        raw_sum = sum(item.get("partial_weight") or 0 for item in items)
+        net_diff = round(peso_net_total - raw_sum, 4)
+        if net_diff != 0:
+            last = items[-1]
+            _pw_before = round((last.get("partial_weight") or 0), 2)
+            last["partial_weight"] = round(_pw_before + net_diff, 2)
+            _pw_after  = last["partial_weight"]
+            # Store pre-adjustment values and item info for display in ODS col R/S/T
+            invoice_data["_adj_net_diff"]      = net_diff
+            invoice_data["_adj_net_raw"]       = round(raw_sum, 2)
+            invoice_data["_adj_br_raw"]        = round(raw_sum * brut_net_ratio, 2)
+            invoice_data["_adj_item_code"]     = last.get("code", "")
+            invoice_data["_adj_item_idx"]      = len(items) - 1
+            invoice_data["_adj_item_pw_before"]= _pw_before
+            invoice_data["_adj_item_pw_after"] = _pw_after
+            print(f"  [AUTO] PESO NET ajustado: +{net_diff} al ultimo item "
+                  f"({last.get('code','')}) -> suma={peso_net_total}")
+
     # Pre-calculate totals
     total_valor = sum(item.get("subtotal_price") or 0 for item in items)
     total_opr = sum(item.get("opr_material") or 0 for item in items)
     total_pallets = sum(item.get("project_pallets") or 0 for item in items)
-    total_peso_net_items = sum(item.get("partial_weight") or 0 for item in items)
-    calc_peso_net = sum(round(item.get("partial_weight") or 0) for item in items)  # sum of per-row integers
-    calc_peso_br = round(calc_peso_net * brut_net_ratio)  # use integer net to match R2/R4 formula result
 
     item_idx = 0
 
@@ -742,15 +802,18 @@ def update_ods_template(template_path: Path, items: List[Dict],
             total_valor = sum(item.get("subtotal_price") or 0 for item in items)
             total_opr   = sum(item.get("opr_material") or 0 for item in items)
             total_pallets = sum(item.get("project_pallets") or 0 for item in items)
-            total_peso_net_int = sum(round(item.get("partial_weight") or 0) for item in items)
+            # Decimal sums - match what the per-row values actually add up to
+            sum_peso_net = round(sum(item.get("partial_weight") or 0 for item in items), 2)
+            sum_peso_br  = round(sum_peso_net * brut_net_ratio, 2)
             update_formula_cache(cell_map.get(COL_VALOR_DUA), total_valor,
                                  format_eu_number(total_valor))
             update_formula_cache(cell_map.get(COL_OPR_MAT), total_opr,
                                  format_eu_number(total_opr))
             update_formula_cache(cell_map.get(COL_PALETS), total_pallets, str(total_pallets))
-            update_formula_cache(cell_map.get(COL_PESO_BR), calc_peso_br, str(calc_peso_br))
-            update_formula_cache(cell_map.get(COL_PESO_NET), total_peso_net_int,
-                                 str(total_peso_net_int))
+            update_formula_cache(cell_map.get(COL_PESO_BR), sum_peso_br,
+                                 str(round(sum_peso_br)))
+            update_formula_cache(cell_map.get(COL_PESO_NET), sum_peso_net,
+                                 format_eu_number(sum_peso_net))
             total_un = sum(int(item.get("quantity") or 0) for item in items)
             update_formula_cache(cell_map.get(COL_UN), total_un, str(total_un))
             continue
@@ -760,12 +823,51 @@ def update_ods_template(template_path: Path, items: List[Dict],
         for cc in CLEAR_COLS:
             clear_cell(cell_map.get(cc))
 
-        # R2 = PESO BRUT, R4 = PESO NET: static values (cannot use formula
-        # referencing col N because N uses R2 -> circular reference)
+        # Col R=FACTURA  S=CALCULO  T=DIFF  U=nota ajuste
+        # Rows 2/3: PESO BRUT (pre / post ajuste)
+        # Rows 4/5: PESO NET  (pre / post ajuste)
+        _adj_code = invoice_data.get("_adj_item_code", "")
+        _adj_diff = invoice_data.get("_adj_net_diff", 0)
         if row_idx == 1:
-            set_numeric_value(cell_map.get(COL_PESO_VAL), calc_peso_br, str(calc_peso_br))
+            # PESO BRUT - pre ajuste (raw PDF-derived calc)
+            _raw_br  = invoice_data.get("_adj_br_raw") or round(
+                sum(item.get("partial_weight") or 0 for item in items) * brut_net_ratio, 2)
+            _diff_br = round(_raw_br - peso_brut, 2)
+            set_numeric_value(cell_map.get(COL_PESO_VAL), peso_brut, format_eu_number(peso_brut))
+            set_numeric_value(cell_map.get(COL_CALCULO),  _raw_br,   format_eu_number(_raw_br))
+            set_numeric_value(cell_map.get(COL_DIFF),     _diff_br,  format_eu_number(_diff_br))
+        if row_idx == 2:
+            # PESO BRUT - post ajuste (after NET correction, formula recalculates)
+            _post_br  = round(peso_net_total * brut_net_ratio, 2)
+            set_numeric_value(cell_map.get(COL_PESO_VAL), peso_brut,  format_eu_number(peso_brut))
+            set_numeric_value(cell_map.get(COL_CALCULO),  _post_br,   format_eu_number(_post_br))
+            set_numeric_value(cell_map.get(COL_DIFF),     0.0,        "0,00")
+            if _adj_code:
+                # BRUT recalculates via formula from NET; show NET adjustment made
+                _pw_b = invoice_data.get("_adj_item_pw_before", 0)
+                _pw_a = invoice_data.get("_adj_item_pw_after", 0)
+                set_cell_value(cell_map.get(COL_NOTE),
+                               f"BRUT recalculado via formula | "
+                               f"NET ajustado en {_adj_code}: {_pw_b} -> {_pw_a} ({_adj_diff:+.4f})")
         if row_idx == 3:
-            set_numeric_value(cell_map.get(COL_PESO_VAL), calc_peso_net, str(calc_peso_net))
+            # PESO NET - pre ajuste
+            _raw_net  = invoice_data.get("_adj_net_raw") or round(
+                sum(item.get("partial_weight") or 0 for item in items), 2)
+            _diff_net = round(_raw_net - peso_net_total, 2)
+            set_numeric_value(cell_map.get(COL_PESO_VAL), peso_net_total, format_eu_number(peso_net_total))
+            set_numeric_value(cell_map.get(COL_CALCULO),  _raw_net,        format_eu_number(_raw_net))
+            set_numeric_value(cell_map.get(COL_DIFF),     _diff_net,       format_eu_number(_diff_net))
+        if row_idx == 4:
+            # PESO NET - post ajuste
+            _post_net = round(sum(item.get("partial_weight") or 0 for item in items), 2)
+            set_numeric_value(cell_map.get(COL_PESO_VAL), peso_net_total, format_eu_number(peso_net_total))
+            set_numeric_value(cell_map.get(COL_CALCULO),  _post_net,       format_eu_number(_post_net))
+            set_numeric_value(cell_map.get(COL_DIFF),     0.0,             "0,00")
+            if _adj_code:
+                _pw_b = invoice_data.get("_adj_item_pw_before", 0)
+                _pw_a = invoice_data.get("_adj_item_pw_after", 0)
+                set_cell_value(cell_map.get(COL_NOTE),
+                               f"ajuste en {_adj_code}: {_pw_b} -> {_pw_a} ({_adj_diff:+.4f})")
 
         if item_idx < len(items):
             item = items[item_idx]
@@ -797,8 +899,9 @@ def update_ods_template(template_path: Path, items: List[Dict],
             # PESO NET (col O) - stored as integer to match template style
             partial_weight = item.get("partial_weight")
             if partial_weight is not None:
-                pw_int = round(partial_weight)
-                set_numeric_value(cell_map.get(COL_PESO_NET), pw_int, str(pw_int))
+                pw_val = round(partial_weight, 2)
+                set_numeric_value(cell_map.get(COL_PESO_NET), pw_val,
+                                  format_eu_number(pw_val))
 
             # UN / quantity (col P)
             quantity = item.get("quantity")
@@ -820,7 +923,8 @@ def update_ods_template(template_path: Path, items: List[Dict],
             update_formula_cache(cell_map.get(COL_VE), ve_val)
 
             pb_val = (partial_weight or 0) * brut_net_ratio
-            update_formula_cache(cell_map.get(COL_PESO_BR), pb_val)
+            update_formula_cache(cell_map.get(COL_PESO_BR), pb_val,
+                                 str(round(pb_val)))
 
             item_idx += 1
         else:
@@ -847,17 +951,19 @@ def process_invoice(pdf_path: Path, template_path: Path, output_dir: Path) -> Pa
     items = extract_line_items(text, fmt)
     invoice_no = invoice_data.get("invoice_no", "UNKNOWN")
 
-    # --- Summary & difference check vs PDF ---
+    # --- Summary & difference check vs PDF (before auto-adjustment) ---
     calc_valor = sum(item.get("subtotal_price") or 0 for item in items)
     calc_opr   = sum(item.get("opr_material") or 0 for item in items)
     calc_pnet  = sum(item.get("partial_weight") or 0 for item in items)
     pdf_pbrut  = invoice_data.get("peso_brut") or 0
     pdf_pnet   = invoice_data.get("peso_net") or 0
     ratio      = pdf_pbrut / pdf_pnet if pdf_pnet > 0 else 1.0
-    calc_pbrut = round(calc_pnet * ratio)
+    calc_pbrut = round(calc_pnet * ratio, 2)
 
     pdf_valor = invoice_data.get("total_invoice") or 0
     pdf_opr   = invoice_data.get("total_opr") or 0
+
+    print(f"  Invoice: {invoice_no}, Items: {len(items)}, Pallets: {invoice_data.get('pallets')}")
 
     diffs = []
     if pdf_valor and abs(pdf_valor - calc_valor) > 0.01:
@@ -865,14 +971,12 @@ def process_invoice(pdf_path: Path, template_path: Path, output_dir: Path) -> Pa
     if pdf_opr and abs(pdf_opr - calc_opr) > 0.01:
         diffs.append(f"  OPR 7009  : PDF {pdf_opr:>12.2f}  CALC {calc_opr:>12.2f}  DIFF {calc_opr-pdf_opr:+.2f}")
     if pdf_pnet and abs(pdf_pnet - calc_pnet) > 0.01:
-        diff_pn = calc_pnet - pdf_pnet
-        diffs.append(f"  Peso Net  : PDF {pdf_pnet:>12.2f}  CALC {calc_pnet:>12.2f}  DIFF {diff_pn:+.2f}")
-    if pdf_pbrut and abs(pdf_pbrut - calc_pbrut) > 0.5:
-        diffs.append(f"  Peso Brut : PDF {pdf_pbrut:>12.0f}  CALC {calc_pbrut:>12.0f}  DIFF {calc_pbrut-pdf_pbrut:+.0f}")
+        diffs.append(f"  Peso Net  : PDF {pdf_pnet:>12.2f}  CALC {calc_pnet:>12.2f}  DIFF {calc_pnet-pdf_pnet:+.2f}  [AUTO-ajustado]")
+    if pdf_pbrut and abs(pdf_pbrut - calc_pbrut) > 0.01:
+        diffs.append(f"  Peso Brut : PDF {pdf_pbrut:>12.2f}  CALC {calc_pbrut:>12.2f}  DIFF {calc_pbrut-pdf_pbrut:+.2f}  [recalc via formula]")
 
-    print(f"  Invoice: {invoice_no}, Items: {len(items)}, Pallets: {invoice_data.get('pallets')}")
     if diffs:
-        warn_msg = "AVISO - Diferencias entre totales del PDF y calculos propios:\n" + "\n".join(diffs)
+        warn_msg = "AVISO - Diferencias pre-ajuste (se corrigen automaticamente):\n" + "\n".join(diffs)
         print(f"  {warn_msg}")
         invoice_data["_warnings"] = warn_msg
     else:
