@@ -177,22 +177,27 @@
     </header>
     <main>
     <p class="muted">
-      Sube el ODS de packing-list (Hoja5) y el XLSX con el mapeo de productos.
+      Sube el packing-list (<strong>.ods</strong>, <strong>.xlsx</strong> o <strong>.xls</strong>)
+      y la factura (<strong>.xlsx</strong> o <strong>.xls</strong>).
       La herramienta añade una nueva pestaña <strong>Resumen_Partidas</strong>
-      al ODS original con el resumen por partida aduanera.
+      a una copia del fichero de packing con el resumen por partida aduanera.
     </p>
 
     <div class="card">
       <div class="file-row">
         <div class="file-field">
-          <label>📄 Packing list ODS <span style="color:#dc2626">*</span></label>
-          <input id="odsInput" type="file" accept=".ods,application/vnd.oasis.opendocument.spreadsheet" />
-          <span class="hint">Formato ODS con hoja Hoja5</span>
+          <label>📄 Packing list <span style="color:#dc2626">*</span></label>
+          <input
+            id="packingInput"
+            type="file"
+            accept=".ods,.xlsx,.xls,application/vnd.oasis.opendocument.spreadsheet,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
+          />
+          <span class="hint">Formatos permitidos: ODS, XLSX, XLS</span>
         </div>
         <div class="file-field">
-          <label>📊 Mapeo de productos XLSX <span style="color:#dc2626">*</span></label>
-          <input id="xlsxInput" type="file" accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" />
-          <span class="hint">Columnas: CODIGO, DESCRIPCION_CONTAINS, MERCANCIA, PARTIDA</span>
+          <label>🧾 Factura <span style="color:#dc2626">*</span></label>
+          <input id="invoiceInput" type="file" accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" />
+          <span class="hint">Formatos permitidos: XLSX, XLS</span>
         </div>
       </div>
       <div class="row">
@@ -294,7 +299,7 @@
 
         let html = "";
         if (stage === "DONE" || state === "DONE") {
-          html = `<div class="ok">✓ Lote finalizado. ODS con pestaña Resumen_Partidas enviado a: <span class="mono">${rec.join(", ") || "—"}</span></div>`;
+          html = `<div class="ok">✓ Lote finalizado. Fichero de packing enriquecido con la pestaña Resumen_Partidas enviado a: <span class="mono">${rec.join(", ") || "—"}</span></div>`;
           stopPolling();
         } else if (stage === "ERROR" || state === "ERROR") {
           html = `<div class="error">✗ Error en procesamiento. Revisa logs: docker compose logs unified_processor</div>`;
@@ -320,20 +325,20 @@
       }
 
       $("btnUpload").addEventListener("click", async () => {
-        const odsFile  = $("odsInput").files[0];
-        const xlsxFile = $("xlsxInput").files[0];
+        const packingFile = $("packingInput").files[0];
+        const invoiceFile = $("invoiceInput").files[0];
 
-        if (!odsFile) {
-          return setUploadMsg("Selecciona el archivo ODS de packing-list.", true);
+        if (!packingFile) {
+          return setUploadMsg("Selecciona el archivo de packing-list.", true);
         }
-        if (!odsFile.name.toLowerCase().endsWith(".ods")) {
-          return setUploadMsg(`Archivo ODS no válido: ${odsFile.name}`, true);
+        if (!/\.(ods|xlsx|xls)$/i.test(packingFile.name)) {
+          return setUploadMsg(`Archivo de packing no válido: ${packingFile.name}`, true);
         }
-        if (!xlsxFile) {
-          return setUploadMsg("Selecciona el archivo XLSX de mapeo de productos.", true);
+        if (!invoiceFile) {
+          return setUploadMsg("Selecciona el archivo de factura.", true);
         }
-        if (!/\.(xlsx|xls)$/i.test(xlsxFile.name)) {
-          return setUploadMsg(`Archivo XLSX no válido: ${xlsxFile.name}`, true);
+        if (!/\.(xlsx|xls)$/i.test(invoiceFile.name)) {
+          return setUploadMsg(`Archivo de factura no válido: ${invoiceFile.name}`, true);
         }
 
         setUploadMsg("Subiendo…");
@@ -343,8 +348,8 @@
 
         try {
           const fd = new FormData();
-          fd.append("files", odsFile,  odsFile.name);
-          fd.append("files", xlsxFile, xlsxFile.name);
+          fd.append("files", packingFile, packingFile.name);
+          fd.append("files", invoiceFile, invoiceFile.name);
 
           const r = await fetch("/api/croton/batches", { method: "POST", body: fd });
           if (!r.ok) {
