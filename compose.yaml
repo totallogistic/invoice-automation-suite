@@ -1,102 +1,68 @@
+version: '3.8'
+
 services:
-
-  processor_lear_cable:
+  
+  unified_api:
     build:
-      context: ./services/processor
+      context: ./services/unified_api
     restart: unless-stopped
     environment:
-      - SERVICE_ROOT=/data
-      - INBOX_DIR=/data/inbox
-      - PROCESSING_DIR=/data/processing
-      - OUT_DIR=/data/out
-      - PROCESSED_DIR=/data/processed
-      - ERROR_DIR=/data/error
-
-      - DONE_MARKER=${DONE_MARKER:-_DONE}
-      - POLL_SECONDS=${POLL_SECONDS:-3}
-      - BATCH_QUIET_SECONDS=${BATCH_QUIET_SECONDS}
-
-      - EXTRACTOR_PATH=/app/extractor/extract_lear_fields.py
-
-      - EMAIL_MODE=${EMAIL_MODE:-BATCH_ONLY}
-      - SMTP_HOST=${SMTP_HOST:-}
-      - SMTP_PORT=${SMTP_PORT:-587}
-      - SMTP_USER=${SMTP_USER:-}
-      - SMTP_PASS=${SMTP_PASS:-}
-      - MAIL_FROM=${MAIL_FROM:-}
-      - MAIL_TO=${MAIL_TO:-}
-
+      - CONFIG_PATH=/config/tools.yaml
+      - DATA_ROOT=${DATA_ROOT:-/data}
     volumes:
-      # IMPORTANT:
-      # DATA_ROOT se parametriza por stack. Si haces pre/prod, pon DATA_ROOT distinto.
-      - ${DATA_ROOT:-${STACK_ROOT:-/data/ias_prod}/data}:/data
-      - ./apps/lear_cable/extractor:/app/extractor:ro
+      - ${DATA_ROOT:-/data}:/data
+      - ./config:/config:ro
+      - ./libs/iasuite_common:/usr/local/lib/python3.12/site-packages/iasuite_common:ro
+      - ./apps:/app/apps:ro
+    ports:
+      - "${UNIFIED_API_PORT:-8000}:8000"  
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
-  processor_import_partida:
+  unified_processor:
     build:
-      context: services/processor
-    command: ["python3", "/app/watcher_import_partida.py"]
+      context: ./services/unified_processor
     restart: unless-stopped
     environment:
-      - SERVICE_ROOT=/data
-      - INBOX_DIR=/data/import_partida/inbox
-      - STATUS_DIR=/data/import_partida/status
-      - OUT_DIR=/data/import_partida/out
-
-      - POLL_SECONDS=${POLL_SECONDS:-3}
-      - BATCH_QUIET_SECONDS=${BATCH_QUIET_SECONDS:-30}
-
-      - EMAIL_MODE=${EMAIL_MODE:-BATCH_ONLY}
-      - SMTP_HOST=${SMTP_HOST:-}
+      - CONFIG_PATH=/config/tools.yaml
+      - DATA_ROOT=/data
+      - POLL_SECONDS=${POLL_SECONDS:-1}
+      - BATCH_QUIET_SECONDS=${BATCH_QUIET_SECONDS:-5}
+      - SMTP_HOST=${SMTP_HOST}
       - SMTP_PORT=${SMTP_PORT:-587}
-      - SMTP_USER=${SMTP_USER:-}
-      - SMTP_PASS=${SMTP_PASS:-}
-      - MAIL_FROM=${MAIL_FROM:-}
-      - MAIL_TO=${MAIL_TO:-}
+      - SMTP_USER=${SMTP_USER}
+      - SMTP_PASS=${SMTP_PASS}
+      - MAIL_FROM=${MAIL_FROM}
+      - MAIL_TO=${MAIL_TO}
+      - MAIL_TO_LEAR_CABLE=${MAIL_TO_LEAR_CABLE:-}
+      - MAIL_TO_LEAR_RABAT=${MAIL_TO_LEAR_RABAT:-}
+      - MAIL_TO_CUADRE_ASIENTOS=${MAIL_TO_CUADRE_ASIENTOS:-}
+      - MAIL_TO_IMPORT_PARTIDA=${MAIL_TO_IMPORT_PARTIDA:-}
     volumes:
-      - ${DATA_ROOT}/import_partida:/data/import_partida
+      - ${DATA_ROOT:-/data}:/data
+      - ./config:/config:ro
       - ./apps:/apps:ro
+      - ./libs/iasuite_common:/usr/local/lib/python3.12/site-packages/iasuite_common:ro
+    depends_on:
+      - unified_api
 
-  api_lear_cable:
-    build:
-      context: ./services/api_lear_cable
-    restart: unless-stopped
-
-    # No exponemos el puerto en el host; nginx lo proxya dentro de la red docker
-    environment:
-      - INBOX_DIR=/data/inbox
-      - PROCESSING_DIR=/data/processing
-      - OUT_DIR=/data/out
-      - PROCESSED_DIR=/data/processed
-      - ERROR_DIR=/data/error
-      - STATUS_DIR=/data/status
-      - MAX_ZIP_MB=${MAX_ZIP_MB:-200}
-
-    volumes:
-      - ${DATA_ROOT:-${STACK_ROOT:-/data/ias_prod}/data}:/data
-
-  api_import_partida:
-    build:
-      context: ./services/api_import_partida
-    restart: unless-stopped
-    environment:
-      - SERVICE_ROOT=/data
-      - INBOX_DIR=/data/inbox
-      - STATUS_DIR=/data/status
-    volumes:
-      - ${DATA_ROOT:-${STACK_ROOT:-/data/ias_prod}/data}/import_partida:/data
 
   tools_web:
     image: nginx:alpine
     restart: unless-stopped
-    depends_on:
-      - api_lear_cable
-      - api_import_partida
-
     ports:
       - "${TOOLS_WEB_PORT:-8081}:80"
-
     volumes:
-      - ${WEB_SITE_DIR:-./services/web/site}:/usr/share/nginx/html:ro
-      - ./services/web/nginx.conf:/etc/nginx/conf.d/default.conf:ro
-
+      # Use WEB_SITE_DIR env var, defaults to site_dev for development
+      - ./services/web/sites/${ENVIRONMENT:-dev}:/usr/share/nginx/html:ro
+      - ./services/web/nginx_unified.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - unified_api
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3

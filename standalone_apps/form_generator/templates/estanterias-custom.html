@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Revisión de Estanterías</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <style>
+        .estanterias-grid {
+            overflow-x: auto;
+            margin: 2rem 0;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background: white;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        
+        th, td {
+            padding: 0.75rem;
+            text-align: center;
+            border: 1px solid #e5e7eb;
+        }
+        
+        th {
+            background: #1a4d7e;
+            color: white;
+            font-weight: 600;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+        
+        tr:hover {
+            background: #f9fafb;
+        }
+        
+        input[type="checkbox"] {
+            width: 20px;
+            height: 20px;
+            cursor: pointer;
+        }
+        
+        .fila-label {
+            font-weight: 600;
+            text-align: left;
+            padding-left: 1rem;
+        }
+        
+        .observaciones-input {
+            width: 100%;
+            padding: 0.5rem;
+            border: 1px solid #d1d5db;
+            border-radius: 4px;
+        }
+        
+        .header-info {
+            background: white;
+            padding: 1.5rem;
+            border-radius: 8px;
+            margin-bottom: 2rem;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        
+        .form-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+        
+        .form-group label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            color: #374151;
+        }
+        
+        .form-input, .form-select {
+            width: 100%;
+            padding: 0.5rem;
+            border: 1px solid #d1d5db;
+            border-radius: 4px;
+            font-size: 1rem;
+        }
+        
+        .actions {
+            position: sticky;
+            bottom: 0;
+            background: white;
+            padding: 1rem;
+            box-shadow: 0 -2px 8px rgba(0,0,0,0.1);
+            display: flex;
+            gap: 1rem;
+            justify-content: flex-end;
+            z-index: 10;
+        }
+        
+        .btn {
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 4px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .btn-primary {
+            background: #2563a8;
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            background: #1a4d7e;
+        }
+        
+        .btn-secondary {
+            background: #e5e7eb;
+            color: #374151;
+        }
+        
+        .check-all {
+            padding: 0.25rem 0.5rem;
+            font-size: 0.75rem;
+            background: #10b981;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-top: 0.25rem;
+        }
+        
+        .check-all:hover {
+            background: #059669;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>📋 Revisión de Estanterías - Trimestral</h1>
+        <p class="description">Delegación Algeciras</p>
+    </header>
+
+    <main style="max-width: 1400px; margin: 2rem auto; padding: 0 1.5rem;">
+        <div class="header-info">
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Fecha de Revisión *</label>
+                    <input type="date" id="fechaRevision" class="form-input" required>
+                </div>
+                <div class="form-group">
+                    <label>Responsable *</label>
+                    <select id="responsable" class="form-select" required>
+                        <option value="">Seleccionar...</option>
+                        <option>DIEGO LADRON FONCUBIERTA</option>
+                        <option>DANIEL ALFARO DIAZ</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Nave *</label>
+                    <select id="nave" class="form-select" required>
+                        <option value="">Seleccionar...</option>
+                        <option>NAVE 1T25</option>
+                        <option>NAVE 2T25</option>
+                        <option>NAVE 3T25</option>
+                        <option>NAVE 4T25</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Trimestre *</label>
+                    <select id="trimestre" class="form-select" required>
+                        <option value="">Seleccionar...</option>
+                        <option>1er trimestre</option>
+                        <option>2do trimestre</option>
+                        <option>3er trimestre</option>
+                        <option>4to trimestre</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <div class="estanterias-grid">
+            <table id="estanteriasTable">
+                <thead>
+                    <tr>
+                        <th style="text-align: left;">Fila</th>
+                        <th>
+                            Revisada<br>
+                            <button type="button" class="check-all" onclick="checkAllColumn('revisada')">✓ Todas</button>
+                        </th>
+                        <th>
+                            Colocación<br>
+                            <button type="button" class="check-all" onclick="checkAllColumn('colocacion')">✓ Todas</button>
+                        </th>
+                        <th>
+                            Accesibilidad<br>
+                            <button type="button" class="check-all" onclick="checkAllColumn('accesibilidad')">✓ Todas</button>
+                        </th>
+                        <th>
+                            Sin Corrosión<br>
+                            <button type="button" class="check-all" onclick="checkAllColumn('corrosion')">✓ Todas</button>
+                        </th>
+                        <th>
+                            Anclajes<br>
+                            <button type="button" class="check-all" onclick="checkAllColumn('anclajes')">✓ Todas</button>
+                        </th>
+                        <th>
+                            Protecciones<br>
+                            <button type="button" class="check-all" onclick="checkAllColumn('protecciones')">✓ Todas</button>
+                        </th>
+                        <th style="min-width: 200px;">Observaciones</th>
+                    </tr>
+                </thead>
+                <tbody id="filasBody">
+                    <!-- Filas generadas por JavaScript -->
+                </tbody>
+            </table>
+        </div>
+
+        <div class="form-group" style="margin-top: 2rem;">
+            <label>Observaciones Generales</label>
+            <textarea id="observacionesGenerales" class="observaciones-input" rows="3" 
+                placeholder="Comentarios adicionales sobre la revisión completa..."></textarea>
+        </div>
+
+        <div class="actions">
+            <button type="button" class="btn btn-secondary" onclick="window.history.back()">← Volver</button>
+            <button type="button" class="btn btn-primary" onclick="guardarRevision()">💾 Guardar Revisión</button>
+        </div>
+
+        <div id="message" style="margin-top: 1rem; padding: 1rem; border-radius: 4px; display: none;"></div>
+    </main>
+
+    <script>
+        // Generar filas: 10 filas + 2 fondos
+        const filas = [
+            ...Array.from({length: 10}, (_, i) => `FILA ${i + 1}`),
+            'FONDO 1',
+            'FONDO 2'
+        ];
+        const tbody = document.getElementById('filasBody');
+        
+        filas.forEach(fila => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td class="fila-label">${fila}</td>
+                <td><input type="checkbox" class="check-revisada" data-fila="${fila}"></td>
+                <td><input type="checkbox" class="check-colocacion" data-fila="${fila}"></td>
+                <td><input type="checkbox" class="check-accesibilidad" data-fila="${fila}"></td>
+                <td><input type="checkbox" class="check-corrosion" data-fila="${fila}"></td>
+                <td><input type="checkbox" class="check-anclajes" data-fila="${fila}"></td>
+                <td><input type="checkbox" class="check-protecciones" data-fila="${fila}"></td>
+                <td><input type="text" class="observaciones-input obs-${fila.replace(' ', '-')}" placeholder="Observaciones..."></td>
+            `;
+            tbody.appendChild(tr);
+        });
+        
+        // Marcar toda una columna
+        function checkAllColumn(type) {
+            const checkboxes = document.querySelectorAll(`.check-${type}`);
+            const allChecked = Array.from(checkboxes).every(cb => cb.checked);
+            checkboxes.forEach(cb => cb.checked = !allChecked);
+        }
+        
+        // Guardar revisión
+        async function guardarRevision() {
+            const data = {
+                fechaRevision: document.getElementById('fechaRevision').value,
+                responsable: document.getElementById('responsable').value,
+                nave: document.getElementById('nave').value,
+                trimestre: document.getElementById('trimestre').value,
+                observacionesGenerales: document.getElementById('observacionesGenerales').value
+            };
+            
+            // Validar campos requeridos
+            if (!data.fechaRevision || !data.responsable || !data.nave || !data.trimestre) {
+                showMessage('Por favor completa todos los campos obligatorios', 'error');
+                return;
+            }
+            
+            // Recoger datos de todas las filas revisadas
+            const filasRevisadas = [];
+            filas.forEach(fila => {
+                const filaId = fila.replace(' ', '-');
+                const revisada = document.querySelector(`.check-revisada[data-fila="${fila}"]`).checked;
+                
+                if (revisada) {
+                    filasRevisadas.push({
+                        fila: fila,
+                        colocacion: document.querySelector(`.check-colocacion[data-fila="${fila}"]`).checked ? '√' : 'X',
+                        accesibilidad: document.querySelector(`.check-accesibilidad[data-fila="${fila}"]`).checked ? '√' : 'X',
+                        corrosion: document.querySelector(`.check-corrosion[data-fila="${fila}"]`).checked ? '√' : 'X',
+                        anclajes: document.querySelector(`.check-anclajes[data-fila="${fila}"]`).checked ? '√' : 'X',
+                        protecciones: document.querySelector(`.check-protecciones[data-fila="${fila}"]`).checked ? '√' : 'X',
+                        observaciones: document.querySelector(`.obs-${filaId}`).value
+                    });
+                }
+            });
+            
+            if (filasRevisadas.length === 0) {
+                showMessage('Debes marcar al menos una fila como revisada', 'error');
+                return;
+            }
+            
+            // Enviar TODAS las filas en un solo request
+            const payload = {
+                ...data,
+                filas: filasRevisadas
+            };
+            
+            try {
+                const response = await fetch('/api/save-estanterias-completo', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(payload)
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok) {
+                    showMessage(`✅ Revisión guardada correctamente (${filasRevisadas.length} filas)`, 'success');
+                    setTimeout(() => window.location.reload(), 2000);
+                } else {
+                    showMessage(`❌ Error: ${result.detail || 'Error desconocido'}`, 'error');
+                }
+            } catch (e) {
+                console.error('Error guardando revisión:', e);
+                showMessage('❌ Error de conexión', 'error');
+            }
+        }
+        
+        function showMessage(text, type) {
+            const msg = document.getElementById('message');
+            msg.textContent = text;
+            msg.style.display = 'block';
+            msg.style.background = type === 'error' ? '#fee2e2' : type === 'success' ? '#d1fae5' : '#fef3c7';
+            msg.style.color = type === 'error' ? '#991b1b' : type === 'success' ? '#065f46' : '#92400e';
+        }
+        
+        // Establecer fecha actual por defecto
+        document.getElementById('fechaRevision').valueAsDate = new Date();
+    </script>
+</body>
+</html>

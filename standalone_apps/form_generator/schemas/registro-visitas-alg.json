@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "[ALG] Registro de Visitas",
+  "description": "Formulario de registro de visitas a las instalaciones - Algeciras",
+  "category": "📊 Sede Algeciras",
+  "custom_template": "registro-visitas-alg.html",
+  "type": "object",
+  "properties": {
+    "fecha": {
+      "type": "string",
+      "format": "date",
+      "title": "Fecha",
+      "default": "today"
+    },
+    "hora_entrada": {
+      "type": "string",
+      "format": "time",
+      "title": "Hora de Entrada",
+      "default": "now"
+    },
+    "nombre": {
+      "type": "string",
+      "title": "Nombre"
+    },
+    "apellidos": {
+      "type": "string",
+      "title": "Apellidos"
+    },
+    "dni": {
+      "type": "string",
+      "title": "DNI/NIE",
+      "pattern": "^[0-9]{8}[A-Z]$|^[XYZ][0-9]{7}[A-Z]$"
+    },
+    "empresa": {
+      "type": "string",
+      "title": "Empresa"
+    },
+    "motivo": {
+      "type": "string",
+      "title": "Motivo de la Visita",
+      "enum": [
+        "Comercial",
+        "Cita previa",
+        "Auditoría",
+        "Otros"
+      ]
+    },
+    "persona_contacto": {
+      "type": "string",
+      "title": "Persona de Contacto",
+      "enum": [
+        "Rafael Rubiales Mejias",
+        "Rubén Rubiales Montero",
+        "Palma Almagro Guerrero",
+        "José Luis Martínez Lázaro",
+        "Javier Martínez Lázaro",
+        "Juan Antonio Martínez Lázaro",
+        "Gonzalo Baeza Torres",
+        "Juan José López Martínez",
+        "Mª José Gómez Carmona",
+        "Jose Luis del Pino Maya"
+      ]
+    },
+    "observaciones": {
+      "type": "string",
+      "title": "Observaciones"
+    },
+    "rgpd_consent": {
+      "type": "boolean",
+      "title": "Acepta Política de Privacidad"
+    }
+  },
+  "required": [
+    "fecha",
+    "hora_entrada",
+    "nombre",
+    "apellidos",
+    "dni",
+    "empresa",
+    "motivo",
+    "persona_contacto",
+    "rgpd_consent"
+  ]
+}

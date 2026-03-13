@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "[ALG] Revisión Vehículos",
+  "description": "Formulario de revisión de los vehículos propiedad de la empresa - Algeciras",
+  "category": "📊 Sede Algeciras",
+  "custom_template": "revision-vehiculos-alg.html",
+  "type": "object",
+  "properties": {
+    "fecha": {"type": "string", "format": "date", "title": "Fecha de Revisión"},
+    "responsable": {
+      "type": "string",
+      "enum": ["DANIEL ALFARO DIAZ", "DIEGO LADRÓN FONCUBIERTA"],
+      "title": "Responsable"
+    },
+    "vehiculo": {
+      "type": "string",
+      "enum": ["JUMPER 1834 FZY"],
+      "title": "Vehículo"
+    },
+    "kilometraje": {"type": "number", "title": "Kilometraje Actual"},
+    "nivelAceite": {"type": "boolean", "title": "Nivel de Aceite Correcto"},
+    "nivelLiquidoFrenos": {"type": "boolean", "title": "Nivel de Líquido de Frenos"},
+    "nivelRefrigerante": {"type": "boolean", "title": "Nivel de Refrigerante"},
+    "presionNeumaticos": {"type": "boolean", "title": "Presión de Neumáticos"},
+    "lucesExteriores": {"type": "boolean", "title": "Luces Exteriores Funcionando"},
+    "limpiaparabrisas": {"type": "boolean", "title": "Limpiaparabrisas Funcionando"},
+    "estadoCarroceria": {
+      "type": "string",
+      "enum": ["Excelente", "Bueno", "Regular", "Necesita reparación"],
+      "title": "Estado de Carrocería"
+    },
+    "observaciones": {"type": "string", "title": "Observaciones"}
+  },
+  "required": ["fecha", "responsable", "vehiculo", "kilometraje"]
+}

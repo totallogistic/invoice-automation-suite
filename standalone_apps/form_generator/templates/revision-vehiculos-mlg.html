@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>[MLG] Revisión Vehículos</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <header>
+        <h1>🚗 [MLG] Revisión de Vehículos</h1>
+        <p class="description">Formulario de revisión - Delegación Málaga</p>
+        <a href="/" class="back-link">← Volver al inicio</a>
+    </header>
+
+    <main>
+        <form id="vehiculosForm" class="form-container">
+            <div class="form-group">
+                <label for="fecha">Fecha de Revisión *</label>
+                <input type="date" id="fecha" name="fecha" required class="form-input">
+            </div>
+
+            <div class="form-group">
+                <label for="responsable">Responsable *</label>
+                <select id="responsable" name="responsable" required class="form-select">
+                    <option value="">Seleccionar...</option>
+                    <option value="ANTONIO RODRIGUEZ SANTANA">ANTONIO RODRIGUEZ SANTANA</option>
+                    <option value="MANUEL RODRIGUEZ SANTANA">MANUEL RODRIGUEZ SANTANA</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="vehiculo">Vehículo *</label>
+                <select id="vehiculo" name="vehiculo" required class="form-select">
+                    <option value="">Seleccionar...</option>
+                    <option value="JUMPER 5516 GDV">JUMPER 5516 GDV</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="kilometraje">Kilometraje Actual *</label>
+                <input type="number" id="kilometraje" name="kilometraje" required class="form-input" min="0">
+            </div>
+
+            <h3>Revisión Técnica</h3>
+
+            <div class="checkbox-group">
+                <label>
+                    <input type="checkbox" name="nivelAceite" value="true">
+                    <span>Nivel de Aceite Correcto</span>
+                </label>
+            </div>
+
+            <div class="checkbox-group">
+                <label>
+                    <input type="checkbox" name="nivelLiquidoFrenos" value="true">
+                    <span>Nivel de Líquido de Frenos Correcto</span>
+                </label>
+            </div>
+
+            <div class="checkbox-group">
+                <label>
+                    <input type="checkbox" name="nivelRefrigerante" value="true">
+                    <span>Nivel de Refrigerante Correcto</span>
+                </label>
+            </div>
+
+            <div class="checkbox-group">
+                <label>
+                    <input type="checkbox" name="presionNeumaticos" value="true">
+                    <span>Presión de Neumáticos Correcta</span>
+                </label>
+            </div>
+
+            <div class="checkbox-group">
+                <label>
+                    <input type="checkbox" name="lucesExteriores" value="true">
+                    <span>Luces Exteriores Funcionando</span>
+                </label>
+            </div>
+
+            <div class="checkbox-group">
+                <label>
+                    <input type="checkbox" name="limpiaparabrisas" value="true">
+                    <span>Limpiaparabrisas Funcionando</span>
+                </label>
+            </div>
+
+            <div class="form-group">
+                <label for="estadoCarroceria">Estado de Carrocería</label>
+                <select id="estadoCarroceria" name="estadoCarroceria" class="form-select">
+                    <option value="">Seleccionar...</option>
+                    <option value="Excelente">Excelente</option>
+                    <option value="Bueno">Bueno</option>
+                    <option value="Regular">Regular</option>
+                    <option value="Necesita reparación">Necesita reparación</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="observaciones">Observaciones</label>
+                <textarea id="observaciones" name="observaciones" rows="4" class="form-textarea"></textarea>
+            </div>
+
+            <button type="submit" class="btn btn-primary">💾 Guardar Revisión</button>
+        </form>
+
+        <div id="message" style="display: none;"></div>
+    </main>
+
+    <script>
+        document.getElementById('fecha').valueAsDate = new Date();
+        
+        document.getElementById('vehiculosForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const formData = new FormData(e.target);
+            const data = Object.fromEntries(formData);
+            
+            // Convert checkboxes to boolean
+            const checkboxes = ['nivelAceite', 'nivelLiquidoFrenos', 'nivelRefrigerante', 
+                               'presionNeumaticos', 'lucesExteriores', 'limpiaparabrisas'];
+            checkboxes.forEach(name => {
+                data[name] = formData.has(name);
+            });
+            
+            // Convert kilometraje to number
+            if (data.kilometraje) {
+                data.kilometraje = parseFloat(data.kilometraje);
+            }
+            
+            try {
+                const response = await fetch('/api/save-to-excel/revision-vehiculos-mlg', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(data)
+                });
+                
+                if (response.ok) {
+                    document.getElementById('message').textContent = '✅ Revisión guardada correctamente';
+                    document.getElementById('message').className = 'success';
+                    document.getElementById('message').style.display = 'block';
+                    setTimeout(() => e.target.reset(), 2000);
+                } else {
+                    throw new Error('Error al guardar');
+                }
+            } catch (error) {
+                document.getElementById('message').textContent = '❌ Error al guardar la revisión';
+                document.getElementById('message').className = 'error';
+                document.getElementById('message').style.display = 'block';
+            }
+        });
+    </script>
+</body>
+</html>

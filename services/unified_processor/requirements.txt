@@ -1,0 +1,15 @@
+# Core processor
+pyyaml==6.0.1
+
+# PDF processing (MUST match old processor versions!)
+pypdf
+openpyxl
+pandas
+pdfplumber==0.11.4
+pypdfium2==4.30.0
+odfpy==1.4.1
+# Additional extractor dependencies
+xlsxwriter==3.1.9
+python-dateutil==2.8.2
+pillow==10.1.0
+reportlab==4.0.7

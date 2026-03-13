@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>[PROD] Totallogistic Tools — Lear Cable</title>
+    <title>[PROD] Totallogistic Tools — Lear Rabat</title>
     <style>
       * { margin: 0; padding: 0; box-sizing: border-box; }
       body { 
@@ -163,7 +163,7 @@
   <body>
     <header>
       <div class="env-badge">PROD</div>
-      <h1>Lear Cable <span class="version-badge" id="scriptVersion">…</span></h1>
+      <h1>Lear Rabat <span class="version-badge" id="scriptVersion">…</span></h1>
     </header>
     <main>
     <p class="muted">Sube uno o varios archivos PDF, o un ZIP con múltiples PDFs. La página se queda aquí y muestra progreso/estado.</p>
@@ -175,7 +175,7 @@
         <span id="uploadMsg" class="muted"></span>
       </div>
       <p class="muted" style="margin:10px 0 0">
-        Endpoint: <span class="mono">POST /api/lear_cable/batches</span>
+        Endpoint: <span class="mono">POST /api/lear_rabat/batches</span>
       </p>
     </div>
 
@@ -244,7 +244,7 @@
       }
 
       async function fetchStatus(batchId) {
-        const r = await fetch(`/api/lear_cable/batches/${batchId}/status`, { cache: "no-store" });
+        const r = await fetch(`/api/lear_rabat/batches/${batchId}/status`, { cache: "no-store" });
         if (!r.ok) throw new Error(`Status HTTP ${r.status}`);
         return await r.json();
       }
@@ -295,7 +295,7 @@
       }
 
       // Fetch script version on load
-      fetch("/api/lear_cable/version", { cache: "no-store" })
+      fetch("/api/lear_rabat/version", { cache: "no-store" })
         .then(r => r.ok ? r.json() : Promise.reject())
         .then(d => { $("scriptVersion").textContent = d.version || "?"; })
         .catch(() => { $("scriptVersion").textContent = "?"; });
@@ -334,7 +334,7 @@
             fd.append("files", file, file.name);
           });
 
-          const r = await fetch("/api/lear_cable/batches", { method: "POST", body: fd });
+          const r = await fetch("/api/lear_rabat/batches", { method: "POST", body: fd });
           if (!r.ok) {
             const t = await r.text();
             throw new Error(`Upload HTTP ${r.status}: ${t}`);
