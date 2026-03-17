@@ -82,7 +82,7 @@ def lear_rabat_version():
 
 @app.get("/api/lear_cable/version")
 def lear_cable_version():
-    path = "/app/apps/lear_rabat/extractor/extract_lear_rabat.py"
+    path = "/app/apps/lear_cable/extractor/extract_lear_fields.py"
     return {
         "version": _read_script_version(path),
         "changelog": _read_script_changelog(path),
