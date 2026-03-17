@@ -212,14 +212,18 @@ class UnifiedProcessor:
         """Build CLI command for inject-mode extractors (Croton).
 
         Supported batch layouts:
-        - packing .ods + factura .xlsx/.xls
-        - packing .xlsx/.xls + factura .xlsx/.xls
+        - packing .ods + factura/mapeo .ods
+        - packing .ods + factura/mapeo .xlsx/.xls
+        - packing .xlsx/.xls + factura/mapeo .ods
+        - packing .xlsx/.xls + factura/mapeo .xlsx/.xls
 
         Resolution rules:
-        1) If exactly one .ods is present, that file is the packing.
-        2) Otherwise infer packing/factura from the filename.
+        1) If exactly one .ods is present and one XLSX/XLS, use filename keywords
+           to determine roles; fall back to ODS=packing, XLSX=factura.
+        2) If two files of the same format (both ODS or both XLSX/XLS), infer
+           packing/factura from the filename.
             Packing keywords: packing, parking
-            Factura keywords: factura, invoice
+            Factura keywords: factura, invoice, mapeo, mapping
         3) If still ambiguous, fail loudly.
         """
         ods_files = [f for f in files if f.suffix.lower() == ".ods"]
@@ -228,33 +232,53 @@ class UnifiedProcessor:
         packing_file = None
         factura_file = None
 
-        if len(ods_files) == 1:
-            packing_file = ods_files[0]
-            remaining_excels = [f for f in excel_files if f != packing_file]
-            if len(remaining_excels) != 1:
+        _packing_kw = ("packing", "parking", "packing_list", "parking_list")
+        _factura_kw = ("factura", "invoice", "mapeo", "mapping")
+
+        if len(ods_files) == 1 and len(excel_files) == 1:
+            # Try filename-based disambiguation first
+            ods_name = ods_files[0].name.lower()
+            xls_name = excel_files[0].name.lower()
+            if any(k in xls_name for k in _packing_kw) and any(k in ods_name for k in _factura_kw):
+                packing_file = excel_files[0]
+                factura_file = ods_files[0]
+            else:
+                # Default: ODS is packing, XLSX/XLS is factura
+                packing_file = ods_files[0]
+                factura_file = excel_files[0]
+
+        elif len(ods_files) == 2:
+            for f in ods_files:
+                name = f.name.lower()
+                if any(k in name for k in _packing_kw):
+                    packing_file = f
+                elif any(k in name for k in _factura_kw):
+                    factura_file = f
+
+            if not packing_file or not factura_file:
                 raise RuntimeError(
-                    f"[{tool.name}] Expected exactly one invoice XLSX/XLS when packing is ODS."
+                    f"[{tool.name}] Could not infer packing/factura from ODS filenames. "
+                    f"Use names containing 'packing'/'parking' and 'factura'/'invoice'/'mapeo'/'mapping'."
                 )
-            factura_file = remaining_excels[0]
 
         elif len(ods_files) == 0 and len(excel_files) == 2:
             for f in excel_files:
                 name = f.name.lower()
-                if any(k in name for k in ("packing", "parking", "packing_list", "parking_list")):
+                if any(k in name for k in _packing_kw):
                     packing_file = f
-                elif any(k in name for k in ("factura", "invoice")):
+                elif any(k in name for k in _factura_kw):
                     factura_file = f
 
             if not packing_file or not factura_file:
                 raise RuntimeError(
                     f"[{tool.name}] Could not infer packing/factura from filenames. "
-                    f"Use names containing 'packing'/'parking' and 'factura'/'invoice'."
+                    f"Use names containing 'packing'/'parking' and 'factura'/'invoice'/'mapeo'/'mapping'."
                 )
 
         else:
             raise RuntimeError(
-                f"[{tool.name}] inject_mode expects either "
-                f"(1 ODS + 1 XLSX/XLS) or (2 XLSX/XLS files: packing + factura)."
+                f"[{tool.name}] inject_mode expects exactly 2 files "
+                f"(ODS and/or XLSX/XLS: packing + factura/mapeo)."
             )
 
         stem = packing_file.stem

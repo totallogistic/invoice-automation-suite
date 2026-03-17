@@ -178,7 +178,7 @@
     <main>
     <p class="muted">
       Sube el packing-list (<strong>.ods</strong>, <strong>.xlsx</strong> o <strong>.xls</strong>)
-      y la factura (<strong>.xlsx</strong> o <strong>.xls</strong>).
+      y el mapeo de productos (<strong>.ods</strong>, <strong>.xlsx</strong> o <strong>.xls</strong>).
       La herramienta añade una nueva pestaña <strong>Resumen_Partidas</strong>
       a una copia del fichero de packing con el resumen por partida aduanera.
     </p>
@@ -195,9 +195,9 @@
           <span class="hint">Formatos permitidos: ODS, XLSX, XLS</span>
         </div>
         <div class="file-field">
-          <label>🧾 Factura <span style="color:#dc2626">*</span></label>
-          <input id="invoiceInput" type="file" accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" />
-          <span class="hint">Formatos permitidos: XLSX, XLS</span>
+          <label>🧾 Mapeo de productos <span style="color:#dc2626">*</span></label>
+          <input id="invoiceInput" type="file" accept=".ods,.xlsx,.xls,application/vnd.oasis.opendocument.spreadsheet,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" />
+          <span class="hint">Formatos permitidos: ODS, XLSX, XLS</span>
         </div>
       </div>
       <div class="row">
@@ -335,10 +335,10 @@
           return setUploadMsg(`Archivo de packing no válido: ${packingFile.name}`, true);
         }
         if (!invoiceFile) {
-          return setUploadMsg("Selecciona el archivo de factura.", true);
+          return setUploadMsg("Selecciona el archivo de mapeo de productos.", true);
         }
-        if (!/\.(xlsx|xls)$/i.test(invoiceFile.name)) {
-          return setUploadMsg(`Archivo de factura no válido: ${invoiceFile.name}`, true);
+        if (!/\.(ods|xlsx|xls)$/i.test(invoiceFile.name)) {
+          return setUploadMsg(`Archivo de mapeo de productos no válido: ${invoiceFile.name}`, true);
         }
 
         setUploadMsg("Subiendo…");
