@@ -187,12 +187,15 @@ class UnifiedProcessor:
         # Get files with the tool's accepted formats
         files = BatchOperations.get_files(processing_path, tool.input_formats)
         
-        cmd = [
-            "python3",
-            str(tool.extractor_path)
-        ] + [str(p) for p in files] + [
-            "-o", str(output_path)
-        ]
+        if tool.inject_mode:
+            cmd = self._build_inject_cmd(tool, files, output_path)
+        else:
+            cmd = [
+                "python3",
+                str(tool.extractor_path)
+            ] + [str(p) for p in files] + [
+                "-o", str(output_path)
+            ]
         
         logger.info(f"[{tool.name}] Running extractor...")
         result = subprocess.run(cmd, capture_output=True, text=True)
@@ -204,6 +207,72 @@ class UnifiedProcessor:
         report_path.write_text(result.stdout, encoding="utf-8")
 
         return output_path
+    
+    def _build_inject_cmd(self, tool: ToolConfig, files: List[Path], output_path: Path) -> List[str]:
+        """Build CLI command for inject-mode extractors (Croton).
+
+        Supported batch layouts:
+        - packing .ods + factura .xlsx/.xls
+        - packing .xlsx/.xls + factura .xlsx/.xls
+
+        Resolution rules:
+        1) If exactly one .ods is present, that file is the packing.
+        2) Otherwise infer packing/factura from the filename.
+            Packing keywords: packing, parking
+            Factura keywords: factura, invoice
+        3) If still ambiguous, fail loudly.
+        """
+        ods_files = [f for f in files if f.suffix.lower() == ".ods"]
+        excel_files = [f for f in files if f.suffix.lower() in (".xlsx", ".xls")]
+
+        packing_file = None
+        factura_file = None
+
+        if len(ods_files) == 1:
+            packing_file = ods_files[0]
+            remaining_excels = [f for f in excel_files if f != packing_file]
+            if len(remaining_excels) != 1:
+                raise RuntimeError(
+                    f"[{tool.name}] Expected exactly one invoice XLSX/XLS when packing is ODS."
+                )
+            factura_file = remaining_excels[0]
+
+        elif len(ods_files) == 0 and len(excel_files) == 2:
+            for f in excel_files:
+                name = f.name.lower()
+                if any(k in name for k in ("packing", "parking", "packing_list", "parking_list")):
+                    packing_file = f
+                elif any(k in name for k in ("factura", "invoice")):
+                    factura_file = f
+
+            if not packing_file or not factura_file:
+                raise RuntimeError(
+                    f"[{tool.name}] Could not infer packing/factura from filenames. "
+                    f"Use names containing 'packing'/'parking' and 'factura'/'invoice'."
+                )
+
+        else:
+            raise RuntimeError(
+                f"[{tool.name}] inject_mode expects either "
+                f"(1 ODS + 1 XLSX/XLS) or (2 XLSX/XLS files: packing + factura)."
+            )
+
+        stem = packing_file.stem
+        out_ext = packing_file.suffix.lower()
+        out_filename = (
+            tool.filename_pattern.format(stem=stem, ext=out_ext)
+            if tool.filename_pattern
+            else f"CROTON_{stem}{out_ext}"
+        )
+        out_file = output_path / out_filename
+
+        return [
+            "python3", str(tool.extractor_path),
+            str(packing_file),
+            "--factura", str(factura_file),
+            "--inject",
+            "-o", str(out_file),
+        ]
     
     def _get_recipients(self, tool_name: str) -> List[str]:
         """Get recipients: per-tool first, then global fallback."""
@@ -252,4 +321,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
