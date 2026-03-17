@@ -822,22 +822,32 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('--xlsx', required=True, help='Input packing-list Excel (Sheet1 tab)')
     parser.add_argument('--t1', required=True, nargs='+', help='T1 transit PDF files')
     parser.add_argument('--doc', dest='doc', help='DOC PDF para validar el XLSX antes de procesar')
-    parser.add_argument('--output', default=None, help='Output Excel path')
     parser.add_argument('--verbose', action='store_true', help='Print row-by-row detail')
     parser.add_argument('--dpi', type=int, default=150, help='DPI para OCR del PDF DOC')
+
+    out_group = parser.add_mutually_exclusive_group()
+    out_group.add_argument('--output', default=None, help='Output Excel file path (standalone mode)')
+    out_group.add_argument('-o', dest='output_dir', default=None,
+                           metavar='OUTPUT_DIR',
+                           help='Output directory (web-stack mode; file is named <stem>-PROCESSED.xlsx)')
     return parser.parse_args()
 
 
-def derive_output_path(xlsx_path: str, output: Optional[str]) -> Path:
+def derive_output_path(xlsx_path: str, output: Optional[str], output_dir: Optional[str] = None) -> Path:
     if output:
         return Path(output)
     src = Path(xlsx_path)
-    return src.with_name(f'{src.stem}-PROCESSED.xlsx')
+    stem_processed = f'{src.stem}-PROCESSED.xlsx'
+    if output_dir:
+        out = Path(output_dir)
+        out.mkdir(parents=True, exist_ok=True)
+        return out / stem_processed
+    return src.with_name(stem_processed)
 
 
 def main() -> int:
     args = parse_args()
-    output_path = derive_output_path(args.xlsx, args.output)
+    output_path = derive_output_path(args.xlsx, args.output, getattr(args, 'output_dir', None))
 
     print('\n=== Camión Export Processor ===\n')
 
