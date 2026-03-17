@@ -31,6 +31,14 @@ class ToolConfig:
     # input_formats must include both accepted extensions, e.g. ["ods", "xlsx"]
     inject_mode: bool = False
     filename_pattern: str = ""   # e.g. "CROTON_{stem}.ods"
+    # ── Camion mode ──────────────────────────────────────────────────────────
+    # When True, the extractor receives named file arguments:
+    #   --xlsx <packing_list.xlsx>
+    #   --t1   <T1_1.pdf> [<T1_2.pdf> ...]
+    #   --doc  <doc.pdf>
+    #   -o     <output_dir>
+    # T1 files are identified by "t1" in the filename; the DOC file by "doc".
+    camion_mode: bool = False
 
 
 class ToolRegistry:
@@ -79,6 +87,7 @@ class ToolRegistry:
                 enabled=True,
                 inject_mode=tool_data.get("extractor", {}).get("inject_mode", False),
                 filename_pattern=tool_data.get("output", {}).get("filename_pattern", ""),
+                camion_mode=tool_data.get("extractor", {}).get("camion_mode", False),
             )
             
             # Ensure directories exist
