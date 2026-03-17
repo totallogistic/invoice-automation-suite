@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """
-Croton packing + factura -> Resumen_Partidas
+Croton packing + factura/mapeo -> Resumen_Partidas
 
 What this version fixes
 -----------------------
 - Packing input can be .ods or .xlsx
-- Factura input can be .xlsx/.xls
+- Factura/mapeo input can be .ods, .xlsx or .xls
 - product_mapping.csv is OPTIONAL, not mandatory
 - If there is factura, VALOR is allocated from factura totals for the whole matched
   reference bucket, avoiding mixed ODS/manual partial values and double counting
@@ -361,35 +361,43 @@ def lookup_mapping(referencia: str, descripcion: str, rules: List[Dict[str, str]
 # Factura loading and matching
 # ---------------------------------------------------------------------------
 
-def load_factura(xlsx_path: str) -> Dict[str, Dict[str, Any]]:
-    wb = openpyxl.load_workbook(xlsx_path, data_only=True)
-    try:
-        ws = wb["TOTAL FRA."] if "TOTAL FRA." in wb.sheetnames else wb.active
-        result: Dict[str, Dict[str, Any]] = OrderedDict()
-        for row in ws.iter_rows(values_only=True):
-            ref = _safe_str(row[0] if len(row) > 0 else None)
-            desc = _safe_str(row[1] if len(row) > 1 else None)
-            cant = _parse_num(row[6] if len(row) > 6 else None)
-            neto = _parse_num(row[8] if len(row) > 8 else None)
-            importe = _parse_num(row[9] if len(row) > 9 else None)
-            if not ref or ref.upper() == "REFERENCIA" or cant is None or importe is None:
-                continue
-            refn = _norm_ref(ref)
-            slot = result.setdefault(refn, {
-                "referencia": refn,
-                "descripcion": desc,
-                "cant_total": 0.0,
-                "importe_total": 0.0,
-                "neto_total": 0.0,
-                "desc_norm": _normalize_desc_for_match(desc),
-            })
-            slot["cant_total"] += cant or 0.0
-            slot["importe_total"] += importe or 0.0
-            slot["neto_total"] += neto or 0.0
-        log.info("Loaded FACTURA refs=%d total=%.2f EUR", len(result), sum(v["importe_total"] for v in result.values()))
-        return result
-    finally:
-        wb.close()
+def load_factura(path: str) -> Dict[str, Dict[str, Any]]:
+    ext = Path(path).suffix.lower()
+    if ext == ".ods":
+        names = _ods_sheet_names(path)
+        sheet_name = next((n for n in names if "TOTAL FRA" in n.upper()), names[0])
+        rows: List[List[Any]] = _read_ods_sheet(path, sheet_name)
+    else:
+        wb = openpyxl.load_workbook(path, data_only=True)
+        try:
+            ws = wb["TOTAL FRA."] if "TOTAL FRA." in wb.sheetnames else wb.active
+            rows = [list(r) for r in ws.iter_rows(values_only=True)]
+        finally:
+            wb.close()
+
+    result: Dict[str, Dict[str, Any]] = OrderedDict()
+    for row in rows:
+        ref = _safe_str(row[0] if len(row) > 0 else None)
+        desc = _safe_str(row[1] if len(row) > 1 else None)
+        cant = _parse_num(row[6] if len(row) > 6 else None)
+        neto = _parse_num(row[8] if len(row) > 8 else None)
+        importe = _parse_num(row[9] if len(row) > 9 else None)
+        if not ref or ref.upper() == "REFERENCIA" or cant is None or importe is None:
+            continue
+        refn = _norm_ref(ref)
+        slot = result.setdefault(refn, {
+            "referencia": refn,
+            "descripcion": desc,
+            "cant_total": 0.0,
+            "importe_total": 0.0,
+            "neto_total": 0.0,
+            "desc_norm": _normalize_desc_for_match(desc),
+        })
+        slot["cant_total"] += cant or 0.0
+        slot["importe_total"] += importe or 0.0
+        slot["neto_total"] += neto or 0.0
+    log.info("Loaded FACTURA refs=%d total=%.2f EUR", len(result), sum(v["importe_total"] for v in result.values()))
+    return result
 
 
 def infer_invoice_ref(linea: Dict[str, Any], factura: Dict[str, Dict[str, Any]]) -> Optional[str]:
@@ -830,10 +838,10 @@ def process(packing_path: str, output_path: str, factura_path: Optional[str] = N
 # ---------------------------------------------------------------------------
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Croton packing (.ods/.xlsx) + factura (.xlsx) -> Resumen_Partidas")
+    parser = argparse.ArgumentParser(description="Croton packing (.ods/.xlsx) + factura/mapeo (.ods/.xlsx/.xls) -> Resumen_Partidas")
     parser.add_argument("input_packing", help="Input packing file (.ods or .xlsx)")
     parser.add_argument("-o", "--output", dest="output_file", required=True, help="Output file path")
-    parser.add_argument("--factura", default=None, help="FACTURA XLSX path")
+    parser.add_argument("--factura", default=None, help="Factura / mapeo de productos path (.ods, .xlsx or .xls)")
     parser.add_argument("--mapping", default=None, help="Optional product_mapping.csv path")
     parser.add_argument("--no-inject", action="store_true", default=False, help="Write standalone output instead of injecting into a copy of the source workbook")
     parser.add_argument("--inject", action="store_true", default=False, help="Legacy flag; injection is default")
