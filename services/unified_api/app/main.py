@@ -67,13 +67,26 @@ def _read_script_version(path: str) -> str:
     except Exception:
         return "unknown"
 
+def _read_script_changelog(path: str) -> str:
+    try:
+        with open(path, encoding="utf-8") as f:
+            src = f.read()
+        m = _re.search(r'SCRIPT_CHANGELOG\s*=\s*"""(.*?)"""', src, _re.DOTALL)
+        return m.group(1).strip() if m else ""
+    except Exception:
+        return ""
+
 @app.get("/api/lear_rabat/version")
 def lear_rabat_version():
     return {"version": _read_script_version("/app/apps/lear_rabat/extractor/extract_lear_rabat.py")}
 
 @app.get("/api/lear_cable/version")
 def lear_cable_version():
-    return {"version": _read_script_version("/app/apps/lear_cable/extractor/extract_lear_fields.py")}
+    path = "/app/apps/lear_cable/extractor/extract_lear_fields.py"
+    return {
+        "version": _read_script_version(path),
+        "changelog": _read_script_changelog(path),
+        }
 
 @app.post("/api/{tool_name}/batches")
 async def create_batch(

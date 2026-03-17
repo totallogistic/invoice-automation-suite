@@ -41,6 +41,7 @@ services:
       - MAIL_TO_LEAR_RABAT=${MAIL_TO_LEAR_RABAT:-}
       - MAIL_TO_CUADRE_ASIENTOS=${MAIL_TO_CUADRE_ASIENTOS:-}
       - MAIL_TO_IMPORT_PARTIDA=${MAIL_TO_IMPORT_PARTIDA:-}
+      - MAIL_TO_CROTON=${MAIL_TO_CROTON:-}
     volumes:
       - ${DATA_ROOT:-/data}:/data
       - ./config:/config:ro

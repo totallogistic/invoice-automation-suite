@@ -69,6 +69,38 @@ tools:
     email:
       subject_template: "[Lear Rabat] Batch {batch_id} - DUA files ready"
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Append this block to config/tools.yaml under the  tools:  list
+# ─────────────────────────────────────────────────────────────────────────────
+  - name: croton
+    display_name: "Croton Resumen Partidas Aduaneras"
+    description: >
+      Genera el resumen de partidas aduaneras a partir del packing-list
+      (.ods o .xlsx) y el mapeo de productos / factura (.ods, .xlsx o .xls).
+      El resultado se añade como hoja "Resumen_Partidas" a una copia enriquecida
+      del fichero de packing de entrada.
+    enabled: true
+
+    input:
+      formats: [ods, xlsx, xls]
+
+    extractor:
+      path: /apps/croton/extractor/extract_croton.py
+      inject_mode: true
+
+    output:
+      directory: /data/croton/out
+      artifacts:
+        - "CROTON_*.ods"
+        - "CROTON_*.xlsx"
+        - "CROTON_*.xls"
+      filename_pattern: "CROTON_{stem}{ext}"
+
+    email:
+      subject_template: "[Croton] Batch {batch_id} - Resumen Partidas listo"
+
+    status_dir: /data/croton/status
+
   # Cuadre Asientos
   - name: cuadre_asientos
     enabled: true
