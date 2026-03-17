@@ -856,10 +856,10 @@ def main() -> None:
     )
     print(f"Done — {len(summary)} partidas -> {args.output_file}")
     print(
-        f"VALOR={sum(r['valor'] for r in summary):.2f} EUR  "
-        f"BRUTO={sum(r['bruto'] for r in summary):.2f}kg  "
-        f"NETO={sum(r['neto'] for r in summary):.2f}kg  "
-        f"M2={sum(r['m2'] for r in summary):.2f}"
+        f"VALOR={sum((r.get('valor') or 0) for r in summary):.2f} EUR  "
+        f"BRUTO={sum((r.get('bruto') or 0) for r in summary):.2f}kg  "
+        f"NETO={sum((r.get('neto') or 0) for r in summary):.2f}kg  "
+        f"M2={sum((r.get('m2') or 0) for r in summary):.2f}"
     )
 
 
