@@ -833,16 +833,29 @@ def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description='Validador XLSX vs DOC PDF para Camión Export')
     p.add_argument('--xlsx', required=True)
     p.add_argument('--doc', required=True)
-    p.add_argument('--output', default=None)
+    p.add_argument('-o', '--output', default=None)
     p.add_argument('--dpi', type=int, default=150)
     return p.parse_args()
 
 
 def derive_output_path(xlsx_path: str, output: Optional[str]) -> Path:
-    if output:
-        return Path(output)
     src = Path(xlsx_path)
-    return src.with_name(f'{src.stem}-VALIDATED.xlsx')
+
+    if not output:
+        return src.with_name(f'{src.stem}-VALIDATED.xlsx')
+
+    out = Path(output)
+    if out.suffix.lower() == '.xlsx':
+        out.parent.mkdir(parents=True, exist_ok=True)
+        return out
+    if out.exists() and out.is_dir():
+        out.mkdir(parents=True, exist_ok=True)
+        return out / f'{src.stem}-VALIDATED.xlsx'
+    if out.suffix == '':
+        out.mkdir(parents=True, exist_ok=True)
+        return out / f'{src.stem}-VALIDATED.xlsx'
+    out.parent.mkdir(parents=True, exist_ok=True)
+    return out
 
 
 
