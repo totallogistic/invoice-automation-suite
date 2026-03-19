@@ -41,6 +41,8 @@ from openpyxl.utils import get_column_letter
 from PIL import Image
 from pypdf import PdfReader
 
+import camion_pdf_validator as pdf_validator
+
 # ============================================================================
 # Shared styling
 # ============================================================================
@@ -879,14 +881,14 @@ def main() -> int:
     print(f'  ✓ Totals: gross={summary["total_peso_bruto"]} net={summary["total_peso_neto"]} PK={summary["total_pk"]} CL={summary["total_cl"]}')
 
     report = None
-    json_path = csv_path = None
     if args.doc:
         print(f'\n🔎 Validating XLSX against PDF: {args.doc}')
-        xlsx_path = Path(args.xlsx)
-        pdf_path = Path(args.doc)
-        entries = load_entries_from_xlsx(xlsx_path)
-        page_texts = extract_pdf_text(pdf_path, dpi=args.dpi)
-        report = build_report(entries, page_texts)
+        report = pdf_validator.validate_xlsx_against_doc(
+            xlsx_path=Path(args.xlsx),
+            doc_path=Path(args.doc),
+            dpi=args.dpi,
+        )
+        print(f"  ✓ Validation summary: {report['summary']}")
 
     print('\n⚙️ Applying transformation rules...')
     result = process_packing_list(rows, t1_map)
@@ -904,7 +906,7 @@ def main() -> int:
     print(f'\n💾 Writing output workbook: {output_path}')
     wb = openpyxl.load_workbook(args.xlsx)
     if report is not None:
-        add_validated_sheet(wb, report, validated_sheet_name='PDF_VALIDADO')
+        pdf_validator.add_validated_sheet(wb, report, validated_sheet_name='PDF_VALIDADO')
     add_processed_sheet(wb, result, summary, processed_sheet_name='PACKING_LIST_RESULT')
     if t1_info_list:
         add_t1_summary_sheet(wb, t1_info_list, sheet_name='T1_SUMMARY')
