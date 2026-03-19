@@ -41,6 +41,8 @@ from openpyxl.utils import get_column_letter
 from PIL import Image
 from pypdf import PdfReader
 
+import camion_pdf_validator as pdf_validator
+
 # ============================================================================
 # Shared styling
 # ============================================================================
@@ -822,32 +824,22 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('--xlsx', required=True, help='Input packing-list Excel (Sheet1 tab)')
     parser.add_argument('--t1', required=True, nargs='+', help='T1 transit PDF files')
     parser.add_argument('--doc', dest='doc', help='DOC PDF para validar el XLSX antes de procesar')
+    parser.add_argument('--output', default=None, help='Output Excel path')
     parser.add_argument('--verbose', action='store_true', help='Print row-by-row detail')
     parser.add_argument('--dpi', type=int, default=150, help='DPI para OCR del PDF DOC')
-
-    out_group = parser.add_mutually_exclusive_group()
-    out_group.add_argument('--output', default=None, help='Output Excel file path (standalone mode)')
-    out_group.add_argument('-o', dest='output_dir', default=None,
-                           metavar='OUTPUT_DIR',
-                           help='Output directory (web-stack mode; file is named <stem>-PROCESSED.xlsx)')
     return parser.parse_args()
 
 
-def derive_output_path(xlsx_path: str, output: Optional[str], output_dir: Optional[str] = None) -> Path:
+def derive_output_path(xlsx_path: str, output: Optional[str]) -> Path:
     if output:
         return Path(output)
     src = Path(xlsx_path)
-    stem_processed = f'{src.stem}-PROCESSED.xlsx'
-    if output_dir:
-        out = Path(output_dir)
-        out.mkdir(parents=True, exist_ok=True)
-        return out / stem_processed
-    return src.with_name(stem_processed)
+    return src.with_name(f'{src.stem}-PROCESSED.xlsx')
 
 
 def main() -> int:
     args = parse_args()
-    output_path = derive_output_path(args.xlsx, args.output, getattr(args, 'output_dir', None))
+    output_path = derive_output_path(args.xlsx, args.output)
 
     print('\n=== Camión Export Processor ===\n')
 
@@ -869,14 +861,14 @@ def main() -> int:
     print(f'  ✓ Totals: gross={summary["total_peso_bruto"]} net={summary["total_peso_neto"]} PK={summary["total_pk"]} CL={summary["total_cl"]}')
 
     report = None
-    json_path = csv_path = None
     if args.doc:
         print(f'\n🔎 Validating XLSX against PDF: {args.doc}')
-        xlsx_path = Path(args.xlsx)
-        pdf_path = Path(args.doc)
-        entries = load_entries_from_xlsx(xlsx_path)
-        page_texts = extract_pdf_text(pdf_path, dpi=args.dpi)
-        report = build_report(entries, page_texts)
+        report = pdf_validator.validate_xlsx_against_doc(
+            xlsx_path=Path(args.xlsx),
+            doc_path=Path(args.doc),
+            dpi=args.dpi,
+        )
+        print(f"  ✓ Validation summary: {report['summary']}")
 
     print('\n⚙️ Applying transformation rules...')
     result = process_packing_list(rows, t1_map)
@@ -894,7 +886,7 @@ def main() -> int:
     print(f'\n💾 Writing output workbook: {output_path}')
     wb = openpyxl.load_workbook(args.xlsx)
     if report is not None:
-        add_validated_sheet(wb, report, validated_sheet_name='PDF_VALIDADO')
+        pdf_validator.add_validated_sheet(wb, report, validated_sheet_name='PDF_VALIDADO')
     add_processed_sheet(wb, result, summary, processed_sheet_name='PACKING_LIST_RESULT')
     add_t1_summary_sheet(wb, t1_info_list, sheet_name='T1_SUMMARY')
     wb.save(output_path)
