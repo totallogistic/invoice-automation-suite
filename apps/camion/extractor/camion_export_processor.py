@@ -41,8 +41,6 @@ from openpyxl.utils import get_column_letter
 from PIL import Image
 from pypdf import PdfReader
 
-import camion_pdf_validator as pdf_validator
-
 # ============================================================================
 # Shared styling
 # ============================================================================
@@ -822,7 +820,7 @@ def add_t1_summary_sheet(wb: openpyxl.Workbook, t1_info: list[dict], sheet_name:
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description='Kenitra unified packing-list processor')
     parser.add_argument('--xlsx', required=True, help='Input packing-list Excel (Sheet1 tab)')
-    parser.add_argument('--t1', required=True, nargs='+', help='T1 transit PDF files')
+    parser.add_argument('--t1', nargs='*', default=[], help='T1 transit PDF files')
     parser.add_argument('--doc', dest='doc', help='DOC PDF para validar el XLSX antes de procesar')
     parser.add_argument('-o', '--output', default=None, help='Output Excel path')
     parser.add_argument('--verbose', action='store_true', help='Print row-by-row detail')
@@ -831,10 +829,27 @@ def parse_args() -> argparse.Namespace:
 
 
 def derive_output_path(xlsx_path: str, output: Optional[str]) -> Path:
-    if output:
-        return Path(output)
     src = Path(xlsx_path)
-    return src.with_name(f'{src.stem}-PROCESSED.xlsx')
+
+    if not output:
+        return src.with_name(f'{src.stem}-PROCESSED.xlsx')
+
+    out = Path(output)
+
+    if out.suffix.lower() == '.xlsx':
+        out.parent.mkdir(parents=True, exist_ok=True)
+        return out
+
+    if out.exists() and out.is_dir():
+        out.mkdir(parents=True, exist_ok=True)
+        return out / f'{src.stem}-PROCESSED.xlsx'
+
+    if out.suffix == '':
+        out.mkdir(parents=True, exist_ok=True)
+        return out / f'{src.stem}-PROCESSED.xlsx'
+
+    out.parent.mkdir(parents=True, exist_ok=True)
+    return out
 
 
 def main() -> int:
@@ -843,17 +858,20 @@ def main() -> int:
 
     print('\n=== Camión Export Processor ===\n')
 
-    print('📄 Extracting T1 data...')
     t1_info_list = []
     t1_map: dict[str, float] = {}
-    for pdf_path in args.t1:
-        info = extract_t1_info(pdf_path)
-        t1_info_list.append(info)
-        if info['mrn']:
-            t1_map[info['mrn']] = info['gross_kg']
-            print(f"  ✓ {info['source_file']}  →  MRN: {info['mrn']} | Gross: {info['gross_kg']:.0f} kg | Pkgs: {info['packages']} | Deadline: {info['deadline']}")
-        else:
-            print(f"  ⚠ Could not extract MRN from: {pdf_path}")
+    if args.t1:
+        print('📄 Extracting T1 data...')
+        for pdf_path in args.t1:
+            info = extract_t1_info(pdf_path)
+            t1_info_list.append(info)
+            if info['mrn']:
+                t1_map[info['mrn']] = info['gross_kg']
+                print(f"  ✓ {info['source_file']}  →  MRN: {info['mrn']} | Gross: {info['gross_kg']:.0f} kg | Pkgs: {info['packages']} | Deadline: {info['deadline']}")
+            else:
+                print(f"  ⚠ Could not extract MRN from: {pdf_path}")
+    else:
+        print('📄 No T1 files provided, using XLSX values where needed...')
 
     print(f'\n📊 Reading packing list: {args.xlsx}')
     rows, summary = read_sheet1(args.xlsx)
@@ -861,14 +879,14 @@ def main() -> int:
     print(f'  ✓ Totals: gross={summary["total_peso_bruto"]} net={summary["total_peso_neto"]} PK={summary["total_pk"]} CL={summary["total_cl"]}')
 
     report = None
+    json_path = csv_path = None
     if args.doc:
         print(f'\n🔎 Validating XLSX against PDF: {args.doc}')
-        report = pdf_validator.validate_xlsx_against_doc(
-            xlsx_path=Path(args.xlsx),
-            doc_path=Path(args.doc),
-            dpi=args.dpi,
-        )
-        print(f"  ✓ Validation summary: {report['summary']}")
+        xlsx_path = Path(args.xlsx)
+        pdf_path = Path(args.doc)
+        entries = load_entries_from_xlsx(xlsx_path)
+        page_texts = extract_pdf_text(pdf_path, dpi=args.dpi)
+        report = build_report(entries, page_texts)
 
     print('\n⚙️ Applying transformation rules...')
     result = process_packing_list(rows, t1_map)
@@ -886,9 +904,10 @@ def main() -> int:
     print(f'\n💾 Writing output workbook: {output_path}')
     wb = openpyxl.load_workbook(args.xlsx)
     if report is not None:
-        pdf_validator.add_validated_sheet(wb, report, validated_sheet_name='PDF_VALIDADO')
+        add_validated_sheet(wb, report, validated_sheet_name='PDF_VALIDADO')
     add_processed_sheet(wb, result, summary, processed_sheet_name='PACKING_LIST_RESULT')
-    add_t1_summary_sheet(wb, t1_info_list, sheet_name='T1_SUMMARY')
+    if t1_info_list:
+        add_t1_summary_sheet(wb, t1_info_list, sheet_name='T1_SUMMARY')
     wb.save(output_path)
 
     print('\n✅ Done!')
