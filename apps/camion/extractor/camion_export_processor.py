@@ -824,7 +824,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('--xlsx', required=True, help='Input packing-list Excel (Sheet1 tab)')
     parser.add_argument('--t1', required=True, nargs='+', help='T1 transit PDF files')
     parser.add_argument('--doc', dest='doc', help='DOC PDF para validar el XLSX antes de procesar')
-    parser.add_argument('--output', default=None, help='Output Excel path')
+    parser.add_argument('-o', '--output', default=None, help='Output Excel path')
     parser.add_argument('--verbose', action='store_true', help='Print row-by-row detail')
     parser.add_argument('--dpi', type=int, default=150, help='DPI para OCR del PDF DOC')
     return parser.parse_args()
