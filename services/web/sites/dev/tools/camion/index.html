@@ -350,9 +350,6 @@
         if (!/\.xlsx$/i.test(xlsxFile.name)) {
           return setUploadMsg(`Packing list no válido: ${xlsxFile.name}. Debe ser .xlsx`, true);
         }
-        if (t1Files.length === 0) {
-          return setUploadMsg("Selecciona al menos un documento T1 (.pdf).", true);
-        }
         for (const f of t1Files) {
           if (!/\.pdf$/i.test(f.name)) {
             return setUploadMsg(`Documento T1 no válido: ${f.name}. Debe ser .pdf`, true);
