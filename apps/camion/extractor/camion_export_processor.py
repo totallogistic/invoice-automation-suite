@@ -568,27 +568,35 @@ _COL = {
 }
 
 
-def _find_source_worksheet(wb: openpyxl.Workbook) -> openpyxl.worksheet.worksheet.Worksheet:
-    """
-    Devuelve la primera hoja que parece ser el packing list del cliente,
-    sin depender del nombre de la hoja.
-    """
+def _find_source_worksheet(wb: openpyxl.Workbook):
     for ws in wb.worksheets:
-        raw = list(ws.iter_rows(min_row=1, max_row=min(ws.max_row, 6), values_only=True))
-        if len(raw) < 4:
-            continue
         try:
-            for i in range(2, min(6, len(raw))):
-                row = raw[i]
-                if row is None:
-                    continue
-                if len(row) <= _COL['cl']:
-                    continue
-                if row[_COL['peso_bruto']] is not None:
-                    return ws
+            row1 = [str(ws.cell(1, c).value or "").strip().lower() for c in range(1, 13)]
+            row2 = [str(ws.cell(2, c).value or "").strip().lower() for c in range(1, 13)]
+
+            has_base = (
+                len(row1) >= 4
+                and row1[0] == "tour"
+                and row1[1] == "date"
+                and row1[2] == "trailer"
+                and row1[3] == "to"
+            )
+
+            has_shipper = "shipper" in row1
+            has_recipient = "recipient" in row1
+
+            has_some_data = any(
+                any(ws.cell(r, c).value not in (None, "") for c in range(1, 8))
+                for r in range(5, min(ws.max_row, 15) + 1)
+            )
+
+            if has_base and has_shipper and has_recipient and has_some_data:
+                return ws
+
         except Exception:
             continue
-    raise ValueError('No se encontró ninguna hoja con formato válido de packing list')
+
+    raise ValueError("No se encontró ninguna hoja con formato válido de packing list")
 
 
 def read_sheet1(xlsx_path: str) -> tuple[list[dict], dict]:
