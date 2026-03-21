@@ -301,20 +301,6 @@ class UnifiedProcessor:
         ]
     
     def _build_camion_cmd(self, tool: ToolConfig, files: List[Path], output_path: Path) -> List[str]:
-        """Build CLI command for camion-mode extractors (Camion Export Processor).
-
-        Expected batch layout:
-        - Exactly one .xlsx  → packing list  (passed via --xlsx)
-        - One or more .pdf with "t1" in the filename → T1 docs (passed via --t1)
-        - Exactly one .pdf with "doc" in the filename → DOC (passed via --doc)
-
-        Resolution rules:
-        1) Exactly one XLSX is required; fails loudly if absent or multiple.
-        2) PDF files are split into T1 vs DOC by checking for "t1" or "doc"
-           in the filename (case-insensitive).  If a PDF matches neither
-           keyword it is treated as a DOC when there is only one such
-           ambiguous file; otherwise the call fails.
-        """
         xlsx_files = [f for f in files if f.suffix.lower() == ".xlsx"]
         pdf_files = [f for f in files if f.suffix.lower() == ".pdf"]
 
@@ -341,24 +327,23 @@ class UnifiedProcessor:
                     "Use filenames containing 't1' or 'doc'."
                 )
 
-        if not t1_files:
-            raise RuntimeError(
-                f"[{tool.name}] No T1 PDF files found. "
-                "Filenames must contain 't1' (case-insensitive)."
-            )
         if len(doc_files) != 1:
             raise RuntimeError(
                 f"[{tool.name}] Expected exactly 1 DOC PDF file, "
                 f"got {len(doc_files)}. Filename must contain 'doc'."
             )
 
-        return [
+        cmd = [
             "python3", str(tool.extractor_path),
             "--xlsx", str(xlsx_file),
-            "--t1", *[str(f) for f in t1_files],
             "--doc", str(doc_files[0]),
             "-o", str(output_path),
         ]
+
+        if t1_files:
+            cmd.extend(["--t1", *[str(f) for f in t1_files]])
+
+        return cmd
 
     def _get_recipients(self, tool_name: str) -> List[str]:
         """Get recipients: per-tool first, then global fallback."""
