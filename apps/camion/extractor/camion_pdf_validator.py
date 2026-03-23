@@ -500,6 +500,26 @@ def derive_output_path(xlsx_path: str, output: Optional[str]) -> Path:
     src = Path(xlsx_path)
     return src.with_name(f'{src.stem}-VALIDATED.xlsx')
 
+def validate_xlsx_against_doc(xlsx_path: Path, doc_path: Path, dpi: int = 150) -> dict:
+    entries = load_entries_from_xlsx(Path(xlsx_path))
+    page_texts = extract_pdf_text(Path(doc_path), dpi=dpi)
+    return build_report(entries, page_texts)
+
+
+def append_validated_sheet_from_paths(
+    wb: openpyxl.Workbook,
+    xlsx_path: Path,
+    doc_path: Path,
+    dpi: int = 150,
+    validated_sheet_name: str = "PDF_VALIDADO",
+) -> dict:
+    report = validate_xlsx_against_doc(
+        xlsx_path=Path(xlsx_path),
+        doc_path=Path(doc_path),
+        dpi=dpi,
+    )
+    add_validated_sheet(wb, report, validated_sheet_name=validated_sheet_name)
+    return report
 
 def main() -> int:
     args = parse_args()
