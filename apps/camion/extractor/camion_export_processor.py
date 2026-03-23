@@ -40,6 +40,7 @@ from openpyxl.styles import Font, PatternFill, Alignment
 from openpyxl.utils import get_column_letter
 from PIL import Image
 from pypdf import PdfReader
+import camion_pdf_validator as pdf_validator
 
 # ============================================================================
 # Shared styling
@@ -834,10 +835,10 @@ def add_t1_summary_sheet(wb: openpyxl.Workbook, t1_info: list[dict], sheet_name:
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description='Kenitra unified packing-list processor')
     parser.add_argument('--xlsx', required=True, help='Input packing-list Excel (Sheet1 tab)')
-    parser.add_argument('--t1', required=True, nargs='+', help='T1 transit PDF files')
+    parser.add_argument('--t1', nargs='*', default=[], help='T1 transit PDF files (optional)')
     parser.add_argument('--doc', dest='doc', help='DOC PDF para validar el XLSX antes de procesar')
     parser.add_argument('--pdf', dest='doc', help=argparse.SUPPRESS)
-    parser.add_argument('--output', default=None, help='Output Excel path')
+    parser.add_argument('-o', '--output', default=None, help='Output Excel path')
     parser.add_argument('--verbose', action='store_true', help='Print row-by-row detail')
     parser.add_argument('--dpi', type=int, default=150, help='DPI para OCR del PDF DOC')
     return parser.parse_args()
@@ -856,17 +857,21 @@ def main() -> int:
 
     print('\n=== Camión Export Processor ===\n')
 
-    print('📄 Extracting T1 data...')
     t1_info_list = []
     t1_map: dict[str, float] = {}
-    for pdf_path in args.t1:
-        info = extract_t1_info(pdf_path)
-        t1_info_list.append(info)
-        if info['mrn']:
-            t1_map[info['mrn']] = info['gross_kg']
-            print(f"  ✓ {info['source_file']}  →  MRN: {info['mrn']} | Gross: {info['gross_kg']:.0f} kg | Pkgs: {info['packages']} | Deadline: {info['deadline']}")
-        else:
-            print(f"  ⚠ Could not extract MRN from: {pdf_path}")
+
+    if args.t1:
+        print('📄 Extracting T1 data...')
+        for pdf_path in args.t1:
+            info = extract_t1_info(pdf_path)
+            t1_info_list.append(info)
+            if info['mrn']:
+                t1_map[info['mrn']] = info['gross_kg']
+                print(f"  ✓ {info['source_file']}  →  MRN: {info['mrn']} | Gross: {info['gross_kg']:.0f} kg | Pkgs: {info['packages']} | Deadline: {info['deadline']}")
+            else:
+                print(f"  ⚠ Could not extract MRN from: {pdf_path}")
+    else:
+        print('📄 No T1 files provided, using XLSX values where needed...')
 
     print(f'\n📊 Reading packing list: {args.xlsx}')
     rows, summary = read_sheet1(args.xlsx)
@@ -876,13 +881,11 @@ def main() -> int:
     report = None
     if args.doc:
         print(f'\n🔎 Validating XLSX against PDF: {args.doc}')
-        xlsx_path = Path(args.xlsx)
-        pdf_path = Path(args.doc)
-
-        entries = load_entries_from_xlsx(xlsx_path)
-        page_texts = extract_pdf_text(pdf_path, dpi=args.dpi)
-        report = build_report(entries, page_texts)
-
+        report = pdf_validator.validate_xlsx_against_doc(
+            xlsx_path=Path(args.xlsx),
+            doc_path=Path(args.doc),
+            dpi=args.dpi,
+        )
         print(f"  ✓ Validation summary: {json.dumps(report['summary'], ensure_ascii=False)}")
 
     print('\n⚙️ Applying transformation rules...')
@@ -901,9 +904,10 @@ def main() -> int:
     print(f'\n💾 Writing output workbook: {output_path}')
     wb = openpyxl.load_workbook(args.xlsx)
     if report is not None:
-        add_validated_sheet(wb, report, validated_sheet_name='PDF_VALIDADO')
+        pdf_validator.add_validated_sheet(wb, report, validated_sheet_name='PDF_VALIDADO')
     add_processed_sheet(wb, result, summary, processed_sheet_name='PACKING_LIST_RESULT')
-    add_t1_summary_sheet(wb, t1_info_list, sheet_name='T1_SUMMARY')
+    if t1_info_list:
+        add_t1_summary_sheet(wb, t1_info_list, sheet_name='T1_SUMMARY')
     wb.save(output_path)
 
     print('\n✅ Done!')
