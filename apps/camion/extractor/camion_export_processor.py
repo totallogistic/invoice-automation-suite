@@ -103,6 +103,12 @@ def find_present_values(haystack: str, needles: Iterable[str]) -> list[str]:
             found.append(n)
     return found
 
+def safe_get(row, idx, default=None):
+    if row is None:
+        return default
+    if idx < 0 or idx >= len(row):
+        return default
+    return row[idx]
 
 def safe_float(value: object) -> Optional[float]:
     if value is None or value == "":
@@ -197,41 +203,63 @@ def load_entries_from_xlsx(xlsx_path: Path) -> list[RowEntry]:
         if not any(cell is not None and cell != "" for cell in row):
             continue
 
-        tour, date_val, trailer = row[0], row[1], row[2]
-        if tour:
-            current_tour = str(tour)
-        if date_val:
-            if isinstance(date_val, (dt.datetime, dt.date)):
-                current_date = date_val.strftime("%Y-%m-%d")
+        c0 = safe_get(row, 0)
+        c1 = safe_get(row, 1)
+        c2 = safe_get(row, 2)
+        c3 = safe_get(row, 3)
+        c4 = safe_get(row, 4)
+        c5 = safe_get(row, 5)
+        c6 = safe_get(row, 6)
+        c7 = safe_get(row, 7)
+        c8 = safe_get(row, 8)
+        c9 = safe_get(row, 9)
+        c10 = safe_get(row, 10)
+        c11 = safe_get(row, 11)
+        c12 = safe_get(row, 12)
+        c13 = safe_get(row, 13)
+        c14 = safe_get(row, 14)
+        c15 = safe_get(row, 15)
+        c16 = safe_get(row, 16)
+        c17 = safe_get(row, 17)
+        c18 = safe_get(row, 18)
+        c19 = safe_get(row, 19)
+        c20 = safe_get(row, 20)
+        c21 = safe_get(row, 21)
+
+        if c0:
+            current_tour = str(c0)
+        if c1:
+            if isinstance(c1, (dt.datetime, dt.date)):
+                current_date = c1.strftime("%Y-%m-%d")
             else:
-                current_date = str(date_val)
-        if trailer:
-            current_trailer = str(trailer)
+                current_date = str(c1)
+        if c2:
+            current_trailer = str(c2)
 
         entries.append(RowEntry(
             excel_row=row_idx,
             tour=current_tour,
             date=current_date,
             trailer=current_trailer,
-            to_code=str(row[3]).strip() if row[3] else None,
-            shipper_name=str(row[4]).strip() if row[4] else None,
-            shipper_iso=str(row[5]).strip() if row[5] else None,
-            shipper_city=str(row[6]).strip() if row[6] else None,
-            shipper_code=str(row[7]).strip() if row[7] else None,
-            recipient_name=str(row[8]).strip() if row[8] else None,
-            recipient_iso=str(row[9]).strip() if row[9] else None,
-            recipient_city=str(row[10]).strip() if row[10] else None,
-            recipient_code=str(row[11]).strip() if row[11] else None,
-            vol=safe_float(row[12]),
-            mrn_invoice=str(row[13]).strip() if row[13] else None,
-            mrn_detail=str(row[14]).strip() if row[14] else None,
-            value_eur=safe_float(row[15]),
-            value_usd=safe_float(row[16]),
-            hu=safe_float(row[17]),
-            peso_bruto=safe_float(row[18]),
-            peso_neto=safe_float(row[19]),
-            pk=safe_float(row[20]),
-            cl=safe_float(row[21]),
+            to_code=str(c3).strip() if c3 else None,
+            shipper_name=str(c4).strip() if c4 else None,
+            shipper_iso=str(c5).strip() if c5 else None,
+            shipper_city=str(c6).strip() if c6 else None,
+            shipper_code=str(c7).strip() if c7 else None,
+            recipient_name=str(c8).strip() if c8 else None,
+            recipient_iso=str(c9).strip() if c9 else None,
+            recipient_city=str(c10).strip() if c10 else None,
+            recipient_code=str(c11).strip() if c11 else None,
+            vol=safe_float(c12),
+            mrn_invoice=str(c13).strip() if c13 else None,
+            mrn_detail=str(c14).strip() if c14 else None,
+            value_eur=safe_float(c15),
+            value_usd=safe_float(c16),
+            hu=safe_float(c17),
+            peso_bruto=safe_float(c18),
+            peso_neto=safe_float(c19),
+            pk=safe_float(c20),
+            cl=safe_float(c21),
         ))
 
     return entries
@@ -581,27 +609,35 @@ _COL = {
 }
 
 
-def _find_source_worksheet(wb: openpyxl.Workbook) -> openpyxl.worksheet.worksheet.Worksheet:
-    """
-    Devuelve la primera hoja que parece ser el packing list del cliente,
-    sin depender del nombre de la hoja.
-    """
+def _find_source_worksheet(wb: openpyxl.Workbook):
     for ws in wb.worksheets:
-        raw = list(ws.iter_rows(min_row=1, max_row=min(ws.max_row, 6), values_only=True))
-        if len(raw) < 4:
-            continue
         try:
-            for i in range(2, min(6, len(raw))):
-                row = raw[i]
-                if row is None:
-                    continue
-                if len(row) <= _COL['cl']:
-                    continue
-                if row[_COL['peso_bruto']] is not None:
-                    return ws
+            row1 = [str(ws.cell(1, c).value or "").strip().lower() for c in range(1, 16)]
+            row2 = [str(ws.cell(2, c).value or "").strip().lower() for c in range(1, 16)]
+
+            has_base = (
+                len(row1) >= 4
+                and row1[0] == "tour"
+                and row1[1] == "date"
+                and row1[2] == "trailer"
+                and row1[3] == "to"
+            )
+
+            has_shipper = "shipper" in row1 or "shipper" in row2
+            has_recipient = "recipient" in row1 or "recipient" in row2
+
+            has_some_data = any(
+                any(ws.cell(r, c).value not in (None, "") for c in range(1, 8))
+                for r in range(5, min(ws.max_row, 15) + 1)
+            )
+
+            if has_base and has_shipper and has_recipient and has_some_data:
+                return ws
+
         except Exception:
             continue
-    raise ValueError('No se encontró ninguna hoja con formato válido de packing list')
+
+    raise ValueError("No se encontró ninguna hoja con formato válido de packing list")
 
 
 def read_sheet1(xlsx_path: str) -> tuple[list[dict], dict]:
@@ -610,23 +646,53 @@ def read_sheet1(xlsx_path: str) -> tuple[list[dict], dict]:
     raw_rows = list(ws.iter_rows(values_only=False))
     raw = [tuple(c.value for c in r) for r in raw_rows]
 
-    summary_row_idx = next(i for i in range(2, 6) if raw[i][_COL['peso_bruto']] is not None)
+    def has_peso_bruto_at(row_idx: int) -> bool:
+        if row_idx < 0 or row_idx >= len(raw):
+            return False
+        return _safe_idx(raw[row_idx], _COL['peso_bruto']) is not None
+
+    summary_row_idx = next(
+        i for i in range(2, min(6, len(raw))) if has_peso_bruto_at(i)
+    )
+
     s = raw[summary_row_idx]
     summary = {
-        'total_peso_bruto': s[_COL['peso_bruto']],
-        'total_peso_neto': s[_COL['peso_neto']],
-        'total_pk': s[_COL['pk']],
-        'total_cl': s[_COL['cl']],
+        'total_peso_bruto': _safe_idx(s, _COL['peso_bruto']),
+        'total_peso_neto': _safe_idx(s, _COL['peso_neto']),
+        'total_pk': _safe_idx(s, _COL['pk']),
+        'total_cl': _safe_idx(s, _COL['cl']),
     }
 
     rows = []
     for src_row_obj, raw_row in zip(raw_rows[summary_row_idx + 1:], raw[summary_row_idx + 1:]):
         if all(v is None for v in raw_row):
             continue
-        has_yellow = any(c.fill.fgColor.rgb == 'FFFFFFBB' for c in src_row_obj if c.fill)
-        row_dict = {k: raw_row[i] for k, i in _COL.items()}
+
+        has_yellow = any(
+            getattr(getattr(c.fill, "fgColor", None), "rgb", None) == 'FFFFFFBB'
+            for c in src_row_obj if c.fill
+        )
+
+        row_dict = {k: _safe_idx(raw_row, i) for k, i in _COL.items()}
         row_dict['_src_yellow'] = has_yellow
         rows.append(row_dict)
+
+    def _num(v):
+        try:
+            if v in (None, ""):
+                return 0.0
+            return float(v)
+        except Exception:
+            return 0.0
+
+    if summary['total_peso_bruto'] is None:
+        summary['total_peso_bruto'] = sum(_num(r.get('peso_bruto')) for r in rows)
+    if summary['total_peso_neto'] is None:
+        summary['total_peso_neto'] = sum(_num(r.get('peso_neto')) for r in rows)
+    if summary['total_pk'] is None:
+        summary['total_pk'] = sum(_num(r.get('pk')) for r in rows)
+    if summary['total_cl'] is None:
+        summary['total_cl'] = sum(_num(r.get('cl')) for r in rows)
 
     return rows, summary
 
