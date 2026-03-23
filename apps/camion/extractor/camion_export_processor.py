@@ -952,7 +952,6 @@ def main() -> int:
             doc_path=Path(args.doc),
             dpi=args.dpi,
         )
-        print(f"  ✓ Validation summary: {json.dumps(report['summary'], ensure_ascii=False)}")
 
     print('\n⚙️ Applying transformation rules...')
     result = process_packing_list(rows, t1_map)
