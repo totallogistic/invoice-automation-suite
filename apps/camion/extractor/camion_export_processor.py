@@ -910,11 +910,28 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def derive_output_path(xlsx_path: str, output: Optional[str]) -> Path:
-    if output:
-        return Path(output)
-    src = Path(xlsx_path)
-    return src.with_name(f'{src.stem}-PROCESSED.xlsx')
+def derive_output_path(xlsx_input: str, output_arg: str | None) -> Path:
+    xlsx_path = Path(xlsx_input)
+
+    if not output_arg:
+        return xlsx_path.with_name(f"{xlsx_path.stem}-PROCESSED.xlsx")
+
+    out = Path(output_arg)
+
+    if out.suffix.lower() == ".xlsx":
+        out.parent.mkdir(parents=True, exist_ok=True)
+        return out
+
+    if out.exists() and out.is_dir():
+        out.mkdir(parents=True, exist_ok=True)
+        return out / f"{xlsx_path.stem}-PROCESSED.xlsx"
+
+    if out.suffix == "":
+        out.mkdir(parents=True, exist_ok=True)
+        return out / f"{xlsx_path.stem}-PROCESSED.xlsx"
+
+    out.parent.mkdir(parents=True, exist_ok=True)
+    return out
 
 
 def main() -> int:
