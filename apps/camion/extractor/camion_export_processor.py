@@ -41,8 +41,6 @@ from openpyxl.utils import get_column_letter
 from PIL import Image
 from pypdf import PdfReader
 
-import camion_pdf_validator as pdf_validator
-
 # ============================================================================
 # Shared styling
 # ============================================================================
@@ -256,11 +254,17 @@ def extract_pdf_text(pdf_path: Path, dpi: int = 150) -> dict[int, str]:
             page_texts[page_no] = native
             continue
 
+        txt_path = cache_dir / f"page-{page_no:03d}.txt"
+        if txt_path.exists():
+            page_texts[page_no] = txt_path.read_text(encoding="utf-8", errors="ignore")
+            continue
+
         page = doc.load_page(page_no - 1)
         scale = dpi / 72.0
         pix = page.get_pixmap(matrix=fitz.Matrix(scale, scale), alpha=False)
         img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
         ocr_text = pytesseract.image_to_string(img, lang="eng")
+        txt_path.write_text(ocr_text, encoding="utf-8")
         page_texts[page_no] = ocr_text
 
     return page_texts
@@ -513,6 +517,14 @@ def _parse_european_number(s: str) -> float:
     return float(s)
 
 
+
+def _safe_idx(row, idx, default=None):
+    if row is None:
+        return default
+    if idx < 0 or idx >= len(row):
+        return default
+    return row[idx]
+
 def extract_t1_info(pdf_path: str) -> dict:
     with pdfplumber.open(pdf_path) as pdf:
         text = pdf.pages[0].extract_text() or ""
@@ -568,42 +580,28 @@ _COL = {
 }
 
 
-def _find_source_worksheet(wb: openpyxl.Workbook):
+def _find_source_worksheet(wb: openpyxl.Workbook) -> openpyxl.worksheet.worksheet.Worksheet:
+    """
+    Devuelve la primera hoja que parece ser el packing list del cliente,
+    sin depender del nombre de la hoja.
+    """
     for ws in wb.worksheets:
+        raw = list(ws.iter_rows(min_row=1, max_row=min(ws.max_row, 6), values_only=True))
+        if len(raw) < 4:
+            continue
         try:
-            row1 = [str(ws.cell(1, c).value or "").strip().lower() for c in range(1, 13)]
-            row2 = [str(ws.cell(2, c).value or "").strip().lower() for c in range(1, 13)]
-
-            has_base = (
-                len(row1) >= 4
-                and row1[0] == "tour"
-                and row1[1] == "date"
-                and row1[2] == "trailer"
-                and row1[3] == "to"
-            )
-
-            has_shipper = "shipper" in row1
-            has_recipient = "recipient" in row1
-
-            has_some_data = any(
-                any(ws.cell(r, c).value not in (None, "") for c in range(1, 8))
-                for r in range(5, min(ws.max_row, 15) + 1)
-            )
-
-            if has_base and has_shipper and has_recipient and has_some_data:
-                return ws
-
+            for i in range(2, min(6, len(raw))):
+                row = raw[i]
+                if row is None:
+                    continue
+                if len(row) <= _COL['cl']:
+                    continue
+                if row[_COL['peso_bruto']] is not None:
+                    return ws
         except Exception:
             continue
+    raise ValueError('No se encontró ninguna hoja con formato válido de packing list')
 
-    raise ValueError("No se encontró ninguna hoja con formato válido de packing list")
-
-def _safe_idx(row, idx, default=None):
-    if row is None:
-        return default
-    if idx < 0 or idx >= len(row):
-        return default
-    return row[idx]
 
 def read_sheet1(xlsx_path: str) -> tuple[list[dict], dict]:
     wb = openpyxl.load_workbook(xlsx_path)
@@ -611,54 +609,23 @@ def read_sheet1(xlsx_path: str) -> tuple[list[dict], dict]:
     raw_rows = list(ws.iter_rows(values_only=False))
     raw = [tuple(c.value for c in r) for r in raw_rows]
 
-    def has_peso_bruto_at(row_idx: int) -> bool:
-        if row_idx < 0 or row_idx >= len(raw):
-            return False
-        return _safe_idx(raw[row_idx], _COL['peso_bruto']) is not None
-
-    summary_row_idx = next(
-        i for i in range(2, min(6, len(raw))) if has_peso_bruto_at(i)
-    )
-
+    summary_row_idx = next(i for i in range(2, 6) if raw[i][_COL['peso_bruto']] is not None)
     s = raw[summary_row_idx]
-
     summary = {
-        'total_peso_bruto': _safe_idx(s, _COL['peso_bruto']),
-        'total_peso_neto': _safe_idx(s, _COL['peso_neto']),
-        'total_pk': _safe_idx(s, _COL['pk']),
-        'total_cl': _safe_idx(s, _COL['cl']),
+        'total_peso_bruto': s[_COL['peso_bruto']],
+        'total_peso_neto': s[_COL['peso_neto']],
+        'total_pk': s[_COL['pk']],
+        'total_cl': s[_COL['cl']],
     }
 
     rows = []
     for src_row_obj, raw_row in zip(raw_rows[summary_row_idx + 1:], raw[summary_row_idx + 1:]):
         if all(v is None for v in raw_row):
             continue
-
-        has_yellow = any(
-            getattr(getattr(c.fill, "fgColor", None), "rgb", None) == 'FFFFFFBB'
-            for c in src_row_obj if c.fill
-        )
-
-        row_dict = {k: _safe_idx(raw_row, i) for k, i in _COL.items()}
+        has_yellow = any(c.fill.fgColor.rgb == 'FFFFFFBB' for c in src_row_obj if c.fill)
+        row_dict = {k: raw_row[i] for k, i in _COL.items()}
         row_dict['_src_yellow'] = has_yellow
         rows.append(row_dict)
-
-    def _num(v):
-        try:
-            if v in (None, ""):
-                return 0.0
-            return float(v)
-        except Exception:
-            return 0.0
-
-    if summary['total_peso_bruto'] is None:
-        summary['total_peso_bruto'] = sum(_num(r.get('peso_bruto')) for r in rows)
-    if summary['total_peso_neto'] is None:
-        summary['total_peso_neto'] = sum(_num(r.get('peso_neto')) for r in rows)
-    if summary['total_pk'] is None:
-        summary['total_pk'] = sum(_num(r.get('pk')) for r in rows)
-    if summary['total_cl'] is None:
-        summary['total_cl'] = sum(_num(r.get('cl')) for r in rows)
 
     return rows, summary
 
@@ -826,7 +793,7 @@ def add_processed_sheet(wb: openpyxl.Workbook, result_rows: list[dict], summary:
         f'=SUM(F{data_start_row}:F{data_end_row})',
         'COINCIDE ± CON PESO BRUTO',
         None,
-        f'=SUM(H{data_start_row}:I{data_end_row})',
+        '=SUM(H4,I4)',
     ])
     for cell in ws[coincide_row]:
         cell.font = arial10
@@ -867,36 +834,20 @@ def add_t1_summary_sheet(wb: openpyxl.Workbook, t1_info: list[dict], sheet_name:
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description='Kenitra unified packing-list processor')
     parser.add_argument('--xlsx', required=True, help='Input packing-list Excel (Sheet1 tab)')
-    parser.add_argument('--t1', nargs='*', default=[], help='T1 transit PDF files')
+    parser.add_argument('--t1', required=True, nargs='+', help='T1 transit PDF files')
     parser.add_argument('--doc', dest='doc', help='DOC PDF para validar el XLSX antes de procesar')
-    parser.add_argument('-o', '--output', default=None, help='Output Excel path')
+    parser.add_argument('--pdf', dest='doc', help=argparse.SUPPRESS)
+    parser.add_argument('--output', default=None, help='Output Excel path')
     parser.add_argument('--verbose', action='store_true', help='Print row-by-row detail')
     parser.add_argument('--dpi', type=int, default=150, help='DPI para OCR del PDF DOC')
     return parser.parse_args()
 
 
 def derive_output_path(xlsx_path: str, output: Optional[str]) -> Path:
+    if output:
+        return Path(output)
     src = Path(xlsx_path)
-
-    if not output:
-        return src.with_name(f'{src.stem}-PROCESSED.xlsx')
-
-    out = Path(output)
-
-    if out.suffix.lower() == '.xlsx':
-        out.parent.mkdir(parents=True, exist_ok=True)
-        return out
-
-    if out.exists() and out.is_dir():
-        out.mkdir(parents=True, exist_ok=True)
-        return out / f'{src.stem}-PROCESSED.xlsx'
-
-    if out.suffix == '':
-        out.mkdir(parents=True, exist_ok=True)
-        return out / f'{src.stem}-PROCESSED.xlsx'
-
-    out.parent.mkdir(parents=True, exist_ok=True)
-    return out
+    return src.with_name(f'{src.stem}-PROCESSED.xlsx')
 
 
 def main() -> int:
@@ -905,20 +856,17 @@ def main() -> int:
 
     print('\n=== Camión Export Processor ===\n')
 
+    print('📄 Extracting T1 data...')
     t1_info_list = []
     t1_map: dict[str, float] = {}
-    if args.t1:
-        print('📄 Extracting T1 data...')
-        for pdf_path in args.t1:
-            info = extract_t1_info(pdf_path)
-            t1_info_list.append(info)
-            if info['mrn']:
-                t1_map[info['mrn']] = info['gross_kg']
-                print(f"  ✓ {info['source_file']}  →  MRN: {info['mrn']} | Gross: {info['gross_kg']:.0f} kg | Pkgs: {info['packages']} | Deadline: {info['deadline']}")
-            else:
-                print(f"  ⚠ Could not extract MRN from: {pdf_path}")
-    else:
-        print('📄 No T1 files provided, using XLSX values where needed...')
+    for pdf_path in args.t1:
+        info = extract_t1_info(pdf_path)
+        t1_info_list.append(info)
+        if info['mrn']:
+            t1_map[info['mrn']] = info['gross_kg']
+            print(f"  ✓ {info['source_file']}  →  MRN: {info['mrn']} | Gross: {info['gross_kg']:.0f} kg | Pkgs: {info['packages']} | Deadline: {info['deadline']}")
+        else:
+            print(f"  ⚠ Could not extract MRN from: {pdf_path}")
 
     print(f'\n📊 Reading packing list: {args.xlsx}')
     rows, summary = read_sheet1(args.xlsx)
@@ -928,12 +876,14 @@ def main() -> int:
     report = None
     if args.doc:
         print(f'\n🔎 Validating XLSX against PDF: {args.doc}')
-        report = pdf_validator.validate_xlsx_against_doc(
-            xlsx_path=Path(args.xlsx),
-            doc_path=Path(args.doc),
-            dpi=args.dpi,
-        )
-        print(f"  ✓ Validation summary: {report['summary']}")
+        xlsx_path = Path(args.xlsx)
+        pdf_path = Path(args.doc)
+
+        entries = load_entries_from_xlsx(xlsx_path)
+        page_texts = extract_pdf_text(pdf_path, dpi=args.dpi)
+        report = build_report(entries, page_texts)
+
+        print(f"  ✓ Validation summary: {json.dumps(report['summary'], ensure_ascii=False)}")
 
     print('\n⚙️ Applying transformation rules...')
     result = process_packing_list(rows, t1_map)
@@ -951,10 +901,9 @@ def main() -> int:
     print(f'\n💾 Writing output workbook: {output_path}')
     wb = openpyxl.load_workbook(args.xlsx)
     if report is not None:
-        pdf_validator.add_validated_sheet(wb, report, validated_sheet_name='PDF_VALIDADO')
+        add_validated_sheet(wb, report, validated_sheet_name='PDF_VALIDADO')
     add_processed_sheet(wb, result, summary, processed_sheet_name='PACKING_LIST_RESULT')
-    if t1_info_list:
-        add_t1_summary_sheet(wb, t1_info_list, sheet_name='T1_SUMMARY')
+    add_t1_summary_sheet(wb, t1_info_list, sheet_name='T1_SUMMARY')
     wb.save(output_path)
 
     print('\n✅ Done!')
