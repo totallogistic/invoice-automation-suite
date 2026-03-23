@@ -950,17 +950,17 @@ def main() -> int:
             pb = str(r['peso_bruto']) if r['peso_bruto'] is not None else '–'
             print(f'  {sep:<4} {ylw:<7} {r["_type"]:<8} {str(r["mrn_invoice"] or ""):<35} {pb:>8}')
 
-        print(f'\n💾 Writing output workbook: {output_path}')
-        wb = openpyxl.load_workbook(args.xlsx)
-        if report is not None:
-            pdf_validator.add_validated_sheet(wb, report, validated_sheet_name='PDF_VALIDADO')
-        add_processed_sheet(wb, result, summary, processed_sheet_name='PACKING_LIST_RESULT')
-        wb.save(output_path)
+    print(f'\n💾 Writing output workbook: {output_path}')
+    wb = openpyxl.load_workbook(args.xlsx)
+    if report is not None:
+        pdf_validator.add_validated_sheet(wb, report, validated_sheet_name='PDF_VALIDADO')
+    add_processed_sheet(wb, result, summary, processed_sheet_name='PACKING_LIST_RESULT')
+    wb.save(output_path)
 
-        print('\n✅ Done!')
-        print(f'  ✓ XLSX: {output_path}')
-        print()
-        return 0
+    print('\n✅ Done!')
+    print(f'  ✓ XLSX: {output_path}')
+    print()
+    return 0
 
 
 if __name__ == '__main__':
