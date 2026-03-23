@@ -598,6 +598,12 @@ def _find_source_worksheet(wb: openpyxl.Workbook):
 
     raise ValueError("No se encontró ninguna hoja con formato válido de packing list")
 
+def _safe_idx(row, idx, default=None):
+    if row is None:
+        return default
+    if idx < 0 or idx >= len(row):
+        return default
+    return row[idx]
 
 def read_sheet1(xlsx_path: str) -> tuple[list[dict], dict]:
     wb = openpyxl.load_workbook(xlsx_path)
@@ -605,23 +611,54 @@ def read_sheet1(xlsx_path: str) -> tuple[list[dict], dict]:
     raw_rows = list(ws.iter_rows(values_only=False))
     raw = [tuple(c.value for c in r) for r in raw_rows]
 
-    summary_row_idx = next(i for i in range(2, 6) if raw[i][_COL['peso_bruto']] is not None)
+    def has_peso_bruto_at(row_idx: int) -> bool:
+        if row_idx < 0 or row_idx >= len(raw):
+            return False
+        return _safe_idx(raw[row_idx], _COL['peso_bruto']) is not None
+
+    summary_row_idx = next(
+        i for i in range(2, min(6, len(raw))) if has_peso_bruto_at(i)
+    )
+
     s = raw[summary_row_idx]
+
     summary = {
-        'total_peso_bruto': s[_COL['peso_bruto']],
-        'total_peso_neto': s[_COL['peso_neto']],
-        'total_pk': s[_COL['pk']],
-        'total_cl': s[_COL['cl']],
+        'total_peso_bruto': _safe_idx(s, _COL['peso_bruto']),
+        'total_peso_neto': _safe_idx(s, _COL['peso_neto']),
+        'total_pk': _safe_idx(s, _COL['pk']),
+        'total_cl': _safe_idx(s, _COL['cl']),
     }
 
     rows = []
     for src_row_obj, raw_row in zip(raw_rows[summary_row_idx + 1:], raw[summary_row_idx + 1:]):
         if all(v is None for v in raw_row):
             continue
-        has_yellow = any(c.fill.fgColor.rgb == 'FFFFFFBB' for c in src_row_obj if c.fill)
-        row_dict = {k: raw_row[i] for k, i in _COL.items()}
+
+        has_yellow = any(
+            getattr(getattr(c.fill, "fgColor", None), "rgb", None) == 'FFFFFFBB'
+            for c in src_row_obj if c.fill
+        )
+
+        row_dict = {k: _safe_idx(raw_row, i) for k, i in _COL.items()}
         row_dict['_src_yellow'] = has_yellow
         rows.append(row_dict)
+
+    def _num(v):
+        try:
+            if v in (None, ""):
+                return 0.0
+            return float(v)
+        except Exception:
+            return 0.0
+
+    if summary['total_peso_bruto'] is None:
+        summary['total_peso_bruto'] = sum(_num(r.get('peso_bruto')) for r in rows)
+    if summary['total_peso_neto'] is None:
+        summary['total_peso_neto'] = sum(_num(r.get('peso_neto')) for r in rows)
+    if summary['total_pk'] is None:
+        summary['total_pk'] = sum(_num(r.get('pk')) for r in rows)
+    if summary['total_cl'] is None:
+        summary['total_cl'] = sum(_num(r.get('cl')) for r in rows)
 
     return rows, summary
 
