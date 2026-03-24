@@ -935,6 +935,7 @@ def main() -> int:
             xlsx_path=Path(args.xlsx),
             doc_path=Path(args.doc),
             dpi=args.dpi,
+            t1_paths=[Path(p) for p in args.t1] if args.t1 else [],
         )
 
     print('\n⚙️ Applying transformation rules...')

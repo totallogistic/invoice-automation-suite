@@ -853,14 +853,25 @@ def add_validated_sheet(wb: openpyxl.Workbook, report: dict, validated_sheet_nam
     row_map = {item['excel_row']: item for item in report['results']}
     review_col = 23
     pages_col = 24
+    t1_status_col = 25
+    t1_mrn_col = 26
+    t1_gross_col = 27
+    t1_packages_col = 28
+    t1_file_col = 29
 
     dst_ws.cell(1, review_col).value = 'Validation Status'
     dst_ws.cell(1, pages_col).value = 'PDF Pages'
+    dst_ws.cell(1, t1_status_col).value = 'T1 Status'
+    dst_ws.cell(1, t1_mrn_col).value = 'T1 MRN'
+    dst_ws.cell(1, t1_gross_col).value = 'T1 Gross KG'
+    dst_ws.cell(1, t1_packages_col).value = 'T1 Packages'
+    dst_ws.cell(1, t1_file_col).value = 'T1 File'
 
     for row_idx in range(5, dst_ws.max_row + 1):
         item = row_map.get(row_idx)
         if not item:
             continue
+
         conf = item.get('confirmations', {})
         for col_idx in range(1, 23):
             col_letter = get_column_letter(col_idx)
@@ -872,8 +883,16 @@ def add_validated_sheet(wb: openpyxl.Workbook, report: dict, validated_sheet_nam
                 cell.fill = MISSING_FILL
             elif original_has_value and keep:
                 cell.fill = CONFIRMED_FILL
+
         dst_ws.cell(row_idx, review_col).value = item.get('status')
         dst_ws.cell(row_idx, pages_col).value = ', '.join(map(str, conf.get('context_pages', [])))
+
+        t1 = item.get('t1_validation', {})
+        dst_ws.cell(row_idx, t1_status_col).value = t1.get('status')
+        dst_ws.cell(row_idx, t1_mrn_col).value = t1.get('mrn_t1')
+        dst_ws.cell(row_idx, t1_gross_col).value = t1.get('gross_t1')
+        dst_ws.cell(row_idx, t1_packages_col).value = t1.get('packages_t1')
+        dst_ws.cell(row_idx, t1_file_col).value = t1.get('source_file')
 
 
 def parse_args() -> argparse.Namespace:
