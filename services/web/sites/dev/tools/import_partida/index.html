@@ -23,6 +23,96 @@
         font-weight: 600;
         letter-spacing: -0.5px;
       }
+      .version-badge {
+        display: inline-block;
+        background: rgba(255,255,255,0.18);
+        color: rgba(255,255,255,0.85);
+        padding: 0.25rem 0.6rem;
+        border-radius: 4px;
+        font-size: 0.75rem;
+        font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+        margin-left: 0.75rem;
+        vertical-align: middle;
+        letter-spacing: 0.3px;
+        cursor: pointer;
+        transition: background 0.2s;
+      }
+      .version-badge:hover {
+        background: rgba(255,255,255,0.30);
+        color: white;
+      }
+      /* ── Changelog modal ── */
+      .modal-overlay {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,0.55);
+        z-index: 1000;
+        align-items: center;
+        justify-content: center;
+      }
+      .modal-overlay.open { display: flex; }
+      .modal {
+        background: white;
+        border-radius: 8px;
+        width: min(680px, 92vw);
+        max-height: 82vh;
+        display: flex;
+        flex-direction: column;
+        box-shadow: 0 8px 32px rgba(0,0,0,0.35);
+      }
+      .modal-header {
+        background: linear-gradient(135deg, #1a4d7e 0%, #2563a8 100%);
+        color: white;
+        padding: 1rem 1.25rem;
+        border-radius: 8px 8px 0 0;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+      .modal-header h2 { font-size: 1rem; font-weight: 600; }
+      .modal-close {
+        background: none;
+        border: none;
+        color: rgba(255,255,255,0.7);
+        font-size: 1.2rem;
+        cursor: pointer;
+        padding: 0.2rem 0.4rem;
+        border-radius: 4px;
+        transition: color 0.15s;
+      }
+      .modal-close:hover { color: white; background: none; }
+      .modal-body {
+        padding: 1.25rem 1.5rem;
+        overflow-y: auto;
+        flex: 1;
+        font-size: 0.88rem;
+        line-height: 1.55;
+        color: #333;
+      }
+      .modal-body h3 {
+        font-size: 0.85rem;
+        text-transform: uppercase;
+        letter-spacing: 0.6px;
+        color: #1a4d7e;
+        margin: 1.1rem 0 0.4rem;
+        border-bottom: 1px solid #e5e9ef;
+        padding-bottom: 0.25rem;
+      }
+      .modal-body h3:first-child { margin-top: 0; }
+      .modal-body ul {
+        list-style: disc;
+        margin-left: 1.25rem;
+      }
+      .modal-body li { margin: 0.2rem 0; }
+      .modal-body code {
+        background: #f0f4f8;
+        padding: 0.1em 0.35em;
+        border-radius: 3px;
+        font-family: ui-monospace, Menlo, Consolas, monospace;
+        font-size: 0.93em;
+      }
+      .modal-body p { margin: 0.4rem 0; }
       .env-badge {
         position: absolute;
         top: 1rem;
@@ -151,7 +241,7 @@
   <body>
     <header>
       <div class="env-badge">DEV</div>
-      <h1>Partida</h1>
+      <h1>Partida <span class="version-badge" id="scriptVersion">…</span></h1>
     </header>
     <main>
     <p class="muted">Sube uno o varios archivos PDF, o un ZIP con múltiples PDFs. La página se queda aquí y muestra progreso/estado.</p>
@@ -196,6 +286,16 @@
 
     <p><a href="/" class="back-link">← Volver</a></p>
     </main>
+    <!-- Changelog modal -->
+    <div class="modal-overlay" id="changelogOverlay">
+      <div class="modal">
+        <div class="modal-header">
+          <h2>Changelog — <span id="modalVersion">…</span></h2>
+          <button class="modal-close" id="modalClose" title="Cerrar">✕</button>
+        </div>
+        <div class="modal-body" id="modalBody">Cargando…</div>
+      </div>
+    </div>
 
     <script>
       const $ = (id) => document.getElementById(id);
@@ -283,6 +383,84 @@
         await tick();
         pollTimer = setInterval(tick, 2000);
       }
+
+      // ── Changelog modal ──────────────────────────────────────────────
+      let changelogCache = null;
+
+      function renderChangelog(md) {
+        const lines = md.split("\n");
+        let html = "";
+        let inList = false;
+        for (const raw of lines) {
+          const line = raw.trimEnd();
+          if (line.startsWith("### ")) {
+            if (inList) { html += "</ul>"; inList = false; }
+            html += `<h3>${esc(line.slice(4))}</h3>`;
+          } else if (line.startsWith("## ")) {
+            if (inList) { html += "</ul>"; inList = false; }
+            html += `<h3>${esc(line.slice(3))}</h3>`;
+          } else if (/^[-*] /.test(line)) {
+            if (!inList) { html += "<ul>"; inList = true; }
+            html += `<li>${fmt(line.slice(2))}</li>`;
+          } else if (line.trim() === "") {
+            if (inList) { html += "</ul>"; inList = false; }
+          } else {
+            if (inList) { html += "</ul>"; inList = false; }
+            html += `<p>${fmt(line)}</p>`;
+          }
+        }
+        if (inList) html += "</ul>";
+        return html;
+      }
+      function esc(s) { return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+      function fmt(s) {
+        return esc(s).replace(/`([^`]+)`/g, "<code>$1</code>");
+      }
+
+      function openChangelog(version) {
+        $("modalVersion").textContent = version;
+        $("changelogOverlay").classList.add("open");
+        if (changelogCache !== null) {
+          $("modalBody").innerHTML = changelogCache
+            ? renderChangelog(changelogCache)
+            : "<p>No hay descripción disponible.</p>";
+          return;
+        }
+        $("modalBody").textContent = "Cargando…";
+        fetch("/api/import_partida/version", { cache: "no-store" })
+          .then(r => r.ok ? r.json() : Promise.reject())
+          .then(d => {
+            changelogCache = d.changelog || "";
+            $("modalBody").innerHTML = changelogCache
+              ? renderChangelog(changelogCache)
+              : "<p>No hay descripción disponible.</p>";
+          })
+          .catch(() => {
+            changelogCache = "";
+            $("modalBody").innerHTML = "<p>No hay descripción disponible.</p>";
+          });
+      }
+
+      $("modalClose").addEventListener("click", () => {
+        $("changelogOverlay").classList.remove("open");
+      });
+      $("changelogOverlay").addEventListener("click", (e) => {
+        if (e.target === $("changelogOverlay")) $("changelogOverlay").classList.remove("open");
+      });
+      document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape") $("changelogOverlay").classList.remove("open");
+      });
+
+      // ── Fetch script version on load ──────────────────────────────────
+      fetch("/api/import_partida/version", { cache: "no-store" })
+        .then(r => r.ok ? r.json() : Promise.reject())
+        .then(d => {
+          const v = d.version || "?";
+          $("scriptVersion").textContent = v;
+          $("scriptVersion").title = "Ver descripción";
+          $("scriptVersion").addEventListener("click", () => openChangelog(v));
+        })
+        .catch(() => { $("scriptVersion").textContent = "?"; });
 
       $("btnUpload").addEventListener("click", async () => {
         const fileInput = $("zip");
