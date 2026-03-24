@@ -22,6 +22,35 @@ For raw layouts, classification is resolved using:
 - otherwise built-in heuristics from description / invoice description
 """
 
+SCRIPT_VERSION = "2026-03-17.v1"
+
+SCRIPT_CHANGELOG = """
+## 2026-03-17.v1
+
+### Logica general
+Procesa packing lists (ODS/XLSX) junto con facturas opcionales y un mapeo
+de productos para generar una hoja `Resumen_Partidas` con totales por
+partida arancelaria.
+
+### Formatos de entrada
+- Packing list: `.ods` o `.xlsx`
+- Factura/mapeo: `.ods`, `.xlsx` o `.xls`
+- Mapeo de productos CSV (opcional)
+
+### Clasificacion de mercancias
+- Layout enriquecido: usa columnas MERCANCIA + PARTIDA existentes
+- Layout raw: clasifica por heuristicas de descripcion o mapeo CSV
+
+### Calculo de VALOR
+- Si se aporta factura, el valor se asigna desde los totales de factura
+  por referencia, evitando doble conteo
+- Agrupa por (DESCRIPCION, PARTIDA) con totales: PESO BRUTO, PESO NETO,
+  CANTIDAD, VALOR
+
+### Salida
+Inyecta la hoja `Resumen_Partidas` en una copia del fichero fuente.
+""".strip()
+
 from __future__ import annotations
 
 import argparse

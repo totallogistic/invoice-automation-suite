@@ -78,7 +78,11 @@ def _read_script_changelog(path: str) -> str:
 
 @app.get("/api/lear_rabat/version")
 def lear_rabat_version():
-    return {"version": _read_script_version("/app/apps/lear_rabat/extractor/extract_lear_rabat.py")}
+    path = "/app/apps/lear_rabat/extractor/extract_lear_rabat.py"
+    return {
+        "version": _read_script_version(path),
+        "changelog": _read_script_changelog(path),
+    }
 
 @app.get("/api/lear_cable/version")
 def lear_cable_version():
@@ -87,6 +91,38 @@ def lear_cable_version():
         "version": _read_script_version(path),
         "changelog": _read_script_changelog(path),
         }
+
+@app.get("/api/import_partida/version")
+def import_partida_version():
+    path = "/app/apps/import_partida/extractor/wrapper.py"
+    return {
+        "version": _read_script_version(path),
+        "changelog": _read_script_changelog(path),
+    }
+
+@app.get("/api/croton/version")
+def croton_version():
+    path = "/app/apps/croton/extractor/extract_croton.py"
+    return {
+        "version": _read_script_version(path),
+        "changelog": _read_script_changelog(path),
+    }
+
+@app.get("/api/cuadre_asientos/version")
+def cuadre_asientos_version():
+    path = "/app/apps/cuadre_asientos/extractor/cuadre_asientos_wrapper.py"
+    return {
+        "version": _read_script_version(path),
+        "changelog": _read_script_changelog(path),
+    }
+
+@app.get("/api/camion/version")
+def camion_version():
+    path = "/app/apps/camion/extractor/camion_export_processor.py"
+    return {
+        "version": _read_script_version(path),
+        "changelog": _read_script_changelog(path),
+    }
 
 @app.post("/api/{tool_name}/batches")
 async def create_batch(

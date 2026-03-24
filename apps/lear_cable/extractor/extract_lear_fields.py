@@ -13,6 +13,30 @@ from typing import Iterable, Optional
 
 SCRIPT_VERSION = "2026-02-6.v23"
 
+SCRIPT_CHANGELOG = """
+## 2026-02-6.v23
+
+### Logica general
+Extrae campos de facturas PDF de Lear Cable y genera un archivo XLSX
+con los datos estructurados listos para tramitacion.
+
+### Extraccion PDF
+- Detecta automaticamente el formato del PDF (texto nativo u OCR)
+- Extrae por factura: numero, fecha, importe total, moneda
+- Extrae por linea: codigo de pieza, descripcion, cantidad, precio unitario, subtotal
+
+### Columnas generadas
+- Numero de factura y fecha
+- Codigo de pieza (referencia Lear)
+- Descripcion del articulo
+- Cantidad y unidad de medida
+- Precio unitario y subtotal por linea
+- Totales de factura (neto, IVA, total)
+
+### Salida
+Genera `invoices_extracted.xlsx` con una fila por linea de factura.
+""".strip()
+
 try:
     from pypdf import PdfReader
 except ImportError:

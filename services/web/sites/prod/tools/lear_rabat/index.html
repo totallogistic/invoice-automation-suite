@@ -417,25 +417,27 @@
         return esc(s).replace(/`([^`]+)`/g, "<code>$1</code>");
       }
 
-      const FALLBACK_CHANGELOG = "## 2026-03-12.v40\n\n### Logica general\nExtrae datos de facturas PDF de Lear Rabat (Marruecos) y genera archivos ODS\nlistos para tramitacion DUA, usando una plantilla ODS como base.\n\n### Extraccion PDF\n- Detecta automaticamente formato de numeros US (1,234.56) o EU (1.234,56)\n- Extrae por factura: numero, fecha, pallets, peso bruto/neto totales\n- Extrae por linea: codigo parte, descripcion, codigo HS, cantidad, precio\n  unitario, subtotal, OPR Material Cost, Partial Weight, pallets por proyecto\n\n### Columnas generadas en Sheet1\n- G: Codigo parte (numerico, sin ceros iniciales)\n- J: Valor DUA (subtotal FG)\n- K: OPR Material Cost (7009)\n- L: Pallets por proyecto\n- M: V.E = J + K  (formula preservada del template)\n- N: PESO BR = (O * R2) / R4  (formula preservada, cache actualizado)\n- O: PESO NET por linea (2 decimales, del PDF)\n- P: Unidades (cantidad)\n- R: FACTURA - valores totales segun el PDF (R2=PESO BRUT, R4=PESO NET)\n- S: CALCULO - nuestros totales calculados (pre-ajuste)\n- T: DIFF - diferencia CALCULO - FACTURA\n- U: Nota de ajuste automatico (registro, valor antes y despues)\n\n### Ajuste automatico de pesos\nSi la suma de PESO NET de las lineas no coincide exactamente con el total\ndel PDF, la diferencia se suma al ultimo registro para que la columna O\nsume exactamente el total de la factura. PESO BR se recalcula\nautomaticamente via la formula de la columna N al abrir el archivo.\nLa columna R/S/T/U documenta el ajuste para trazabilidad.\n\n### Hoja Resumen\nAgrupa por (DESCRIPCION, PARTIDA) con totales de:\nPALETS, VALOR DUA, 7009, PESO BR, PESO NET, UN.\n- PESO NET por grupo: suma de decimales de Sheet1\n- PESO BR total: total_peso_net * ratio (evita acumulacion de redondeos)\n- Fila Total Resultado refleja los mismos totales que Sheet1";
-
       function openChangelog(version) {
         $("modalVersion").textContent = version;
         $("changelogOverlay").classList.add("open");
-        if (changelogCache) {
-          $("modalBody").innerHTML = renderChangelog(changelogCache);
+        if (changelogCache !== null) {
+          $("modalBody").innerHTML = changelogCache
+            ? renderChangelog(changelogCache)
+            : "<p>No hay descripción disponible.</p>";
           return;
         }
         $("modalBody").textContent = "Cargando…";
         fetch("/api/lear_rabat/version", { cache: "no-store" })
           .then(r => r.ok ? r.json() : Promise.reject())
           .then(d => {
-            changelogCache = d.changelog || FALLBACK_CHANGELOG;
-            $("modalBody").innerHTML = renderChangelog(changelogCache);
+            changelogCache = d.changelog || "";
+            $("modalBody").innerHTML = changelogCache
+              ? renderChangelog(changelogCache)
+              : "<p>No hay descripción disponible.</p>";
           })
           .catch(() => {
-            changelogCache = FALLBACK_CHANGELOG;
-            $("modalBody").innerHTML = renderChangelog(changelogCache);
+            changelogCache = "";
+            $("modalBody").innerHTML = "<p>No hay descripción disponible.</p>";
           });
       }
 

@@ -19,6 +19,37 @@ Si no se pasa --output/-o, genera automáticamente:
     <stem-del-xlsx>-PROCESSED.xlsx
 """
 
+SCRIPT_VERSION = "2026-03-17.v1"
+
+SCRIPT_CHANGELOG = """
+## 2026-03-17.v1
+
+### Logica general
+Procesa packing lists de exportacion en XLSX junto con PDFs de transito T1
+y un documento de validacion opcional (DOC), generando un Excel enriquecido
+con multiples hojas de resultado.
+
+### Entradas
+- `--xlsx`: Packing list del cliente (Excel)
+- `--t1`: Uno o varios PDFs de declaracion T1
+- `--doc`: PDF de documento de validacion (opcional)
+
+### Hojas generadas
+- Hoja original del XLSX conservada sin cambios
+- `PDF_VALIDADO`: resultado de la validacion XLSX vs PDF (si se pasa --doc)
+- `PACKING_LIST_RESULT`: packing list procesado con reglas de transformacion
+- `T1_SUMMARY`: datos extraidos de los PDFs T1 (MRN, peso bruto, bultos, plazo)
+
+### Extraccion T1
+- Extrae MRN, peso bruto, numero de bultos y fecha limite de cada T1
+- Cruza los MRNs del T1 con las filas del packing list
+
+### Validacion XLSX vs PDF
+- Compara campo a campo las filas del Excel contra el PDF de referencia
+- Puntua cada fila por coincidencia de tokens (TO, factura, proveedor, receptor,
+  pesos, valores) y determina estado OK/REVIEW/NO_MATCH
+""".strip()
+
 from __future__ import annotations
 
 import argparse
