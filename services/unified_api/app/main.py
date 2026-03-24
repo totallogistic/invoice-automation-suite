@@ -94,7 +94,7 @@ def lear_cable_version():
 
 @app.get("/api/import_partida/version")
 def import_partida_version():
-    path = "/app/apps/import_partida/extractor/wrapper.py"
+    path = "/app/apps/import_partida/extractor/extract_import_partida_fields.py"
     return {
         "version": _read_script_version(path),
         "changelog": _read_script_changelog(path),
