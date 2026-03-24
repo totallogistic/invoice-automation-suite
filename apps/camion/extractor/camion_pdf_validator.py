@@ -904,13 +904,135 @@ def derive_output_path(xlsx_path: str, output: Optional[str]) -> Path:
     out.parent.mkdir(parents=True, exist_ok=True)
     return out
 
+def extract_t1_summary(pdf_path: Path) -> dict:
+    text_by_page = extract_pdf_text(Path(pdf_path), dpi=150)
+    full_text = "\n".join(text_by_page.values()) if isinstance(text_by_page, dict) else str(text_by_page)
+
+    mrn = None
+    gross_kg = None
+    packages = None
+
+    mrn_match = re.search(r'\b\d{2}[A-Z]{2}[A-Z0-9]{10,}\b', full_text, re.IGNORECASE)
+    if mrn_match:
+        mrn = mrn_match.group(0).strip()
+
+    pkg_patterns = [
+        r'(\d+)\s+(?:packages|package|pkgs|colli|bultos)\b',
+        r'\bpackages?\b\D{0,10}(\d+)',
+    ]
+    for pat in pkg_patterns:
+        m = re.search(pat, full_text, re.IGNORECASE)
+        if m:
+            try:
+                packages = int(m.group(1))
+                break
+            except Exception:
+                pass
+
+    gross_patterns = [
+        r'gross\s*(?:mass|weight)?\D{0,20}(\d+(?:[.,]\d+)?)\s*(?:kg|kgs)\b',
+        r'\bbruto\b\D{0,20}(\d+(?:[.,]\d+)?)\s*(?:kg|kgs)\b',
+        r'(\d+(?:[.,]\d+)?)\s*(?:kg|kgs)\b',
+    ]
+    for pat in gross_patterns:
+        m = re.search(pat, full_text, re.IGNORECASE)
+        if m:
+            try:
+                gross_kg = float(m.group(1).replace(',', '.'))
+                break
+            except Exception:
+                pass
+
+    return {
+        'source_file': pdf_path.name,
+        'mrn': mrn,
+        'gross_kg': gross_kg,
+        'packages': packages,
+    }
 
 
+def load_t1_summaries(t1_paths: list[Path]) -> dict[str, dict]:
+    out: dict[str, dict] = {}
+    for path in t1_paths:
+        try:
+            info = extract_t1_summary(Path(path))
+        except Exception:
+            continue
+        mrn = info.get('mrn')
+        if mrn:
+            out[normalize_token(mrn)] = info
+    return out
 
-def validate_xlsx_against_doc(xlsx_path: Path, doc_path: Path, dpi: int = 150) -> dict:
+
+def enrich_report_with_t1(entries: list, report: dict, t1_info: dict[str, dict]) -> None:
+    row_map = {item['excel_row']: item for item in report.get('results', [])}
+
+    has_any_t1 = bool(t1_info)
+
+    for entry in entries:
+        item = row_map.get(entry.excel_row)
+        if not item:
+            continue
+
+        if not has_any_t1:
+            item['t1_validation'] = {'status': 'NO_T1'}
+            continue
+
+        candidate_tokens = []
+        for token in getattr(entry, 'mrn_detail_tokens', []) or []:
+            candidate_tokens.append(normalize_token(token))
+        for token in getattr(entry, 'mrn_invoice_tokens', []) or []:
+            candidate_tokens.append(normalize_token(token))
+
+        match = None
+        for tok in candidate_tokens:
+            if tok and tok in t1_info:
+                match = t1_info[tok]
+                break
+
+        if not match:
+            item['t1_validation'] = {'status': 'NO_MATCHING_T1'}
+            continue
+
+        gross_xlsx = getattr(entry, 'peso_bruto', None)
+        gross_t1 = match.get('gross_kg')
+        packages_t1 = match.get('packages')
+
+        gross_ok = False
+        if gross_xlsx is not None and gross_t1 is not None:
+            try:
+                gross_ok = abs(float(gross_xlsx) - float(gross_t1)) <= 1.0
+            except Exception:
+                gross_ok = False
+
+        item['t1_validation'] = {
+            'status': 'OK' if gross_ok else 'PARTIAL',
+            'mrn_xlsx': getattr(entry, 'mrn_detail', None) or getattr(entry, 'mrn_invoice', None),
+            'mrn_t1': match.get('mrn'),
+            'gross_xlsx': gross_xlsx,
+            'gross_t1': gross_t1,
+            'packages_t1': packages_t1,
+            'source_file': match.get('source_file'),
+        }
+
+def validate_xlsx_against_doc(
+    xlsx_path: Path,
+    doc_path: Path,
+    dpi: int = 150,
+    t1_paths: Optional[list[Path]] = None,
+) -> dict:
     entries = load_entries_from_xlsx(Path(xlsx_path))
     page_texts = extract_pdf_text(Path(doc_path), dpi=dpi)
-    return build_report(entries, page_texts)
+    report = build_report(entries, page_texts)
+
+    if t1_paths:
+        t1_info = load_t1_summaries(t1_paths)
+        enrich_report_with_t1(entries, report, t1_info)
+    else:
+        enrich_report_with_t1(entries, report, {})
+
+    return report
+
 
 
 def append_validated_sheet_from_paths(
@@ -919,8 +1041,14 @@ def append_validated_sheet_from_paths(
     doc_path: Path,
     dpi: int = 150,
     validated_sheet_name: str = 'PDF_VALIDADO',
+    t1_paths: Optional[list[Path]] = None,
 ) -> dict:
-    report = validate_xlsx_against_doc(xlsx_path=Path(xlsx_path), doc_path=Path(doc_path), dpi=dpi)
+    report = validate_xlsx_against_doc(
+        xlsx_path=Path(xlsx_path),
+        doc_path=Path(doc_path),
+        dpi=dpi,
+        t1_paths=t1_paths,
+    )
     add_validated_sheet(wb, report, validated_sheet_name=validated_sheet_name)
     return report
 
