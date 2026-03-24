@@ -21,7 +21,7 @@ For raw layouts, classification is resolved using:
 - optional CSV mapping if provided / present next to script
 - otherwise built-in heuristics from description / invoice description
 """
-
+from __future__ import annotations
 SCRIPT_VERSION = "2026-03-17.v1"
 
 SCRIPT_CHANGELOG = """
@@ -51,7 +51,7 @@ partida arancelaria.
 Inyecta la hoja `Resumen_Partidas` en una copia del fichero fuente.
 """
 
-from __future__ import annotations
+
 
 import argparse
 import csv

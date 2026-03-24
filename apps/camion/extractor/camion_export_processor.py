@@ -19,6 +19,7 @@ Si no se pasa --output/-o, genera automáticamente:
     <stem-del-xlsx>-PROCESSED.xlsx
 """
 
+from __future__ import annotations
 SCRIPT_VERSION = "2026-03-17.v1"
 
 SCRIPT_CHANGELOG = """
@@ -49,8 +50,6 @@ con multiples hojas de resultado.
 - Puntua cada fila por coincidencia de tokens (TO, factura, proveedor, receptor,
   pesos, valores) y determina estado OK/REVIEW/NO_MATCH
 """
-
-from __future__ import annotations
 
 import argparse
 import dataclasses
