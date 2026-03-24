@@ -34,7 +34,85 @@
         margin-left: 0.75rem;
         vertical-align: middle;
         letter-spacing: 0.3px;
+        cursor: pointer;
+        transition: background 0.2s;
       }
+      .version-badge:hover {
+        background: rgba(255,255,255,0.30);
+        color: white;
+      }
+
+      /* ── Changelog modal ── */
+      .modal-overlay {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,0.45);
+        z-index: 1000;
+        align-items: flex-start;
+        justify-content: center;
+        padding: 48px 16px;
+        overflow-y: auto;
+      }
+      .modal-overlay.open { display: flex; }
+      .modal {
+        background: white;
+        border-radius: 10px;
+        width: 100%;
+        max-width: 680px;
+        box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+        overflow: hidden;
+      }
+      .modal-header {
+        background: linear-gradient(135deg, #1a4d7e 0%, #2563a8 100%);
+        color: white;
+        padding: 1rem 1.5rem;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .modal-header h2 { font-size: 1rem; font-weight: 600; }
+      .modal-close {
+        background: none;
+        border: none;
+        color: rgba(255,255,255,0.8);
+        font-size: 1.4rem;
+        cursor: pointer;
+        padding: 0 0.25rem;
+        line-height: 1;
+      }
+      .modal-close:hover { color: white; background: none; }
+      .modal-body {
+        padding: 1.5rem;
+        font-size: 0.9rem;
+        line-height: 1.6;
+        color: #374151;
+        max-height: 70vh;
+        overflow-y: auto;
+      }
+      .modal-body h3 {
+        font-size: 0.95rem;
+        font-weight: 600;
+        color: #1a4d7e;
+        margin: 1.25rem 0 0.4rem;
+        padding-bottom: 0.25rem;
+        border-bottom: 1px solid #e5e7eb;
+      }
+      .modal-body h3:first-child { margin-top: 0; }
+      .modal-body ul {
+        padding-left: 1.25rem;
+        margin: 0.25rem 0 0.75rem;
+      }
+      .modal-body li { margin: 0.2rem 0; }
+      .modal-body code {
+        font-family: ui-monospace, Menlo, Consolas, monospace;
+        background: #f3f4f6;
+        padding: 1px 5px;
+        border-radius: 3px;
+        font-size: 0.85rem;
+        border: 1px solid #e5e7eb;
+      }
+      .modal-body p { margin: 0.4rem 0; }
       .env-badge {
         position: absolute;
         top: 1rem;
@@ -209,6 +287,17 @@
     <p><a href="/" class="back-link">← Volver</a></p>
     </main>
 
+    <!-- Changelog modal -->
+    <div class="modal-overlay" id="changelogOverlay">
+      <div class="modal">
+        <div class="modal-header">
+          <h2>Changelog — <span id="modalVersion">…</span></h2>
+          <button class="modal-close" id="modalClose" title="Cerrar">✕</button>
+        </div>
+        <div class="modal-body" id="modalBody">Cargando…</div>
+      </div>
+    </div>
+
     <script>
       const $ = (id) => document.getElementById(id);
 
@@ -294,10 +383,81 @@
         pollTimer = setInterval(tick, 2000);
       }
 
-      // Fetch script version on load
+      // ── Changelog modal ──────────────────────────────────────────────
+      let changelogCache = null;
+
+      // Simple Markdown-ish renderer (handles ##/### headers, - lists, `code`, paragraphs)
+      function renderChangelog(md) {
+        const lines = md.split("\n");
+        let html = "";
+        let inList = false;
+        for (const raw of lines) {
+          const line = raw.trimEnd();
+          if (line.startsWith("### ")) {
+            if (inList) { html += "</ul>"; inList = false; }
+            html += `<h3>${esc(line.slice(4))}</h3>`;
+          } else if (line.startsWith("## ")) {
+            if (inList) { html += "</ul>"; inList = false; }
+            html += `<h3>${esc(line.slice(3))}</h3>`;
+          } else if (/^[-*] /.test(line)) {
+            if (!inList) { html += "<ul>"; inList = true; }
+            html += `<li>${fmt(line.slice(2))}</li>`;
+          } else if (line.trim() === "") {
+            if (inList) { html += "</ul>"; inList = false; }
+          } else {
+            if (inList) { html += "</ul>"; inList = false; }
+            html += `<p>${fmt(line)}</p>`;
+          }
+        }
+        if (inList) html += "</ul>";
+        return html;
+      }
+      function esc(s) { return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+      function fmt(s) {
+        return esc(s).replace(/`([^`]+)`/g, "<code>$1</code>");
+      }
+
+      const FALLBACK_CHANGELOG = "## 2026-03-12.v40\n\n### Logica general\nExtrae datos de facturas PDF de Lear Rabat (Marruecos) y genera archivos ODS\nlistos para tramitacion DUA, usando una plantilla ODS como base.\n\n### Extraccion PDF\n- Detecta automaticamente formato de numeros US (1,234.56) o EU (1.234,56)\n- Extrae por factura: numero, fecha, pallets, peso bruto/neto totales\n- Extrae por linea: codigo parte, descripcion, codigo HS, cantidad, precio\n  unitario, subtotal, OPR Material Cost, Partial Weight, pallets por proyecto\n\n### Columnas generadas en Sheet1\n- G: Codigo parte (numerico, sin ceros iniciales)\n- J: Valor DUA (subtotal FG)\n- K: OPR Material Cost (7009)\n- L: Pallets por proyecto\n- M: V.E = J + K  (formula preservada del template)\n- N: PESO BR = (O * R2) / R4  (formula preservada, cache actualizado)\n- O: PESO NET por linea (2 decimales, del PDF)\n- P: Unidades (cantidad)\n- R: FACTURA - valores totales segun el PDF (R2=PESO BRUT, R4=PESO NET)\n- S: CALCULO - nuestros totales calculados (pre-ajuste)\n- T: DIFF - diferencia CALCULO - FACTURA\n- U: Nota de ajuste automatico (registro, valor antes y despues)\n\n### Ajuste automatico de pesos\nSi la suma de PESO NET de las lineas no coincide exactamente con el total\ndel PDF, la diferencia se suma al ultimo registro para que la columna O\nsume exactamente el total de la factura. PESO BR se recalcula\nautomaticamente via la formula de la columna N al abrir el archivo.\nLa columna R/S/T/U documenta el ajuste para trazabilidad.\n\n### Hoja Resumen\nAgrupa por (DESCRIPCION, PARTIDA) con totales de:\nPALETS, VALOR DUA, 7009, PESO BR, PESO NET, UN.\n- PESO NET por grupo: suma de decimales de Sheet1\n- PESO BR total: total_peso_net * ratio (evita acumulacion de redondeos)\n- Fila Total Resultado refleja los mismos totales que Sheet1";
+
+      function openChangelog(version) {
+        $("modalVersion").textContent = version;
+        $("changelogOverlay").classList.add("open");
+        if (changelogCache) {
+          $("modalBody").innerHTML = renderChangelog(changelogCache);
+          return;
+        }
+        $("modalBody").textContent = "Cargando…";
+        fetch("/api/lear_rabat/version", { cache: "no-store" })
+          .then(r => r.ok ? r.json() : Promise.reject())
+          .then(d => {
+            changelogCache = d.changelog || FALLBACK_CHANGELOG;
+            $("modalBody").innerHTML = renderChangelog(changelogCache);
+          })
+          .catch(() => {
+            changelogCache = FALLBACK_CHANGELOG;
+            $("modalBody").innerHTML = renderChangelog(changelogCache);
+          });
+      }
+
+      $("modalClose").addEventListener("click", () => {
+        $("changelogOverlay").classList.remove("open");
+      });
+      $("changelogOverlay").addEventListener("click", (e) => {
+        if (e.target === $("changelogOverlay")) $("changelogOverlay").classList.remove("open");
+      });
+      document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape") $("changelogOverlay").classList.remove("open");
+      });
+
+      // ── Fetch script version on load ──────────────────────────────────
       fetch("/api/lear_rabat/version", { cache: "no-store" })
         .then(r => r.ok ? r.json() : Promise.reject())
-        .then(d => { $("scriptVersion").textContent = d.version || "?"; })
+        .then(d => {
+          const v = d.version || "?";
+          $("scriptVersion").textContent = v;
+          $("scriptVersion").title = "Ver changelog";
+          $("scriptVersion").addEventListener("click", () => openChangelog(v));
+        })
         .catch(() => { $("scriptVersion").textContent = "?"; });
 
       $("btnUpload").addEventListener("click", async () => {

@@ -1,0 +1,374 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>[DEV] Totallogistic Tools — Croton</title>
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      body { 
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+        background: #f5f5f5;
+        min-height: 100vh;
+      }
+      header {
+        background: linear-gradient(135deg, #1a4d7e 0%, #2563a8 100%);
+        color: white;
+        padding: 1.5rem;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        position: relative;
+      }
+      header h1 {
+        font-size: 1.5rem;
+        font-weight: 600;
+        letter-spacing: -0.5px;
+      }
+      .env-badge {
+        position: absolute;
+        top: 1rem;
+        right: 1.5rem;
+        background: rgba(16, 185, 129, 0.95);
+        color: white;
+        padding: 0.375rem 0.75rem;
+        border-radius: 4px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        letter-spacing: 0.5px;
+      }
+      main {
+        max-width: 960px;
+        margin: 0 auto;
+        padding: 32px 24px;
+      }
+      p {
+        margin: 8px 0;
+      }
+      .card { 
+        background: white;
+        border: 1px solid #e5e7eb;
+        border-radius: 8px;
+        padding: 24px;
+        margin: 24px 0;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+      }
+      .file-row {
+        display: flex;
+        gap: 16px;
+        flex-direction: column;
+        margin-bottom: 16px;
+      }
+      .file-field label {
+        display: block;
+        font-size: 0.85rem;
+        font-weight: 600;
+        color: #374151;
+        margin-bottom: 6px;
+      }
+      .file-field span.hint {
+        display: block;
+        font-size: 0.8rem;
+        color: #6b7280;
+        margin-top: 4px;
+      }
+      .row { 
+        display: flex;
+        gap: 12px;
+        align-items: center;
+        flex-wrap: wrap;
+      }
+      input[type="file"] { 
+        padding: 10px 12px;
+        border: 1px solid #d1d5db;
+        border-radius: 6px;
+        background: white;
+        font-size: 0.95rem;
+        cursor: pointer;
+        transition: border-color 0.2s ease;
+        width: 100%;
+        max-width: 420px;
+      }
+      input[type="file"]:focus {
+        outline: none;
+        border-color: #2563a8;
+        box-shadow: 0 0 0 3px rgba(37, 99, 168, 0.1);
+      }
+      button { 
+        padding: 10px 20px;
+        cursor: pointer;
+        background: #2563a8;
+        color: white;
+        border: none;
+        border-radius: 6px;
+        font-weight: 500;
+        transition: background 0.2s;
+      }
+      button:hover { background: #1a4d7e; }
+      button:disabled { background: #9ca3af; cursor: not-allowed; }
+      .muted { 
+        color: #6b7280;
+        font-size: 0.95rem;
+      }
+      .mono { 
+        font-family: ui-monospace, 'SF Mono', 'Cascadia Code', 'Source Code Pro', Menlo, Consolas, monospace;
+        background: #f3f4f6;
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-size: 0.9rem;
+        border: 1px solid #e5e7eb;
+      }
+      progress { 
+        width: 100%;
+        height: 24px;
+        border-radius: 12px;
+        overflow: hidden;
+        background: #e5e7eb;
+        border: none;
+      }
+      progress::-webkit-progress-bar {
+        background: #e5e7eb;
+        border-radius: 12px;
+      }
+      progress::-webkit-progress-value {
+        background: linear-gradient(90deg, #2563a8 0%, #3b82f6 100%);
+        border-radius: 12px;
+        transition: width 0.3s ease;
+      }
+      progress::-moz-progress-bar {
+        background: linear-gradient(90deg, #2563a8 0%, #3b82f6 100%);
+        border-radius: 12px;
+      }
+      .kv { 
+        display: grid;
+        grid-template-columns: 180px 1fr;
+        gap: 10px 16px;
+        margin: 16px 0;
+      }
+      .badge { 
+        display: inline-block;
+        padding: 4px 12px;
+        border-radius: 999px;
+        background: #f3f4f6;
+        font-size: 0.85rem;
+        font-weight: 500;
+        border: 1px solid #e5e7eb;
+      }
+      .error { 
+        color: #dc2626;
+        font-weight: 500;
+      }
+      .ok { 
+        color: #16a34a;
+        font-weight: 500;
+      }
+      .back-link { 
+        display: inline-block;
+        margin-top: 1rem;
+        color: #2563a8;
+        text-decoration: none;
+        font-weight: 500;
+      }
+      .back-link:hover { text-decoration: underline; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="env-badge">DEV</div>
+      <h1>🌿 Croton — Packing List</h1>
+    </header>
+    <main>
+    <p class="muted">
+      Sube el packing-list (<strong>.ods</strong>, <strong>.xlsx</strong> o <strong>.xls</strong>)
+      y la factura (<strong>.xlsx</strong> o <strong>.xls</strong>).
+      La herramienta añade una nueva pestaña <strong>Resumen_Partidas</strong>
+      a una copia del fichero de packing con el resumen por partida aduanera.
+    </p>
+
+    <div class="card">
+      <div class="file-row">
+        <div class="file-field">
+          <label>📄 Packing list <span style="color:#dc2626">*</span></label>
+          <input
+            id="packingInput"
+            type="file"
+            accept=".ods,.xlsx,.xls,application/vnd.oasis.opendocument.spreadsheet,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
+          />
+          <span class="hint">Formatos permitidos: ODS, XLSX, XLS</span>
+        </div>
+        <div class="file-field">
+          <label>🧾 Factura <span style="color:#dc2626">*</span></label>
+          <input
+            id="invoiceInput"
+            type="file"
+            accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
+          />
+          <span class="hint">Formatos permitidos: XLSX, XLS</span>
+</div>
+      </div>
+      <div class="row">
+        <button id="btnUpload">Procesar</button>
+        <span id="uploadMsg" class="muted"></span>
+      </div>
+      <p class="muted" style="margin:10px 0 0">
+        Endpoint: <span class="mono">POST /api/croton/batches</span>
+      </p>
+    </div>
+
+    <div id="statusCard" class="card" style="display:none">
+      <div class="row" style="justify-content:space-between">
+        <div>
+          <div class="muted">Batch</div>
+          <div class="mono" id="batchId">—</div>
+        </div>
+        <div>
+          <span class="badge" id="state">—</span>
+          <span class="badge" id="stage">—</span>
+        </div>
+      </div>
+
+      <div style="margin:12px 0">
+        <progress id="bar" value="0" max="100"></progress>
+        <div class="muted" id="pct" style="margin-top:6px">0%</div>
+      </div>
+
+      <div class="kv">
+        <div class="muted">Mensaje</div> <div id="message">—</div>
+        <div class="muted">Archivos</div> <div><span id="processed">0</span> / <span id="total">0</span></div>
+        <div class="muted">Updated</div> <div class="mono" id="updated">—</div>
+        <div class="muted">Recipients</div> <div id="recipients">—</div>
+      </div>
+
+      <div id="finalNote" style="margin-top:12px"></div>
+    </div>
+
+    <p><a href="/" class="back-link">← Volver</a></p>
+    </main>
+
+    <script>
+      const $ = (id) => document.getElementById(id);
+
+      let pollTimer = null;
+
+      function setUploadMsg(text, isErr=false) {
+        $("uploadMsg").textContent = text || "";
+        $("uploadMsg").className = isErr ? "error" : "muted";
+      }
+
+      function showStatusCard(batchId) {
+        $("statusCard").style.display = "block";
+        $("batchId").textContent = batchId;
+      }
+
+      function stopPolling() {
+        if (pollTimer) clearInterval(pollTimer);
+        pollTimer = null;
+      }
+
+      function computePercent(st) {
+        const total = Number(st.total_files || 0);
+        const done = Number(st.processed_files || 0);
+        if (total > 0) return Math.min(100, Math.round((done / total) * 100));
+
+        const stage = (st.stage || "").toUpperCase();
+        if (stage === "WAITING") return 5;
+        if (stage === "RUNNING_EXTRACTOR") return 55;
+        if (stage === "SENDING_EMAIL") return 85;
+        if (stage === "DONE") return 100;
+        if (stage === "ERROR") return 100;
+        return 10;
+      }
+
+      async function fetchStatus(batchId) {
+        const r = await fetch(`/api/croton/batches/${batchId}/status`, { cache: "no-store" });
+        if (!r.ok) throw new Error(`Status HTTP ${r.status}`);
+        return await r.json();
+      }
+
+      function renderStatus(st) {
+        $("state").textContent = st.state || "—";
+        $("stage").textContent = st.stage || "—";
+        $("message").textContent = st.message || "—";
+        $("total").textContent = st.total_files ?? 0;
+        $("processed").textContent = st.processed_files ?? 0;
+        $("updated").textContent = st.updated_at || "—";
+
+        const rec = Array.isArray(st.recipients) ? st.recipients : [];
+        $("recipients").textContent = rec.length ? rec.join(", ") : "—";
+
+        const pct = computePercent(st);
+        $("bar").value = pct;
+        $("pct").textContent = `${pct}%`;
+
+        const stage = (st.stage || "").toUpperCase();
+        const state = (st.state || "").toUpperCase();
+
+        let html = "";
+        if (stage === "DONE" || state === "DONE") {
+          html = `<div class="ok">✓ Lote finalizado. Fichero de packing enriquecido con la pestaña Resumen_Partidas enviado a: <span class="mono">${rec.join(", ") || "—"}</span></div>`;
+          stopPolling();
+        } else if (stage === "ERROR" || state === "ERROR") {
+          html = `<div class="error">✗ Error en procesamiento. Revisa logs: docker compose logs unified_processor</div>`;
+          stopPolling();
+        } else {
+          html = `<div class="muted">⏳ Procesando… (polling cada 2s)</div>`;
+        }
+        $("finalNote").innerHTML = html;
+      }
+
+      async function startPolling(batchId) {
+        stopPolling();
+        const tick = async () => {
+          try {
+            const st = await fetchStatus(batchId);
+            renderStatus(st);
+          } catch (e) {
+            $("finalNote").innerHTML = `<div class="error">No puedo leer status: ${e.message}</div>`;
+          }
+        };
+        await tick();
+        pollTimer = setInterval(tick, 2000);
+      }
+
+      $("btnUpload").addEventListener("click", async () => {
+        const packingFile = $("packingInput").files[0];
+        const invoiceFile = $("invoiceInput").files[0];
+
+        if (!packingFile) {
+          return setUploadMsg("Selecciona el archivo de packing-list.", true);
+        }
+        if (!/\.(ods|xlsx|xls)$/i.test(packingFile.name)) {
+          return setUploadMsg(`Archivo de packing no válido: ${packingFile.name}`, true);
+        }
+        if (!invoiceFile) {
+          return setUploadMsg("Selecciona el archivo de factura.", true);
+        }
+        if (!/\.(xlsx|xls)$/i.test(invoiceFile.name)) {
+          return setUploadMsg(`Archivo de factura no válido: ${invoiceFile.name}`, true);
+        }
+
+        setUploadMsg("Subiendo…");
+        $("statusCard").style.display = "none";
+        $("finalNote").innerHTML = "";
+        stopPolling();
+
+        try {
+          const fd = new FormData();
+          fd.append("files", packingFile, packingFile.name);
+          fd.append("files", invoiceFile, invoiceFile.name);
+
+          const r = await fetch("/api/croton/batches", { method: "POST", body: fd });
+          if (!r.ok) {
+            const t = await r.text();
+            throw new Error(`Upload HTTP ${r.status}: ${t}`);
+          }
+          const data = await r.json();
+          const batchId = data.batch_id;
+          showStatusCard(batchId);
+          setUploadMsg(`✓ Batch creado: ${batchId} (${data.files_uploaded} archivo(s))`);
+          await startPolling(batchId);
+        } catch (e) {
+          setUploadMsg(e.message, true);
+        }
+      });
+    </script>
+  </body>
+</html>
