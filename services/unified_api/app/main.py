@@ -10,7 +10,7 @@ from typing import List
 import random
 import string
 
-from fastapi import FastAPI, UploadFile, File, HTTPException, Path as PathParam
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Path as PathParam
 from fastapi.responses import JSONResponse
 
 from .tool_registry import ToolRegistry
@@ -91,7 +91,8 @@ def lear_cable_version():
 @app.post("/api/{tool_name}/batches")
 async def create_batch(
     tool_name: str = PathParam(...),
-    files: List[UploadFile] = File(...)
+    files: List[UploadFile] = File(...),
+    skip_validation: str = Form("0"),
 ):
     """Create new batch."""
     tool = registry.get_tool(tool_name)
@@ -106,6 +107,10 @@ async def create_batch(
     
     try:
         batch_inbox.mkdir(parents=True, exist_ok=True)
+
+        skip_validation_flag = str(skip_validation).strip().lower() in {"1", "true", "yes", "on"}
+        if tool_name == "camion" and skip_validation_flag:
+            (batch_inbox / "_SKIP_VALIDATION").write_text("1", encoding="utf-8")
         
         # Save all files
         file_count = 0
@@ -149,7 +154,8 @@ async def create_batch(
             "batch_id": batch_id,
             "tool": tool_name,
             "files_uploaded": file_count,
-            "status": "UPLOADED"
+            "status": "UPLOADED",
+            "skip_validation": skip_validation_flag if tool_name == "camion" else False,
         }
     
     except HTTPException:

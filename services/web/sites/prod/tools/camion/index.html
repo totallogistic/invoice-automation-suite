@@ -175,13 +175,12 @@
       <h1>🚛 Camion Export Processor</h1>
     </header>
     <main>
-    <p class="muted">
-      Sube el packing list (<strong>.xlsx</strong>), los documentos T1
-      (<strong>.pdf</strong>, uno o más; nombre debe contener <strong>T1</strong>)
-      y el documento de acompañamiento DOC (<strong>.pdf</strong>; nombre debe
-      contener <strong>DOC</strong>). La herramienta genera un XLSX enriquecido
-      con la hoja <strong>Procesado_Camion</strong>.
-    </p>
+      <p class="muted">
+        Sube el packing list (<strong>.xlsx</strong>), opcionalmente los documentos T1
+        (<strong>.pdf</strong>, nombre debe contener <strong>T1</strong>) y el documento DOC
+        (<strong>.pdf</strong>, nombre debe contener <strong>DOC</strong>) si quieres validar el XLSX antes de procesar.
+        La herramienta genera un XLSX enriquecido con la hoja <strong>Procesado_Camion</strong>.
+      </p>
 
     <div class="card">
       <div class="file-row">
@@ -213,6 +212,15 @@
           />
           <span class="hint">Un PDF — el nombre debe contener <strong>DOC</strong> (ej. 20260310_DOC.pdf)</span>
         </div>
+      </div>
+      <div class="file-field">
+        <label>
+        <input id="skipValidationInput" type="checkbox" />
+        Omitir validación XLSX vs DOC
+        </label>
+        <span class="hint">
+        Úsalo solo si el XLSX ya fue revisado/corregido manualmente y quieres reprocesar sin regenerar PDF_VALIDADO.
+      </span>
       </div>
       <div class="row">
         <button id="btnUpload">Procesar</button>
@@ -342,6 +350,7 @@
         const xlsxFile = $("xlsxInput").files[0];
         const t1Files = Array.from($("t1Input").files);
         const docFile = $("docInput").files[0];
+        const skipValidation = $("skipValidationInput").checked;
 
         if (!xlsxFile) {
           return setUploadMsg("Selecciona el packing list (.xlsx).", true);
@@ -357,14 +366,16 @@
             return setUploadMsg(`El nombre del T1 debe contener "T1": ${f.name}`, true);
           }
         }
-        if (!docFile) {
-          return setUploadMsg("Selecciona el documento DOC (.pdf).", true);
-        }
-        if (!/\.pdf$/i.test(docFile.name)) {
-          return setUploadMsg(`Documento DOC no válido: ${docFile.name}. Debe ser .pdf`, true);
-        }
-        if (!/doc/i.test(docFile.name)) {
-          return setUploadMsg(`El nombre del DOC debe contener "DOC": ${docFile.name}`, true);
+        if (!skipValidation) {
+          if (!docFile) {
+            return setUploadMsg("Selecciona el documento DOC (.pdf) o marca 'Omitir validación XLSX vs DOC'.", true);
+          }
+          if (!/\.pdf$/i.test(docFile.name)) {
+            return setUploadMsg(`Documento DOC no válido: ${docFile.name}. Debe ser .pdf`, true);
+          }
+          if (!/doc/i.test(docFile.name)) {
+            return setUploadMsg(`El nombre del DOC debe contener "DOC": ${docFile.name}`, true);
+          }
         }
 
         setUploadMsg("Subiendo…");
@@ -378,7 +389,10 @@
           for (const f of t1Files) {
             fd.append("files", f, f.name);
           }
-          fd.append("files", docFile, docFile.name);
+          if (docFile) {
+            fd.append("files", docFile, docFile.name);
+          }
+          fd.append("skip_validation", skipValidation ? "1" : "0");
 
           const r = await fetch("/api/camion/batches", { method: "POST", body: fd });
           if (!r.ok) {

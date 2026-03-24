@@ -190,7 +190,8 @@ class UnifiedProcessor:
         if tool.inject_mode:
             cmd = self._build_inject_cmd(tool, files, output_path)
         elif tool.camion_mode:
-            cmd = self._build_camion_cmd(tool, files, output_path)
+            skip_validation = (processing_path / "_SKIP_VALIDATION").exists()
+            cmd = self._build_camion_cmd(tool, files, output_path, skip_validation=skip_validation)
         else:
             cmd = [
                 "python3",
@@ -300,7 +301,13 @@ class UnifiedProcessor:
             "-o", str(out_file),
         ]
     
-    def _build_camion_cmd(self, tool: ToolConfig, files: List[Path], output_path: Path) -> List[str]:
+    def _build_camion_cmd(
+        self,
+        tool: ToolConfig,
+        files: List[Path],
+        output_path: Path,
+        skip_validation: bool = False,
+    ) -> List[str]:
         xlsx_files = [f for f in files if f.suffix.lower() == ".xlsx"]
         pdf_files = [f for f in files if f.suffix.lower() == ".pdf"]
 
@@ -315,30 +322,33 @@ class UnifiedProcessor:
         doc_files = [f for f in pdf_files if "doc" in f.name.lower()]
         other_pdfs = [f for f in pdf_files if f not in t1_files and f not in doc_files]
 
-        # Absorb ambiguous PDFs into DOC when there is exactly one
-        if other_pdfs:
-            if not doc_files and len(other_pdfs) == 1:
-                doc_files = other_pdfs
-                other_pdfs = []
-            else:
-                raise RuntimeError(
-                    f"[{tool.name}] Cannot classify PDF(s): "
-                    f"{[f.name for f in other_pdfs]}. "
-                    "Use filenames containing 't1' or 'doc'."
-                )
+        # Si vamos a validar, seguimos clasificando DOC como hasta ahora
+        if not skip_validation:
+            if other_pdfs:
+                if not doc_files and len(other_pdfs) == 1:
+                    doc_files = other_pdfs
+                    other_pdfs = []
+                else:
+                    raise RuntimeError(
+                        f"[{tool.name}] Cannot classify PDF(s): "
+                        f"{[f.name for f in other_pdfs]}. "
+                        "Use filenames containing 't1' or 'doc'."
+                    )
 
-        if len(doc_files) != 1:
-            raise RuntimeError(
-                f"[{tool.name}] Expected exactly 1 DOC PDF file, "
-                f"got {len(doc_files)}. Filename must contain 'doc'."
-            )
+            if len(doc_files) != 1:
+                raise RuntimeError(
+                    f"[{tool.name}] Expected exactly 1 DOC PDF file, "
+                    f"got {len(doc_files)}. Filename must contain 'doc'."
+                )
 
         cmd = [
             "python3", str(tool.extractor_path),
             "--xlsx", str(xlsx_file),
-            "--doc", str(doc_files[0]),
             "-o", str(output_path),
         ]
+
+        if not skip_validation:
+            cmd.extend(["--doc", str(doc_files[0])])
 
         if t1_files:
             cmd.extend(["--t1", *[str(f) for f in t1_files]])
