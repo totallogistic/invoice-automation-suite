@@ -32,7 +32,7 @@ de texto plano para auditoria.
 - Excel con columnas originales mas columnas de resultado del cuadre
 - Informe de texto con estadisticas: total asientos, descuadres encontrados,
   cuentas afectadas
-""".strip()
+"""
 
 import argparse
 import sys

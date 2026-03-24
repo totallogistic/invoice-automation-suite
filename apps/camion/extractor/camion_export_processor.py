@@ -48,7 +48,7 @@ con multiples hojas de resultado.
 - Compara campo a campo las filas del Excel contra el PDF de referencia
 - Puntua cada fila por coincidencia de tokens (TO, factura, proveedor, receptor,
   pesos, valores) y determina estado OK/REVIEW/NO_MATCH
-""".strip()
+"""
 
 from __future__ import annotations
 

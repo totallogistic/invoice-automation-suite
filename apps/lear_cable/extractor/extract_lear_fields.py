@@ -35,7 +35,7 @@ con los datos estructurados listos para tramitacion.
 
 ### Salida
 Genera `invoices_extracted.xlsx` con una fila por linea de factura.
-""".strip()
+"""
 
 try:
     from pypdf import PdfReader

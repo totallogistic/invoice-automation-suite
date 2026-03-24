@@ -28,7 +28,7 @@ de Maersk en formato PDF, con soporte para multiples plantillas de formato.
 ### Salida
 Genera `import_partida.csv` en el directorio de salida con todos los campos
 extraidos estructurados por linea de mercancia.
-""".strip()
+"""
 
 import re
 import sys

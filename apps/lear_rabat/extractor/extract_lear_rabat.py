@@ -53,7 +53,7 @@ PALETS, VALOR DUA, 7009, PESO BR, PESO NET, UN.
 - PESO NET por grupo: suma de decimales de Sheet1
 - PESO BR total: total_peso_net * ratio (evita acumulacion de redondeos)
 - Fila Total Resultado refleja los mismos totales que Sheet1
-""".strip()
+"""
 from collections import defaultdict
 from pathlib import Path
 from typing import Dict, List, Optional

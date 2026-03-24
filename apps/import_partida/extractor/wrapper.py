@@ -22,7 +22,7 @@ y genera un XLSX listo para su tramitacion aduanera.
 
 ### Salida
 Genera un archivo XLSX por cada PDF procesado con los campos extraidos.
-""".strip()
+"""
 
 import sys
 import subprocess

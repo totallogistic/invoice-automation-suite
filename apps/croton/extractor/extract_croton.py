@@ -49,7 +49,7 @@ partida arancelaria.
 
 ### Salida
 Inyecta la hoja `Resumen_Partidas` en una copia del fichero fuente.
-""".strip()
+"""
 
 from __future__ import annotations
 
