@@ -858,6 +858,10 @@ def add_validated_sheet(wb: openpyxl.Workbook, report: dict, validated_sheet_nam
     t1_gross_col = 27
     t1_packages_col = 28
     t1_file_col = 29
+    t1_raw_mrns_col = 30
+    t1_raw_gross_col = 31
+    t1_raw_packages_col = 32
+    t1_raw_files_col = 33
 
     dst_ws.cell(1, review_col).value = 'Validation Status'
     dst_ws.cell(1, pages_col).value = 'PDF Pages'
@@ -866,6 +870,10 @@ def add_validated_sheet(wb: openpyxl.Workbook, report: dict, validated_sheet_nam
     dst_ws.cell(1, t1_gross_col).value = 'T1 Gross KG'
     dst_ws.cell(1, t1_packages_col).value = 'T1 Packages'
     dst_ws.cell(1, t1_file_col).value = 'T1 File'
+    dst_ws.cell(1, t1_raw_mrns_col).value = 'T1 Raw MRNs'
+    dst_ws.cell(1, t1_raw_gross_col).value = 'T1 Raw Grosses'
+    dst_ws.cell(1, t1_raw_packages_col).value = 'T1 Raw Packages'
+    dst_ws.cell(1, t1_raw_files_col).value = 'T1 Raw Files'
 
     for row_idx in range(5, dst_ws.max_row + 1):
         item = row_map.get(row_idx)
@@ -888,11 +896,16 @@ def add_validated_sheet(wb: openpyxl.Workbook, report: dict, validated_sheet_nam
         dst_ws.cell(row_idx, pages_col).value = ', '.join(map(str, conf.get('context_pages', [])))
 
         t1 = item.get('t1_validation', {})
+        t1_raw = item.get('t1_raw', {})
         dst_ws.cell(row_idx, t1_status_col).value = t1.get('status')
         dst_ws.cell(row_idx, t1_mrn_col).value = t1.get('mrn_t1')
         dst_ws.cell(row_idx, t1_gross_col).value = t1.get('gross_t1')
         dst_ws.cell(row_idx, t1_packages_col).value = t1.get('packages_t1')
         dst_ws.cell(row_idx, t1_file_col).value = t1.get('source_file')
+        dst_ws.cell(row_idx, t1_raw_mrns_col).value = ', '.join(map(str, t1_raw.get('mrns', [])))
+        dst_ws.cell(row_idx, t1_raw_gross_col).value = ', '.join(map(str, t1_raw.get('grosses', [])))
+        dst_ws.cell(row_idx, t1_raw_packages_col).value = ', '.join(map(str, t1_raw.get('packages', [])))
+        dst_ws.cell(row_idx, t1_raw_files_col).value = ', '.join(map(str, t1_raw.get('files', [])))
 
 
 def parse_args() -> argparse.Namespace:
@@ -988,10 +1001,24 @@ def enrich_report_with_t1(entries: list, report: dict, t1_info: dict[str, dict])
 
     has_any_t1 = bool(t1_info)
 
+    all_t1_raw = {
+        'mrns': sorted([info.get('mrn') for info in t1_info.values() if info.get('mrn')]),
+        'grosses': [info.get('gross_kg') for info in t1_info.values() if info.get('gross_kg') is not None],
+        'packages': [info.get('packages') for info in t1_info.values() if info.get('packages') is not None],
+        'files': sorted([info.get('source_file') for info in t1_info.values() if info.get('source_file')]),
+    }
+
     for entry in entries:
         item = row_map.get(entry.excel_row)
         if not item:
             continue
+
+        item['t1_raw'] = {
+            'mrns': all_t1_raw['mrns'],
+            'grosses': all_t1_raw['grosses'],
+            'packages': all_t1_raw['packages'],
+            'files': all_t1_raw['files'],
+        }
 
         if not has_any_t1:
             item['t1_validation'] = {'status': 'NO_T1'}
@@ -1010,7 +1037,15 @@ def enrich_report_with_t1(entries: list, report: dict, t1_info: dict[str, dict])
                 break
 
         if not match:
-            item['t1_validation'] = {'status': 'NO_MATCHING_T1'}
+            item['t1_validation'] = {
+                'status': 'NO_MATCHING_T1',
+                'mrn_xlsx': getattr(entry, 'mrn_detail', None) or getattr(entry, 'mrn_invoice', None),
+                'mrn_t1': None,
+                'gross_xlsx': getattr(entry, 'peso_bruto', None),
+                'gross_t1': None,
+                'packages_t1': None,
+                'source_file': None,
+            }
             continue
 
         gross_xlsx = getattr(entry, 'peso_bruto', None)
