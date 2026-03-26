@@ -56,31 +56,10 @@
         text-transform: uppercase;
         letter-spacing: 0.5px;
       }
-
-      .badge-operativo {
-        background: #d1fae5;
-        color: #065f46;
-      }
-      
-      .badge-en-cola {
-        background: #fecaca;  /* ← Cambiar a un rojo más claro */
-        color: #7f1d1d;       /* ← Texto más oscuro */
-      }
-
-      .badge-en-proceso {
-        background: #bfdbfe;  /* ← Cambiar a un azul más claro */
-        color: #1e3a8a;       /* ← Texto más oscuro */
-      }
-
-      .badge-wip {
-        background: #fef3c7;
-        color: #92400e;
-      } 
-
-      .badge-draft {
-        background: #f3f4f6;
-        color: #6b7280;
-      }
+      .badge-operativo  { background: #d1fae5; color: #065f46; }
+      .badge-validando  { background: #ede9fe; color: #5b21b6; }
+      .badge-wip        { background: #fef3c7; color: #92400e; }
+      .badge-draft      { background: #f3f4f6; color: #6b7280; }
 
       main {
         flex: 1;
@@ -97,9 +76,7 @@
         letter-spacing: 0.5px;
         margin: 2rem 0 1rem;
       }
-      .section-title:first-child {
-        margin-top: 0;
-      }
+      .section-title:first-child { margin-top: 0; }
       .tools-list {
         background: white;
         border-radius: 8px;
@@ -116,10 +93,7 @@
         font-weight: 500;
       }
       .tools-list a:last-child { border-bottom: none; }
-      .tools-list a:hover {
-        background: #f0f7ff;
-        padding-left: 2rem;
-      }
+      .tools-list a:hover { background: #f0f7ff; padding-left: 2rem; }
       .tools-list a.external::after {
         content: " ↗";
         opacity: 0.5;
@@ -140,65 +114,66 @@
       <p class="header-description">Portal de Herramientas y Procesos</p>
     </header>
     <main>
-    <div class="section-title">Procesos</div>
-    <div class="tools-list">
-    <a href="/tools/lear_cable/">
-      🔗 Lear Cable
-      <span class="tool-badge badge-operativo">Operativo</span>
-    </a>
-    <a href="/tools/lear_rabat/">
-      🇲🇦 Lear Rabat (DUA)
-      <span class="tool-badge badge-operativo">Operativo</span>
-    </a>
-    <a href="/tools/cuadre_asientos/">
-      📊 Cuadre Asientos
-    <span class="tool-badge badge-operativo">Operativo</span>
-  </a>
-  <a href="/tools/croton/">
-    🌿 Croton
-    <span class="tool-badge badge-wip">WIP</span>
-  </a>
-  <a href="/tools/camion/">
-    🚛 Camion Export
-    <span class="tool-badge badge-wip">WIP</span>
-  </a>
-  <a href="/tools/import_partida/">
-    💹 Import Partida
-    <span class="tool-badge badge-wip">WIP</span>
-  </a>
-</div>
-<a href="/tools/split_nominas/">
-    💹 Separar Nominas
-    <span class="tool-badge badge-wip">WIP</span>
-  </a>
-</div>
 
-<div class="section-title">Formularios</div>
-<div class="tools-list">
-  <a href="#" id="form-generator-link" target="_blank" class="external">
-    ⚙️ Lista de formularios de registro
-    <span class="tool-badge badge-operativo">Operativo</span>
-  </a>
-</div>
+      <div class="section-title">Procesos</div>
+      <div class="tools-list">
+        <a href="/tools/lear_cable/">
+          🔗 Lear Cable
+          <span class="tool-badge badge-operativo">Operativo</span>
+        </a>
+        <a href="/tools/lear_rabat/">
+          🇲🇦 Lear Rabat (DUA)
+          <span class="tool-badge badge-operativo">Operativo</span>
+        </a>
+        <a href="/tools/croton/">
+          🌿 Croton
+          <span class="tool-badge badge-wip">En Desarrollo</span>
+          <span class="tool-badge badge-validando">Validando</span>
+        </a>
+        <a href="/tools/camion/">
+          🚛 Camion Export
+          <span class="tool-badge badge-wip">En Desarrollo</span>
+          <span class="tool-badge badge-validando">Validando</span>
+        </a>
+        <a href="/tools/import_partida/">
+          💹 Import Partida
+          <span class="tool-badge badge-draft">Info Pendiente</span>
+        </a>
+      </div>
+
+      <div class="section-title">Admin</div>
+      <div class="tools-list">
+        <a href="/tools/cuadre_asientos/">
+          📊 Cuadre Asientos
+          <span class="tool-badge badge-operativo">Operativo</span>
+        </a>
+        <a href="/tools/split_nominas/">
+          📄 Separar Nóminas
+          <span class="tool-badge badge-operativo">Operativo</span>
+        </a>
+      </div>
+
+      <div class="section-title">Formularios</div>
+      <div class="tools-list">
+        <a href="#" id="form-generator-link" target="_blank" class="external">
+          ⚙️ Lista de formularios de registro
+          <span class="tool-badge badge-operativo">Operativo</span>
+        </a>
+      </div>
+
     </main>
     <footer>
       © 2026 totallogistic
     </footer>
     <script>
-    // Cargar configuración desde env.json
-    fetch('/env.json')
-      .then(r => r.json())
-      .then(data => {
-       // Título
-       document.title = `Herramientas [${data.env.toUpperCase()}]`;
-      
-       // Badge
-       document.getElementById('env-badge').textContent = data.env.toUpperCase();
-      
-       // Form Generator Link
-       const formUrl = `http://${window.location.hostname}:${data.formPort}`;
-       document.getElementById('form-generator-link').href = formUrl;
-     });
+      fetch('/env.json')
+        .then(r => r.json())
+        .then(data => {
+          document.title = `Herramientas [${data.env.toUpperCase()}]`;
+          document.getElementById('env-badge').textContent = data.env.toUpperCase();
+          const formUrl = `http://${window.location.hostname}:${data.formPort}`;
+          document.getElementById('form-generator-link').href = formUrl;
+        });
     </script>
   </body>
 </html>
