@@ -145,7 +145,7 @@ tools:
       inbox: /data/camion/inbox
 
     extractor:
-      path: /apps/camion/extractor/camion_export_processor.py
+      path: /apps/camion/extractor/run_processors.py
       camion_mode: true
 
     output:

@@ -96,8 +96,17 @@ def cuadre_asientos_version():
 
 @app.get("/api/camion/version")
 def camion_version():
-    path = "/app/apps/camion/extractor/camion_export_processor.py"
-    return {"version": _read_script_version(path), "changelog": _read_script_changelog(path)}
+    # run_processors.py es el punto de entrada; también exponemos la versión
+    # del motor T1 (camion_export_processor) para trazabilidad completa.
+    orchestrator_path = "/app/apps/camion/extractor/run_processors.py"
+    t1_engine_path    = "/app/apps/camion/extractor/camion_export_processor.py"
+    dae_engine_path   = "/app/apps/camion/extractor/processor_dae.py"
+    return {
+        "version":          _read_script_version(orchestrator_path),
+        "changelog":        _read_script_changelog(orchestrator_path),
+        "t1_engine_version": _read_script_version(t1_engine_path),
+        "dae_engine_version": _read_script_version(dae_engine_path),
+    }
 
 @app.get("/api/split_nominas/version")
 def split_nominas_version():
