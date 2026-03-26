@@ -310,12 +310,9 @@
 
         if (state === "DONE" || stage === "DONE") {
           stopPolling();
-          fetch(`/api/split_nominas/batches/${currentBatchId}/download`, { method: "HEAD" })
-            .then(r => {
-              const count = parseInt(r.headers.get("X-File-Count") || "0", 10);
-              showDownloadBanner(currentBatchId, count);
-            })
-            .catch(() => showDownloadBanner(currentBatchId, 0));
+          // processed_files = number of output PDFs (set by processor for download-only tools)
+          const count = Number(st.processed_files || 0);
+          showDownloadBanner(currentBatchId, count);
           $("finalNote").innerHTML = `<div class="ok">✓ Procesamiento completado.</div>`;
         } else if (state === "ERROR" || stage === "ERROR") {
           stopPolling();

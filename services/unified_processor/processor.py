@@ -123,7 +123,7 @@ class UnifiedProcessor:
         """Process a single batch."""
         status_mgr = StatusManager(tool.status_dir)
         
-        # Update: processing
+        # Count input files
         file_count = len(BatchOperations.get_files(processing_path, tool.input_formats))
         status_mgr.update_status(
             batch_id=batch_id,
@@ -139,12 +139,10 @@ class UnifiedProcessor:
         artifacts = []
         for artifact_pattern in tool.output_artifacts:
             if '*' in artifact_pattern or '?' in artifact_pattern:
-                # Use glob for wildcard patterns
                 matched = list(output_path.glob(artifact_pattern))
                 artifacts.extend(matched)
                 logger.info(f"[{tool.name}] Pattern '{artifact_pattern}' matched {len(matched)} file(s)")
             else:
-                # Exact filename match
                 artifact_path = output_path / artifact_pattern
                 if artifact_path.exists():
                     artifacts.append(artifact_path)
@@ -155,11 +153,16 @@ class UnifiedProcessor:
         if not artifacts:
             logger.warning(f"[{tool.name}] No artifacts found for patterns: {tool.output_artifacts}")
         
+        # For tools that deliver via direct download (no email), processed_files
+        # reflects the number of output artifacts so the UI can display it.
+        # For email-based tools it reflects the number of input files processed.
+        reported_count = len(artifacts) if not tool.email_subject_template else file_count
+
         # Send email
         status_mgr.update_status(
             batch_id=batch_id,
             stage="SENDING_EMAIL",
-            processed_files=file_count
+            processed_files=reported_count
         )
         
         recipients = self._get_recipients(tool.name)
@@ -168,11 +171,12 @@ class UnifiedProcessor:
             body = self._build_email_body(batch_id, file_count, output_path, artifacts)
             self.email_service.send(recipients, subject, body, artifacts)
         
-        # Done
+        # Done — processed_files carries the final count into the DONE state
         status_mgr.update_status(
             batch_id=batch_id,
             state="DONE",
             stage="DONE",
+            processed_files=reported_count,
             message="Complete"
         )
     
@@ -183,6 +187,12 @@ class UnifiedProcessor:
         
         # Get files with the tool's accepted formats
         files = BatchOperations.get_files(processing_path, tool.input_formats)
+
+        if not files:
+            raise RuntimeError(
+                f"No files found with extensions {tool.input_formats} in {processing_path}. "
+                f"Present: {[f.name for f in processing_path.iterdir() if not f.name.startswith('_')]}"
+            )
         
         if tool.inject_mode:
             cmd = self._build_inject_cmd(tool, files, output_path)
@@ -209,23 +219,6 @@ class UnifiedProcessor:
         return output_path
     
     def _build_inject_cmd(self, tool: ToolConfig, files: List[Path], output_path: Path) -> List[str]:
-        """Build CLI command for inject-mode extractors (Croton).
-
-        Supported batch layouts:
-        - packing .ods + factura/mapeo .ods
-        - packing .ods + factura/mapeo .xlsx/.xls
-        - packing .xlsx/.xls + factura/mapeo .ods
-        - packing .xlsx/.xls + factura/mapeo .xlsx/.xls
-
-        Resolution rules:
-        1) If exactly one .ods is present and one XLSX/XLS, use filename keywords
-           to determine roles; fall back to ODS=packing, XLSX=factura.
-        2) If two files of the same format (both ODS or both XLSX/XLS), infer
-           packing/factura from the filename.
-            Packing keywords: packing, parking
-            Factura keywords: factura, invoice, mapeo, mapping
-        3) If still ambiguous, fail loudly.
-        """
         ods_files = [f for f in files if f.suffix.lower() == ".ods"]
         excel_files = [f for f in files if f.suffix.lower() in (".xlsx", ".xls")]
 
@@ -236,14 +229,12 @@ class UnifiedProcessor:
         _factura_kw = ("factura", "invoice", "mapeo", "mapping")
 
         if len(ods_files) == 1 and len(excel_files) == 1:
-            # Try filename-based disambiguation first
             ods_name = ods_files[0].name.lower()
             xls_name = excel_files[0].name.lower()
             if any(k in xls_name for k in _packing_kw) and any(k in ods_name for k in _factura_kw):
                 packing_file = excel_files[0]
                 factura_file = ods_files[0]
             else:
-                # Default: ODS is packing, XLSX/XLS is factura
                 packing_file = ods_files[0]
                 factura_file = excel_files[0]
 
@@ -319,7 +310,6 @@ class UnifiedProcessor:
         doc_files = [f for f in pdf_files if "doc" in f.name.lower()]
         other_pdfs = [f for f in pdf_files if f not in t1_files and f not in doc_files]
 
-        # Si vamos a validar, seguimos clasificando DOC como hasta ahora
         if not skip_validation:
             if other_pdfs:
                 if not doc_files and len(other_pdfs) == 1:
@@ -353,7 +343,6 @@ class UnifiedProcessor:
         return cmd
 
     def _get_recipients(self, tool_name: str) -> List[str]:
-        """Get recipients: per-tool first, then global fallback."""
         tool_key = f"MAIL_TO_{tool_name.upper()}"
         mail_to = os.getenv(tool_key, "").strip()
         if not mail_to:
@@ -361,20 +350,16 @@ class UnifiedProcessor:
         return [e.strip() for e in mail_to.split(",") if e.strip()]
     
     def _build_email_body(self, batch_id: str, file_count: int, output_path: Path, artifacts: List[Path]) -> str:
-        # Look for report file directly in output_path (not in artifacts list)
         report_path = output_path / f"reporte_{batch_id}.txt"
         if report_path.exists():
             try:
                 return report_path.read_text(encoding="utf-8")
             except Exception as e:
                 logger.warning(f"Failed to read report file {report_path}: {e}")
-        
-        # Default body if no report found
         return f"Batch {batch_id} processed.\n{file_count} file(s) processed."
 
 
 def main():
-    """Entry point."""
     config_path = os.getenv("CONFIG_PATH", "/config/tools.yaml")
     registry = ToolRegistry.from_yaml(config_path)
     
