@@ -862,6 +862,8 @@ def add_validated_sheet(wb: openpyxl.Workbook, report: dict, validated_sheet_nam
     t1_raw_gross_col = 31
     t1_raw_packages_col = 32
     t1_raw_files_col = 33
+    t1_raw_invoice_refs_col = 34
+    t1_raw_order_refs_col = 35
 
     dst_ws.cell(1, review_col).value = 'Validation Status'
     dst_ws.cell(1, pages_col).value = 'PDF Pages'
@@ -874,6 +876,8 @@ def add_validated_sheet(wb: openpyxl.Workbook, report: dict, validated_sheet_nam
     dst_ws.cell(1, t1_raw_gross_col).value = 'T1 Raw Grosses'
     dst_ws.cell(1, t1_raw_packages_col).value = 'T1 Raw Packages'
     dst_ws.cell(1, t1_raw_files_col).value = 'T1 Raw Files'
+    dst_ws.cell(1, t1_raw_invoice_refs_col).value = 'T1 Raw Invoice Refs'
+    dst_ws.cell(1, t1_raw_order_refs_col).value = 'T1 Raw Order Refs'
 
     for row_idx in range(5, dst_ws.max_row + 1):
         item = row_map.get(row_idx)
@@ -906,6 +910,8 @@ def add_validated_sheet(wb: openpyxl.Workbook, report: dict, validated_sheet_nam
         dst_ws.cell(row_idx, t1_raw_gross_col).value = ', '.join(map(str, t1_raw.get('grosses', [])))
         dst_ws.cell(row_idx, t1_raw_packages_col).value = ', '.join(map(str, t1_raw.get('packages', [])))
         dst_ws.cell(row_idx, t1_raw_files_col).value = ', '.join(map(str, t1_raw.get('files', [])))
+        dst_ws.cell(row_idx, t1_raw_invoice_refs_col).value = ', '.join(map(str, t1_raw.get('invoice_refs', [])))
+        dst_ws.cell(row_idx, t1_raw_order_refs_col).value = ', '.join(map(str, t1_raw.get('order_refs', [])))
 
 
 def parse_args() -> argparse.Namespace:
@@ -941,8 +947,8 @@ def extract_t1_summary(pdf_path: Path) -> dict:
     full_text = "\n".join(text_by_page.values()) if isinstance(text_by_page, dict) else str(text_by_page)
 
     mrn = None
-    gross_kg = None
     packages = None
+    gross_kg = None
 
     mrn_match = re.search(r'\b\d{2}[A-Z]{2}[A-Z0-9]{10,}\b', full_text, re.IGNORECASE)
     if mrn_match:
@@ -951,6 +957,7 @@ def extract_t1_summary(pdf_path: Path) -> dict:
     pkg_patterns = [
         r'(\d+)\s+(?:packages|package|pkgs|colli|bultos)\b',
         r'\bpackages?\b\D{0,10}(\d+)',
+        r'\bcol(?:li)?\b\D{0,10}(\d+)',
     ]
     for pat in pkg_patterns:
         m = re.search(pat, full_text, re.IGNORECASE)
@@ -961,27 +968,58 @@ def extract_t1_summary(pdf_path: Path) -> dict:
             except Exception:
                 pass
 
-    gross_patterns = [
-        r'gross\s*(?:mass|weight)?\D{0,20}(\d+(?:[.,]\d+)?)\s*(?:kg|kgs)\b',
-        r'\bbruto\b\D{0,20}(\d+(?:[.,]\d+)?)\s*(?:kg|kgs)\b',
-        r'(\d+(?:[.,]\d+)?)\s*(?:kg|kgs)\b',
+    def _to_float(x):
+        try:
+            return float(str(x).replace(',', '.'))
+        except Exception:
+            return None
+
+    gross_candidates = []
+
+    priority_patterns = [
+        r'rohmasse\D{0,20}(\d+(?:[.,]\d+)?)',
+        r'gross\s*total\D{0,20}(\d+(?:[.,]\d+)?)',
+        r'gross\s*(?:mass|weight)?\D{0,20}(\d+(?:[.,]\d+)?)',
+        r'\bbruto\b\D{0,20}(\d+(?:[.,]\d+)?)',
     ]
-    for pat in gross_patterns:
-        m = re.search(pat, full_text, re.IGNORECASE)
-        if m:
-            try:
-                gross_kg = float(m.group(1).replace(',', '.'))
-                break
-            except Exception:
-                pass
+    for pat in priority_patterns:
+        for m in re.finditer(pat, full_text, re.IGNORECASE):
+            v = _to_float(m.group(1))
+            if v is not None:
+                gross_candidates.append(v)
+
+    generic_kg_matches = re.findall(r'(\d+(?:[.,]\d+)?)\s*(?:kg|kgs)\b', full_text, re.IGNORECASE)
+    for raw in generic_kg_matches:
+        v = _to_float(raw)
+        if v is not None:
+            gross_candidates.append(v)
+
+    # dedupe manteniendo orden
+    seen = set()
+    gross_candidates_clean = []
+    for v in gross_candidates:
+        key = round(v, 3)
+        if key in seen:
+            continue
+        seen.add(key)
+        gross_candidates_clean.append(v)
+
+    # heurística simple: preferir el mayor candidato razonable
+    if gross_candidates_clean:
+        gross_kg = max(gross_candidates_clean)
+
+    invoice_refs = sorted(set(re.findall(r'\b\d{6,}\b', full_text)))
+    order_refs = sorted(set(re.findall(r'\bM\d{7,}\b', full_text, re.IGNORECASE)))
 
     return {
         'source_file': pdf_path.name,
         'mrn': mrn,
         'gross_kg': gross_kg,
+        'gross_candidates': gross_candidates_clean,
         'packages': packages,
+        'invoice_refs': invoice_refs,
+        'order_refs': order_refs,
     }
-
 
 def load_t1_summaries(t1_paths: list[Path]) -> dict[str, dict]:
     out: dict[str, dict] = {}
@@ -990,9 +1028,21 @@ def load_t1_summaries(t1_paths: list[Path]) -> dict[str, dict]:
             info = extract_t1_summary(Path(path))
         except Exception:
             continue
+
         mrn = info.get('mrn')
         if mrn:
             out[normalize_token(mrn)] = info
+
+        for ref in info.get('invoice_refs', []) or []:
+            tok = normalize_token(ref)
+            if tok and tok not in out:
+                out[tok] = info
+
+        for ref in info.get('order_refs', []) or []:
+            tok = normalize_token(ref)
+            if tok and tok not in out:
+                out[tok] = info
+
     return out
 
 
@@ -1003,9 +1053,20 @@ def enrich_report_with_t1(entries: list, report: dict, t1_info: dict[str, dict])
 
     all_t1_raw = {
         'mrns': sorted([info.get('mrn') for info in t1_info.values() if info.get('mrn')]),
-        'grosses': [info.get('gross_kg') for info in t1_info.values() if info.get('gross_kg') is not None],
+        'grosses': sorted(set(
+            g
+            for info in t1_info.values()
+            for g in (info.get('gross_candidates') or ([info.get('gross_kg')] if info.get('gross_kg') is not None else []))
+            if g is not None
+        )),
         'packages': [info.get('packages') for info in t1_info.values() if info.get('packages') is not None],
         'files': sorted([info.get('source_file') for info in t1_info.values() if info.get('source_file')]),
+        'invoice_refs': sorted(set(
+            x for info in t1_info.values() for x in (info.get('invoice_refs') or [])
+        )),
+        'order_refs': sorted(set(
+            x for info in t1_info.values() for x in (info.get('order_refs') or [])
+        )),
     }
 
     for entry in entries:
@@ -1018,6 +1079,8 @@ def enrich_report_with_t1(entries: list, report: dict, t1_info: dict[str, dict])
             'grosses': all_t1_raw['grosses'],
             'packages': all_t1_raw['packages'],
             'files': all_t1_raw['files'],
+            'invoice_refs': all_t1_raw['invoice_refs'],
+            'order_refs': all_t1_raw['order_refs'],
         }
 
         if not has_any_t1:
@@ -1050,12 +1113,18 @@ def enrich_report_with_t1(entries: list, report: dict, t1_info: dict[str, dict])
 
         gross_xlsx = getattr(entry, 'peso_bruto', None)
         gross_t1 = match.get('gross_kg')
+        gross_candidates = match.get('gross_candidates') or []
         packages_t1 = match.get('packages')
 
         gross_ok = False
-        if gross_xlsx is not None and gross_t1 is not None:
+        if gross_xlsx is not None:
             try:
-                gross_ok = abs(float(gross_xlsx) - float(gross_t1)) <= 1.0
+                gx = float(gross_xlsx)
+                for cand in gross_candidates or ([gross_t1] if gross_t1 is not None else []):
+                    if cand is not None and abs(gx - float(cand)) <= 1.0:
+                        gross_ok = True
+                        gross_t1 = cand
+                        break
             except Exception:
                 gross_ok = False
 
