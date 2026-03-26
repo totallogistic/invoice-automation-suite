@@ -266,8 +266,7 @@
     </header>
     <main>
       <p class="muted">
-        Sube el packing list (<strong>.xlsx</strong>), opcionalmente los documentos T1
-        (<strong>.pdf</strong>, nombre debe contener <strong>T1</strong>) y el documento DOC
+        Sube el packing list (<strong>.xlsx</strong>), opcionalmente el documento DOC
         (<strong>.pdf</strong>, nombre debe contener <strong>DOC</strong>) si quieres validar el XLSX antes de procesar.
         La herramienta genera un XLSX enriquecido con las hojas <strong>T1_RESULT</strong> y/o <strong>DAE_RESULT</strong>.
       </p>
@@ -283,18 +282,9 @@
           />
           <span class="hint">Formato permitido: XLSX</span>
         </div>
+
         <div class="file-field">
-          <label>📄 Documentos T1 <span style="color:#dc2626"></span></label>
-          <input
-            id="t1Input"
-            type="file"
-            multiple
-            accept=".pdf,application/pdf"
-          />
-          <span class="hint">Opcional. Uno o más PDFs — el nombre debe contener <strong>T1</strong> (ej. T1_1.pdf)</span>
-        </div>
-        <div class="file-field">
-          <label>📄 Documento DOC <span style="color:#dc2626">*</span></label>
+          <label>📄 Documento DOC <span style="color:#dc2626"></span></label>
           <input
             id="docInput"
             type="file"
@@ -541,8 +531,7 @@
 
       $("btnUpload").addEventListener("click", async () => {
         const xlsxFile = $("xlsxInput").files[0];
-        const t1Files = Array.from($("t1Input").files);
-        const docFile = $("docInput").files[0];
+                const docFile = $("docInput").files[0];
         const skipValidation = $("skipValidationInput").checked;
         const runT1  = $("runT1Input").checked;
         const runDae = $("runDaeInput").checked;
@@ -559,14 +548,7 @@
         if (!/\.xlsx$/i.test(xlsxFile.name)) {
           return setUploadMsg(`Packing list no válido: ${xlsxFile.name}. Debe ser .xlsx`, true);
         }
-        for (const f of t1Files) {
-          if (!/\.pdf$/i.test(f.name)) {
-            return setUploadMsg(`Documento T1 no válido: ${f.name}. Debe ser .pdf`, true);
-          }
-          if (!/t1/i.test(f.name)) {
-            return setUploadMsg(`El nombre del T1 debe contener "T1": ${f.name}`, true);
-          }
-        }
+
         if (!skipValidation) {
           if (!docFile) {
             return setUploadMsg("Selecciona el documento DOC (.pdf) o marca 'Omitir validación XLSX vs DOC'.", true);
@@ -587,9 +569,7 @@
         try {
           const fd = new FormData();
           fd.append("files", xlsxFile, xlsxFile.name);
-          for (const f of t1Files) {
-            fd.append("files", f, f.name);
-          }
+
           if (docFile) {
             fd.append("files", docFile, docFile.name);
           }
