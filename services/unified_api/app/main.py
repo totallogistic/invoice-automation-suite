@@ -1,6 +1,7 @@
 """Unified API for all tools."""
 from __future__ import annotations
 
+import io
 import os
 import zipfile
 import shutil
@@ -11,7 +12,7 @@ import random
 import string
 
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Path as PathParam
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 
 from .tool_registry import ToolRegistry
 from iasuite_common.status import StatusManager
@@ -124,6 +125,59 @@ def camion_version():
         "changelog": _read_script_changelog(path),
     }
 
+@app.get("/api/split_nominas/version")
+def split_nominas_version():
+    path = "/app/apps/split_nominas/extractor/split_nominas.py"
+    return {
+        "version": _read_script_version(path),
+        "changelog": _read_script_changelog(path),
+    }
+
+
+@app.get("/api/split_nominas/batches/{batch_id}/download")
+def split_nominas_download(batch_id: str = PathParam(...)):
+    """
+    Stream a ZIP of all PDFs generated for this batch.
+    Called by the web UI once status reaches DONE.
+    """
+    tool = registry.get_tool("split_nominas")
+    if not tool:
+        raise HTTPException(404, "Tool split_nominas not found")
+
+    # Verify the batch is DONE before allowing download
+    status_mgr = StatusManager(tool.status_dir)
+    status = status_mgr.get_status(batch_id)
+    if not status:
+        raise HTTPException(404, f"Batch not found: {batch_id}")
+    if status.state not in ("DONE", "done"):
+        raise HTTPException(409, f"Batch not ready for download (state={status.state})")
+
+    output_path = tool.output_dir / batch_id
+    if not output_path.exists():
+        raise HTTPException(404, f"Output directory not found for batch {batch_id}")
+
+    pdf_files = sorted(output_path.glob("*.pdf"))
+    if not pdf_files:
+        raise HTTPException(404, "No PDF files found in batch output")
+
+    # Build ZIP in memory and stream it
+    zip_buffer = io.BytesIO()
+    with zipfile.ZipFile(zip_buffer, mode="w", compression=zipfile.ZIP_DEFLATED) as zf:
+        for pdf_path in pdf_files:
+            zf.write(pdf_path, arcname=pdf_path.name)
+    zip_buffer.seek(0)
+
+    zip_filename = f"nominas_{batch_id}.zip"
+    return StreamingResponse(
+        zip_buffer,
+        media_type="application/zip",
+        headers={
+            "Content-Disposition": f'attachment; filename="{zip_filename}"',
+            "X-File-Count": str(len(pdf_files)),
+        },
+    )
+
+
 @app.post("/api/{tool_name}/batches")
 async def create_batch(
     tool_name: str = PathParam(...),
@@ -226,4 +280,3 @@ def get_status(
         "processed_files": status.processed_files,
         "message": status.message
     }
-

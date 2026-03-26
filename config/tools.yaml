@@ -89,7 +89,7 @@ tools:
       inject_mode: true
 
     output:
-      directory: /data/croton/out
+      directory: /data/out
       artifacts:
         - "CROTON_*.ods"
         - "CROTON_*.xlsx"
@@ -143,7 +143,7 @@ tools:
       camion_mode: true
 
     output:
-      directory: /data/camion/out
+      directory: /data/out
       artifacts:
         - "*-PROCESSED.xlsx"
 
@@ -151,3 +151,34 @@ tools:
       subject_template: "[Camion] Batch {batch_id} - Packing list procesado"
 
     status_dir: /data/camion/status
+
+# Split Nóminas
+  # Añadir este bloque al final de la lista tools: en config/tools.yaml
+  - name: split_nominas
+    enabled: true
+    display_name: "Split Nóminas"
+    description: >
+      Divide un PDF de nóminas multi-página en PDFs individuales por empleado.
+      Detecta automáticamente empresa (TLS/TE), mes, año y nombre del empleado
+      desde el texto del PDF y nombra cada archivo resultante en formato
+      MMYY-APELLIDO_APELLIDO_NOMBRE-EMPRESA.pdf.
+      El resultado se entrega como descarga directa de un ZIP desde el navegador.
+
+    input:
+      formats: [pdf]
+      inbox: /data/split_nominas/inbox
+
+    extractor:
+      type: python
+      path: /apps/split_nominas/extractor/split_nominas.py
+
+    output:
+      directory: /data/split_nominas/out
+      artifacts:
+        - "*.pdf"
+
+    # Sin email: la entrega es descarga directa ZIP desde la web UI
+    email:
+      subject_template: ""
+
+    status_dir: /data/split_nominas/status

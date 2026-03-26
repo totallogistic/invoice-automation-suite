@@ -163,12 +163,9 @@ class UnifiedProcessor:
         )
         
         recipients = self._get_recipients(tool.name)
-        if recipients:
+        if recipients and tool.email_subject_template:
             subject = tool.email_subject_template.format(batch_id=batch_id)
-            
-            # Check for text report to use as email body
             body = self._build_email_body(batch_id, file_count, output_path, artifacts)
-            
             self.email_service.send(recipients, subject, body, artifacts)
         
         # Done
