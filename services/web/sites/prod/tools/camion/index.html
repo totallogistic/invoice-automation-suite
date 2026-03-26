@@ -269,7 +269,7 @@
         Sube el packing list (<strong>.xlsx</strong>), opcionalmente los documentos T1
         (<strong>.pdf</strong>, nombre debe contener <strong>T1</strong>) y el documento DOC
         (<strong>.pdf</strong>, nombre debe contener <strong>DOC</strong>) si quieres validar el XLSX antes de procesar.
-        La herramienta genera un XLSX enriquecido con la hoja <strong>Procesado_Camion</strong>.
+        La herramienta genera un XLSX enriquecido con las hojas <strong>T1_RESULT</strong> y/o <strong>DAE_RESULT</strong>.
       </p>
 
     <div class="card">
@@ -305,12 +305,27 @@
       </div>
       <div class="file-field">
         <label>
-        <input id="skipValidationInput" type="checkbox" />
-        Omitir validación XLSX vs DOC
+          <input id="skipValidationInput" type="checkbox" />
+          Omitir validación XLSX vs DOC
         </label>
         <span class="hint">
-        Úsalo solo si el XLSX ya fue revisado/corregido manualmente y quieres reprocesar sin regenerar PDF_VALIDADO.
-      </span>
+          Úsalo solo si el XLSX ya fue revisado/corregido manualmente y quieres reprocesar sin regenerar PDF_VALIDADO.
+        </span>
+      </div>
+
+      <div class="file-field" style="margin-top:0.75rem">
+        <label style="font-weight:600;margin-bottom:0.35rem;display:block">Subprocesos a ejecutar</label>
+        <label style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.3rem">
+          <input id="runT1Input" type="checkbox" checked />
+          <span><strong>T1_RESULT</strong> — tránsito aduanero (T1/EX, pesos del PDF)</span>
+        </label>
+        <label style="display:flex;align-items:center;gap:0.5rem">
+          <input id="runDaeInput" type="checkbox" checked />
+          <span><strong>DAE_RESULT</strong> — declaraciones de exportación (round half-up)</span>
+        </label>
+        <span class="hint" id="subprocesosHint" style="display:none;color:#dc2626">
+          Selecciona al menos un subproceso.
+        </span>
       </div>
       <div class="row">
         <button id="btnUpload">Procesar</button>
@@ -529,6 +544,14 @@
         const t1Files = Array.from($("t1Input").files);
         const docFile = $("docInput").files[0];
         const skipValidation = $("skipValidationInput").checked;
+        const runT1  = $("runT1Input").checked;
+        const runDae = $("runDaeInput").checked;
+
+        if (!runT1 && !runDae) {
+          $("subprocesosHint").style.display = "block";
+          return setUploadMsg("Selecciona al menos un subproceso (T1_RESULT y/o DAE_RESULT).", true);
+        }
+        $("subprocesosHint").style.display = "none";
 
         if (!xlsxFile) {
           return setUploadMsg("Selecciona el packing list (.xlsx).", true);
@@ -571,6 +594,8 @@
             fd.append("files", docFile, docFile.name);
           }
           fd.append("skip_validation", skipValidation ? "1" : "0");
+          fd.append("run_t1",  runT1  ? "1" : "0");
+          fd.append("run_dae", runDae ? "1" : "0");
 
           const r = await fetch("/api/camion/batches", { method: "POST", body: fd });
           if (!r.ok) {

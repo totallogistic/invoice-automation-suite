@@ -198,7 +198,14 @@ class UnifiedProcessor:
             cmd = self._build_inject_cmd(tool, files, output_path)
         elif tool.camion_mode:
             skip_validation = (processing_path / "_SKIP_VALIDATION").exists()
-            cmd = self._build_camion_cmd(tool, files, output_path, skip_validation=skip_validation)
+            skip_t1  = (processing_path / "_SKIP_T1").exists()
+            skip_dae = (processing_path / "_SKIP_DAE").exists()
+            cmd = self._build_camion_cmd(
+                tool, files, output_path,
+                skip_validation=skip_validation,
+                skip_t1=skip_t1,
+                skip_dae=skip_dae,
+            )
         else:
             cmd = [
                 "python3",
@@ -295,6 +302,8 @@ class UnifiedProcessor:
         files: List[Path],
         output_path: Path,
         skip_validation: bool = False,
+        skip_t1:  bool = False,
+        skip_dae: bool = False,
     ) -> List[str]:
         xlsx_files = [f for f in files if f.suffix.lower() == ".xlsx"]
         pdf_files = [f for f in files if f.suffix.lower() == ".pdf"]
@@ -339,6 +348,11 @@ class UnifiedProcessor:
 
         if t1_files:
             cmd.extend(["--t1", *[str(f) for f in t1_files]])
+
+        if skip_t1:
+            cmd.append("--skip-t1")
+        if skip_dae:
+            cmd.append("--skip-dae")
 
         return cmd
 

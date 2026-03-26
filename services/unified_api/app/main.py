@@ -96,17 +96,8 @@ def cuadre_asientos_version():
 
 @app.get("/api/camion/version")
 def camion_version():
-    # run_processors.py es el punto de entrada; también exponemos la versión
-    # del motor T1 (camion_export_processor) para trazabilidad completa.
-    orchestrator_path = "/app/apps/camion/extractor/run_processors.py"
-    t1_engine_path    = "/app/apps/camion/extractor/camion_export_processor.py"
-    dae_engine_path   = "/app/apps/camion/extractor/processor_dae.py"
-    return {
-        "version":          _read_script_version(orchestrator_path),
-        "changelog":        _read_script_changelog(orchestrator_path),
-        "t1_engine_version": _read_script_version(t1_engine_path),
-        "dae_engine_version": _read_script_version(dae_engine_path),
-    }
+    path = "/app/apps/camion/extractor/camion_export_processor.py"
+    return {"version": _read_script_version(path), "changelog": _read_script_changelog(path)}
 
 @app.get("/api/split_nominas/version")
 def split_nominas_version():
@@ -180,6 +171,8 @@ async def create_batch(
     tool_name: str = PathParam(...),
     files: List[UploadFile] = File(...),
     skip_validation: str = Form("0"),
+    run_t1:          str = Form("1"),
+    run_dae:         str = Form("1"),
 ):
     """Create new batch."""
     tool = registry.get_tool(tool_name)
@@ -196,8 +189,15 @@ async def create_batch(
         batch_inbox.mkdir(parents=True, exist_ok=True)
 
         skip_validation_flag = str(skip_validation).strip().lower() in {"1", "true", "yes", "on"}
-        if tool_name == "camion" and skip_validation_flag:
-            (batch_inbox / "_SKIP_VALIDATION").write_text("1", encoding="utf-8")
+        run_t1_flag  = str(run_t1).strip().lower()  not in {"0", "false", "no", "off"}
+        run_dae_flag = str(run_dae).strip().lower()  not in {"0", "false", "no", "off"}
+        if tool_name == "camion":
+            if skip_validation_flag:
+                (batch_inbox / "_SKIP_VALIDATION").write_text("1", encoding="utf-8")
+            if not run_t1_flag:
+                (batch_inbox / "_SKIP_T1").write_text("1", encoding="utf-8")
+            if not run_dae_flag:
+                (batch_inbox / "_SKIP_DAE").write_text("1", encoding="utf-8")
 
         file_count = 0
         for upload_file in files:
@@ -238,6 +238,8 @@ async def create_batch(
             "files_uploaded": file_count,
             "status": "UPLOADED",
             "skip_validation": skip_validation_flag if tool_name == "camion" else False,
+            "run_t1":  run_t1_flag  if tool_name == "camion" else True,
+            "run_dae": run_dae_flag if tool_name == "camion" else True,
         }
 
     except HTTPException:

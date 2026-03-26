@@ -97,6 +97,8 @@ def run(
     output_path: Path,
     verbose:     bool = False,
     dpi:         int  = 150,
+    skip_t1:     bool = False,
+    skip_dae:    bool = False,
 ) -> int:
 
     print('\n=== Camión Export Processor (T1 + DAE) ===\n')
@@ -124,12 +126,14 @@ def run(
         print('\nℹ️  Sin T1 PDFs – pesos T1 tomados del XLSX donde aplique.')
 
     # ── 2. Pipeline T1 ───────────────────────────────────────────────────────
-    print('\n── Pipeline T1 (T1_RESULT) ───────────────────────────────')
-    rows_t1, summary_t1 = t1_processor.read_sheet1(xlsx_path)
-    print(f'  ✓ {len(rows_t1)} filas leídas')
-    result_t1 = t1_processor.process_packing_list(rows_t1, t1_map)
+    result_t1 = summary_t1 = None
+    if not skip_t1:
+        print('\n── Pipeline T1 (T1_RESULT) ───────────────────────────────')
+        rows_t1, summary_t1 = t1_processor.read_sheet1(xlsx_path)
+        print(f'  ✓ {len(rows_t1)} filas leídas')
+        result_t1 = t1_processor.process_packing_list(rows_t1, t1_map)
 
-    if verbose:
+    if verbose and result_t1:
         print(f'  {"Sep":<4} {"Y":<3} {"Type":<8} {"MRN":<32} {"PB":>8}')
         for r in result_t1:
             sep = '↑' if r['_separator_before'] else ''
@@ -153,18 +157,20 @@ def run(
             print('  ⚠ camion_pdf_validator.py no encontrado – validación DOC omitida.')
 
     # ── 4. Pipeline DAE ───────────────────────────────────────────────────────
-    print('\n── Pipeline DAE (DAE_RESULT) ─────────────────────────────')
-    rows_dae, summary_dae = read_sheet1_dae(xlsx_path)
-    print(f'  ✓ {len(rows_dae)} filas leídas')
-    result_dae = process_dae(rows_dae)
+    result_dae = summary_dae = None
+    if not skip_dae:
+        print('\n── Pipeline DAE (DAE_RESULT) ─────────────────────────────')
+        rows_dae, summary_dae = read_sheet1_dae(xlsx_path)
+        print(f'  ✓ {len(rows_dae)} filas leídas')
+        result_dae = process_dae(rows_dae)
 
-    if verbose:
+    if verbose and result_dae:
         print(f'  {"Y":<3} {"Shipper":<28} {"MRN":<32} {"PB_src":>10} {"PB_out":>8}')
-        for src, out in zip(rows_dae, result_dae):
-            ylw = '●' if src['_src_yellow'] else ''
-            print(f'  {ylw:<3} {str(src["shipper_name"] or ""):<28}'
-                  f' {str(src["mrn_invoice"] or ""):<32}'
-                  f' {str(src["peso_bruto"]):>10} {str(out["peso_bruto"]):>8}')
+        for src_r, out in zip(rows_dae, result_dae):
+            ylw = '●' if src_r['_src_yellow'] else ''
+            print(f'  {ylw:<3} {str(src_r["shipper_name"] or ""):<28}'
+                  f' {str(src_r["mrn_invoice"] or ""):<32}'
+                  f' {str(src_r["peso_bruto"]):>10} {str(out["peso_bruto"]):>8}')
 
     # ── 5. Workbook final ────────────────────────────────────────────────────
     print('\n💾 Escribiendo workbook final...')
@@ -176,15 +182,17 @@ def run(
         pdf_validator.add_validated_sheet(wb, report, validated_sheet_name='PDF_VALIDADO')
         print('  ✓ Hoja: PDF_VALIDADO')
 
-    t1_processor.add_processed_sheet(wb, result_t1, summary_t1, processed_sheet_name='T1_RESULT')
-    print('  ✓ Hoja: T1_RESULT')
+    if result_t1 is not None:
+        t1_processor.add_processed_sheet(wb, result_t1, summary_t1, processed_sheet_name='T1_RESULT')
+        print('  ✓ Hoja: T1_RESULT')
 
     if t1_info_list:
         t1_processor.add_t1_summary_sheet(wb, t1_info_list, sheet_name='T1_SUMMARY')
         print('  ✓ Hoja: T1_SUMMARY')
 
-    add_dae_sheet(wb, result_dae, summary_dae, sheet_name='DAE_RESULT')
-    print('  ✓ Hoja: DAE_RESULT')
+    if result_dae is not None:
+        add_dae_sheet(wb, result_dae, summary_dae, sheet_name='DAE_RESULT')
+        print('  ✓ Hoja: DAE_RESULT')
 
     wb.save(output_path)
     print(f'\n✅ Done!')
@@ -205,6 +213,8 @@ def main() -> int:
     parser.add_argument('-o', '--output',  default=None,          help='Output: fichero .xlsx o directorio')
     parser.add_argument('--verbose',       action='store_true',   help='Detalle fila a fila')
     parser.add_argument('--dpi',           type=int, default=150, help='DPI para OCR del DOC')
+    parser.add_argument('--skip-t1',       action='store_true',   help='No ejecutar pipeline T1')
+    parser.add_argument('--skip-dae',      action='store_true',   help='No ejecutar pipeline DAE')
     args = parser.parse_args()
 
     output_path = derive_output_path(args.xlsx, args.output)
@@ -216,6 +226,8 @@ def main() -> int:
         output_path = output_path,
         verbose     = args.verbose,
         dpi         = args.dpi,
+        skip_t1     = args.skip_t1,
+        skip_dae    = args.skip_dae,
     )
 
 
