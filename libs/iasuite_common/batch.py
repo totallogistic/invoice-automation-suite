@@ -72,27 +72,28 @@ class BatchOperations:
     @staticmethod
     def get_files(directory: Path, extensions: List[str] = None) -> List[Path]:
         """
-        Get all files with specified extensions.
-        
+        Get all files with specified extensions (case-insensitive on all platforms).
+
         Args:
             directory: Directory to search
             extensions: List of extensions (without dot), e.g., ['pdf', 'xlsx', 'xls']
                        If None, returns all files except hidden and _DONE marker
-        
+
         Returns:
             Sorted list of file paths
         """
         files = []
-        
+
         if extensions:
-            # Get files with specific extensions
-            for ext in extensions:
-                files.extend(directory.rglob(f"*.{ext}"))
+            # Normalise to lowercase for case-insensitive comparison on Linux
+            exts_lower = {e.lower() for e in extensions}
+            for file_path in directory.rglob("*"):
+                if file_path.is_file() and file_path.suffix.lstrip(".").lower() in exts_lower:
+                    files.append(file_path)
         else:
             # Get all files, excluding hidden and markers
             for file_path in directory.rglob("*"):
                 if file_path.is_file() and not file_path.name.startswith(('.', '_')):
                     files.append(file_path)
-        
-        return sorted(files)
 
+        return sorted(files)
