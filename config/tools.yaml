@@ -186,3 +186,31 @@ tools:
       subject_template: ""
 
     status_dir: /data/split_nominas/status
+
+  - name: split_cotizaciones
+    enabled: true
+    display_name: "Split Cotizaciones SS"
+    description: >
+      Divide PDFs de Recibos de Liquidación de Cotizaciones (RLC) y
+      Relaciones Nominales de Trabajadores (RNT) en archivos individuales
+      por empresa y tipo. Agrupa automáticamente las páginas multi-página
+      del mismo documento. Nomenclatura: MMYY-RLC/RNT-EMPRESA[-CIUDAD].pdf.
+      La entrega es descarga directa de un ZIP desde el navegador.
+
+    input:
+      formats: [pdf]
+      inbox: /data/split_cotizaciones/inbox
+
+    extractor:
+      type: python
+      path: /apps/split_cotizaciones/extractor/split_cotizaciones.py
+
+    output:
+      directory: /data/out
+      artifacts:
+        - "*.pdf"
+
+    email:
+      subject_template: ""
+
+    status_dir: /data/split_cotizaciones/status
