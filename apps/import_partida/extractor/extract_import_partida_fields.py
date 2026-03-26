@@ -10,6 +10,26 @@ Outputs in <out_dir>:
   - import_partida.csv
 """
 
+SCRIPT_VERSION = "2026-03-17.v1"
+
+SCRIPT_CHANGELOG = """
+## 2026-03-17.v1
+
+### Logica general
+Extrae los campos de partida arancelaria de conocimientos de embarque (B/L)
+de Maersk en formato PDF, con soporte para multiples plantillas de formato.
+
+### Extraccion PDF
+- Detecta automaticamente el formato de la plantilla Maersk (multiples variantes)
+- Extrae numero de B/L, fecha de emision, shipper, consignee y notify party
+- Extrae descripcion de mercancias, codigos de partida HS, peso bruto y neto
+- Extrae puertos de carga/descarga y pais de origen
+
+### Salida
+Genera `import_partida.csv` en el directorio de salida con todos los campos
+extraidos estructurados por linea de mercancia.
+"""
+
 import re
 import sys
 from pathlib import Path

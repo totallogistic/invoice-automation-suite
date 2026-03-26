@@ -9,6 +9,31 @@ Adapts procesar_aforos.py to work with the unified processor:
 - Compatible with unified processor batch system
 """
 
+SCRIPT_VERSION = "2026-03-17.v1"
+
+SCRIPT_CHANGELOG = """
+## 2026-03-17.v1
+
+### Logica general
+Procesa archivos Excel de aforos y cuadre de asientos contables,
+generando un Excel de salida con el cuadre calculado mas un informe
+de texto plano para auditoria.
+
+### Entrada
+- Uno o varios archivos Excel (`.xlsx`, `.xls`)
+- Cada archivo representa un lote de asientos a cuadrar
+
+### Procesamiento
+- Identifica columnas de debe/haber automaticamente
+- Calcula diferencias y cuadra los asientos por cuenta contable
+- Detecta y reporta descuadres
+
+### Salida
+- Excel con columnas originales mas columnas de resultado del cuadre
+- Informe de texto con estadisticas: total asientos, descuadres encontrados,
+  cuentas afectadas
+"""
+
 import argparse
 import sys
 from pathlib import Path

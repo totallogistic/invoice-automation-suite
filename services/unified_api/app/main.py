@@ -10,7 +10,7 @@ from typing import List
 import random
 import string
 
-from fastapi import FastAPI, UploadFile, File, HTTPException, Path as PathParam
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Path as PathParam
 from fastapi.responses import JSONResponse
 
 from .tool_registry import ToolRegistry
@@ -78,7 +78,11 @@ def _read_script_changelog(path: str) -> str:
 
 @app.get("/api/lear_rabat/version")
 def lear_rabat_version():
-    return {"version": _read_script_version("/app/apps/lear_rabat/extractor/extract_lear_rabat.py")}
+    path = "/app/apps/lear_rabat/extractor/extract_lear_rabat.py"
+    return {
+        "version": _read_script_version(path),
+        "changelog": _read_script_changelog(path),
+    }
 
 @app.get("/api/lear_cable/version")
 def lear_cable_version():
@@ -88,10 +92,43 @@ def lear_cable_version():
         "changelog": _read_script_changelog(path),
         }
 
+@app.get("/api/import_partida/version")
+def import_partida_version():
+    path = "/app/apps/import_partida/extractor/extract_import_partida_fields.py"
+    return {
+        "version": _read_script_version(path),
+        "changelog": _read_script_changelog(path),
+    }
+
+@app.get("/api/croton/version")
+def croton_version():
+    path = "/app/apps/croton/extractor/extract_croton.py"
+    return {
+        "version": _read_script_version(path),
+        "changelog": _read_script_changelog(path),
+    }
+
+@app.get("/api/cuadre_asientos/version")
+def cuadre_asientos_version():
+    path = "/app/apps/cuadre_asientos/extractor/cuadre_asientos_wrapper.py"
+    return {
+        "version": _read_script_version(path),
+        "changelog": _read_script_changelog(path),
+    }
+
+@app.get("/api/camion/version")
+def camion_version():
+    path = "/app/apps/camion/extractor/camion_export_processor.py"
+    return {
+        "version": _read_script_version(path),
+        "changelog": _read_script_changelog(path),
+    }
+
 @app.post("/api/{tool_name}/batches")
 async def create_batch(
     tool_name: str = PathParam(...),
-    files: List[UploadFile] = File(...)
+    files: List[UploadFile] = File(...),
+    skip_validation: str = Form("0"),
 ):
     """Create new batch."""
     tool = registry.get_tool(tool_name)
@@ -106,6 +143,10 @@ async def create_batch(
     
     try:
         batch_inbox.mkdir(parents=True, exist_ok=True)
+
+        skip_validation_flag = str(skip_validation).strip().lower() in {"1", "true", "yes", "on"}
+        if tool_name == "camion" and skip_validation_flag:
+            (batch_inbox / "_SKIP_VALIDATION").write_text("1", encoding="utf-8")
         
         # Save all files
         file_count = 0
@@ -149,7 +190,8 @@ async def create_batch(
             "batch_id": batch_id,
             "tool": tool_name,
             "files_uploaded": file_count,
-            "status": "UPLOADED"
+            "status": "UPLOADED",
+            "skip_validation": skip_validation_flag if tool_name == "camion" else False,
         }
     
     except HTTPException:

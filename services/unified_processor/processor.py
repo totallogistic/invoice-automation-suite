@@ -189,6 +189,9 @@ class UnifiedProcessor:
         
         if tool.inject_mode:
             cmd = self._build_inject_cmd(tool, files, output_path)
+        elif tool.camion_mode:
+            skip_validation = (processing_path / "_SKIP_VALIDATION").exists()
+            cmd = self._build_camion_cmd(tool, files, output_path, skip_validation=skip_validation)
         else:
             cmd = [
                 "python3",
@@ -298,6 +301,60 @@ class UnifiedProcessor:
             "-o", str(out_file),
         ]
     
+    def _build_camion_cmd(
+        self,
+        tool: ToolConfig,
+        files: List[Path],
+        output_path: Path,
+        skip_validation: bool = False,
+    ) -> List[str]:
+        xlsx_files = [f for f in files if f.suffix.lower() == ".xlsx"]
+        pdf_files = [f for f in files if f.suffix.lower() == ".pdf"]
+
+        if len(xlsx_files) != 1:
+            raise RuntimeError(
+                f"[{tool.name}] camion_mode expects exactly 1 XLSX file "
+                f"(packing list), got {len(xlsx_files)}."
+            )
+        xlsx_file = xlsx_files[0]
+
+        t1_files = [f for f in pdf_files if "t1" in f.name.lower()]
+        doc_files = [f for f in pdf_files if "doc" in f.name.lower()]
+        other_pdfs = [f for f in pdf_files if f not in t1_files and f not in doc_files]
+
+        # Si vamos a validar, seguimos clasificando DOC como hasta ahora
+        if not skip_validation:
+            if other_pdfs:
+                if not doc_files and len(other_pdfs) == 1:
+                    doc_files = other_pdfs
+                    other_pdfs = []
+                else:
+                    raise RuntimeError(
+                        f"[{tool.name}] Cannot classify PDF(s): "
+                        f"{[f.name for f in other_pdfs]}. "
+                        "Use filenames containing 't1' or 'doc'."
+                    )
+
+            if len(doc_files) != 1:
+                raise RuntimeError(
+                    f"[{tool.name}] Expected exactly 1 DOC PDF file, "
+                    f"got {len(doc_files)}. Filename must contain 'doc'."
+                )
+
+        cmd = [
+            "python3", str(tool.extractor_path),
+            "--xlsx", str(xlsx_file),
+            "-o", str(output_path),
+        ]
+
+        if not skip_validation:
+            cmd.extend(["--doc", str(doc_files[0])])
+
+        if t1_files:
+            cmd.extend(["--t1", *[str(f) for f in t1_files]])
+
+        return cmd
+
     def _get_recipients(self, tool_name: str) -> List[str]:
         """Get recipients: per-tool first, then global fallback."""
         tool_key = f"MAIL_TO_{tool_name.upper()}"

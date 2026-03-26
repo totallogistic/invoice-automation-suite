@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>[DEV] Totallogistic Tools — Partida</title>
+    <title>[DEV] Totallogistic Tools — Camion Export</title>
     <style>
       * { margin: 0; padding: 0; box-sizing: border-box; }
       body { 
@@ -141,6 +141,25 @@
         margin: 24px 0;
         box-shadow: 0 1px 3px rgba(0,0,0,0.1);
       }
+      .file-row {
+        display: flex;
+        gap: 16px;
+        flex-direction: column;
+        margin-bottom: 16px;
+      }
+      .file-field label {
+        display: block;
+        font-size: 0.85rem;
+        font-weight: 600;
+        color: #374151;
+        margin-bottom: 6px;
+      }
+      .file-field span.hint {
+        display: block;
+        font-size: 0.8rem;
+        color: #6b7280;
+        margin-top: 4px;
+      }
       .row { 
         display: flex;
         gap: 12px;
@@ -155,6 +174,8 @@
         font-size: 0.95rem;
         cursor: pointer;
         transition: border-color 0.2s ease;
+        width: 100%;
+        max-width: 420px;
       }
       input[type="file"]:focus {
         outline: none;
@@ -162,7 +183,7 @@
         box-shadow: 0 0 0 3px rgba(37, 99, 168, 0.1);
       }
       button { 
-        padding: 10px 16px;
+        padding: 10px 20px;
         cursor: pointer;
         background: #2563a8;
         color: white;
@@ -172,6 +193,7 @@
         transition: background 0.2s;
       }
       button:hover { background: #1a4d7e; }
+      button:disabled { background: #9ca3af; cursor: not-allowed; }
       .muted { 
         color: #6b7280;
         font-size: 0.95rem;
@@ -241,19 +263,54 @@
   <body>
     <header>
       <div class="env-badge">DEV</div>
-      <h1>Partida <span class="version-badge" id="scriptVersion">…</span></h1>
+      <h1>🚛 Camion Export Processor <span class="version-badge" id="scriptVersion">…</span></h1>
     </header>
     <main>
-    <p class="muted">Sube uno o varios archivos PDF, o un ZIP con múltiples PDFs. La página se queda aquí y muestra progreso/estado.</p>
+    <p class="muted">
+      Sube el packing list (<strong>.xlsx</strong>), los documentos T1
+      (<strong>.pdf</strong>, uno o más; nombre debe contener <strong>T1</strong>)
+      y el documento de acompañamiento DOC (<strong>.pdf</strong>; nombre debe
+      contener <strong>DOC</strong>). La herramienta genera un XLSX enriquecido
+      con la hoja <strong>Procesado_Camion</strong>.
+    </p>
 
     <div class="card">
+      <div class="file-row">
+        <div class="file-field">
+          <label>📋 Packing list <span style="color:#dc2626">*</span></label>
+          <input
+            id="xlsxInput"
+            type="file"
+            accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+          />
+          <span class="hint">Formato permitido: XLSX</span>
+        </div>
+        <div class="file-field">
+          <label>📄 Documentos T1 <span style="color:#dc2626">*</span></label>
+          <input
+            id="t1Input"
+            type="file"
+            multiple
+            accept=".pdf,application/pdf"
+          />
+          <span class="hint">Uno o más PDFs — el nombre debe contener <strong>T1</strong> (ej. T1_1.pdf)</span>
+        </div>
+        <div class="file-field">
+          <label>📄 Documento DOC <span style="color:#dc2626">*</span></label>
+          <input
+            id="docInput"
+            type="file"
+            accept=".pdf,application/pdf"
+          />
+          <span class="hint">Un PDF — el nombre debe contener <strong>DOC</strong> (ej. 20260310_DOC.pdf)</span>
+        </div>
+      </div>
       <div class="row">
-        <input id="zip" type="file" accept=".pdf,.zip,application/pdf,application/zip" multiple />
-        <button id="btnUpload">Subir Archivo(s)</button>
+        <button id="btnUpload">Procesar</button>
         <span id="uploadMsg" class="muted"></span>
       </div>
       <p class="muted" style="margin:10px 0 0">
-        Endpoint: <span class="mono">POST /api/import_partida/batches</span>
+        Endpoint: <span class="mono">POST /api/camion/batches</span>
       </p>
     </div>
 
@@ -318,23 +375,21 @@
       }
 
       function computePercent(st) {
-        // Si tienes processed_files/total_files real, usamos eso.
         const total = Number(st.total_files || 0);
         const done = Number(st.processed_files || 0);
         if (total > 0) return Math.min(100, Math.round((done / total) * 100));
 
-        // Si no hay granularidad real (extractor batch), aproximamos por stage.
         const stage = (st.stage || "").toUpperCase();
         if (stage === "WAITING") return 5;
-        if (stage === "EXTRACTING") return 55;
-        if (stage === "EMAILING") return 85;
+        if (stage === "RUNNING_EXTRACTOR") return 55;
+        if (stage === "SENDING_EMAIL") return 85;
         if (stage === "DONE") return 100;
         if (stage === "ERROR") return 100;
         return 10;
       }
 
       async function fetchStatus(batchId) {
-        const r = await fetch(`/api/import_partida/batches/${batchId}/status`, { cache: "no-store" });
+        const r = await fetch(`/api/camion/batches/${batchId}/status`, { cache: "no-store" });
         if (!r.ok) throw new Error(`Status HTTP ${r.status}`);
         return await r.json();
       }
@@ -359,13 +414,13 @@
 
         let html = "";
         if (stage === "DONE" || state === "DONE") {
-          html = `<div class="ok">Lote finalizado. Email enviado a: <span class="mono">${rec.join(", ") || "—"}</span></div>`;
+          html = `<div class="ok">✓ Lote finalizado. Packing list procesado enviado a: <span class="mono">${rec.join(", ") || "—"}</span></div>`;
           stopPolling();
         } else if (stage === "ERROR" || state === "ERROR") {
-          html = `<div class="error">Lote en ERROR. Revisa logs y carpeta /data/error.</div>`;
+          html = `<div class="error">✗ Error en procesamiento. Revisa logs: docker compose logs unified_processor</div>`;
           stopPolling();
         } else {
-          html = `<div class="muted">Procesando… (polling cada 2s)</div>`;
+          html = `<div class="muted">⏳ Procesando… (polling cada 2s)</div>`;
         }
         $("finalNote").innerHTML = html;
       }
@@ -427,7 +482,7 @@
           return;
         }
         $("modalBody").textContent = "Cargando…";
-        fetch("/api/import_partida/version", { cache: "no-store" })
+        fetch("/api/camion/version", { cache: "no-store" })
           .then(r => r.ok ? r.json() : Promise.reject())
           .then(d => {
             changelogCache = d.changelog || "";
@@ -452,7 +507,7 @@
       });
 
       // ── Fetch script version on load ──────────────────────────────────
-      fetch("/api/import_partida/version", { cache: "no-store" })
+      fetch("/api/camion/version", { cache: "no-store" })
         .then(r => r.ok ? r.json() : Promise.reject())
         .then(d => {
           const v = d.version || "?";
@@ -463,30 +518,32 @@
         .catch(() => { $("scriptVersion").textContent = "?"; });
 
       $("btnUpload").addEventListener("click", async () => {
-        const fileInput = $("zip");
-        const selectedFiles = Array.from(fileInput.files);
-        
-        if (selectedFiles.length === 0) {
-          return setUploadMsg("Selecciona uno o más archivos PDF, o un archivo ZIP.", true);
-        }
+        const xlsxFile = $("xlsxInput").files[0];
+        const t1Files = Array.from($("t1Input").files);
+        const docFile = $("docInput").files[0];
 
-        // Validate file types
-        const validExtensions = ['.pdf', '.zip'];
-        const hasZip = selectedFiles.some(f => f.name.toLowerCase().endsWith('.zip'));
-        const hasPdf = selectedFiles.some(f => f.name.toLowerCase().endsWith('.pdf'));
-        
-        // If multiple files selected, none can be ZIP
-        if (selectedFiles.length > 1 && hasZip) {
-          return setUploadMsg("Cuando subes múltiples archivos, no puedes incluir ZIP. Sube solo PDFs o un único ZIP.", true);
+        if (!xlsxFile) {
+          return setUploadMsg("Selecciona el packing list (.xlsx).", true);
         }
-        
-        // Validate all files have valid extensions
-        for (const file of selectedFiles) {
-          const fileName = file.name.toLowerCase();
-          const isValid = validExtensions.some(ext => fileName.endsWith(ext));
-          if (!isValid) {
-            return setUploadMsg(`Archivo no permitido: ${file.name}. Solo se aceptan .pdf o .zip`, true);
+        if (!/\.xlsx$/i.test(xlsxFile.name)) {
+          return setUploadMsg(`Packing list no válido: ${xlsxFile.name}. Debe ser .xlsx`, true);
+        }
+        for (const f of t1Files) {
+          if (!/\.pdf$/i.test(f.name)) {
+            return setUploadMsg(`Documento T1 no válido: ${f.name}. Debe ser .pdf`, true);
           }
+          if (!/t1/i.test(f.name)) {
+            return setUploadMsg(`El nombre del T1 debe contener "T1": ${f.name}`, true);
+          }
+        }
+        if (!docFile) {
+          return setUploadMsg("Selecciona el documento DOC (.pdf).", true);
+        }
+        if (!/\.pdf$/i.test(docFile.name)) {
+          return setUploadMsg(`Documento DOC no válido: ${docFile.name}. Debe ser .pdf`, true);
+        }
+        if (!/doc/i.test(docFile.name)) {
+          return setUploadMsg(`El nombre del DOC debe contener "DOC": ${docFile.name}`, true);
         }
 
         setUploadMsg("Subiendo…");
@@ -496,12 +553,13 @@
 
         try {
           const fd = new FormData();
-          // Append all selected files
-          selectedFiles.forEach(file => {
-            fd.append("files", file, file.name);
-          });
+          fd.append("files", xlsxFile, xlsxFile.name);
+          for (const f of t1Files) {
+            fd.append("files", f, f.name);
+          }
+          fd.append("files", docFile, docFile.name);
 
-          const r = await fetch("/api/import_partida/batches", { method: "POST", body: fd });
+          const r = await fetch("/api/camion/batches", { method: "POST", body: fd });
           if (!r.ok) {
             const t = await r.text();
             throw new Error(`Upload HTTP ${r.status}: ${t}`);
@@ -509,7 +567,7 @@
           const data = await r.json();
           const batchId = data.batch_id;
           showStatusCard(batchId);
-          setUploadMsg(`OK. Batch creado: ${batchId} con ${data.extracted_pdfs} PDF(s)`);
+          setUploadMsg(`✓ Batch creado: ${batchId} (${data.files_uploaded} archivo(s))`);
           await startPolling(batchId);
         } catch (e) {
           setUploadMsg(e.message, true);

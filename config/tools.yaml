@@ -123,3 +123,31 @@ tools:
     
     email:
       subject_template: "[Cuadre Asientos] Batch {batch_id} - Procesamiento completado"
+
+  # Camion Export Processor
+  - name: camion
+    enabled: true
+    display_name: "Camion Export Processor"
+    description: >
+      Procesa el packing list de exportación de camiones integrando los datos
+      extraídos de los documentos T1 (declaraciones de tránsito) y el documento
+      de acompañamiento (DOC). Genera un XLSX enriquecido con la hoja
+      Procesado_Camion.
+
+    input:
+      formats: [xlsx, pdf]
+      inbox: /data/camion/inbox
+
+    extractor:
+      path: /apps/camion/extractor/camion_export_processor.py
+      camion_mode: true
+
+    output:
+      directory: /data/camion/out
+      artifacts:
+        - "*-PROCESSED.xlsx"
+
+    email:
+      subject_template: "[Camion] Batch {batch_id} - Packing list procesado"
+
+    status_dir: /data/camion/status
