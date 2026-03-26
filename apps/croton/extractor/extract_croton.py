@@ -70,6 +70,7 @@ from odf.opendocument import load, OpenDocumentSpreadsheet
 from odf.table import Table, TableRow, TableCell
 from odf.text import P
 from odf.style import Style, TextProperties, TableCellProperties
+from openpyxl.workbook.views import BookView
 
 EXTRACTOR_DIR = Path(__file__).parent
 DEFAULT_MAPPING_FILE = EXTRACTOR_DIR / "product_mapping.csv"
@@ -758,6 +759,7 @@ def inject_summary_into_xlsx(summary: List[Dict[str, Any]], source_xlsx: str, ou
                              detail: Optional[List[Dict[str, Any]]] = None) -> None:
     shutil.copy2(source_xlsx, output_path)
     wb = openpyxl.load_workbook(output_path)
+    # Remove only the sheets we manage; keep all original sheets intact
     for name in ("Resumen_Partidas", "Issues", "Detalle_Extractor"):
         if name in wb.sheetnames:
             del wb[name]
@@ -765,21 +767,14 @@ def inject_summary_into_xlsx(summary: List[Dict[str, Any]], source_xlsx: str, ou
     ws.append(_summary_headers())
     for r in summary:
         ws.append([r["mercancia"], r["partida"], r["bx"], r["valor"], r["bruto"], r["neto"], r["m2"]])
-    if issues is not None:
-        wi = wb.create_sheet("Issues")
-        wi.append(["issue"])
-        for it in issues:
-            wi.append([it])
-    if detail is not None:
-        wd = wb.create_sheet("Detalle_Extractor")
-        headers = [
-            "referencia", "invoice_ref", "descripcion", "mercancia", "partida_arancel",
-            "cant_total", "bultos", "neto", "bruto", "m2", "valor", "valor_fuente",
-            "clasif_fuente", "source_layout"
-        ]
-        wd.append(headers)
-        for row in detail:
-            wd.append([row.get(h) for h in headers])
+    # Ensure the first sheet is active so the workbook opens correctly in LibreOffice/Excel
+    wb.active = wb.worksheets[0]
+    # Fix bookView: ensure sheet tabs are visible and the view is not corrupted
+    if wb.views:
+        for bv in wb.views:
+            bv.showSheetTabs = True
+    else:
+        wb.views.append(BookView(showSheetTabs=True))
     wb.save(output_path)
     wb.close()
 
