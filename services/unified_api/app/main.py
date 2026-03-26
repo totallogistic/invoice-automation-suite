@@ -133,18 +133,21 @@ def split_nominas_version():
         "changelog": _read_script_changelog(path),
     }
 
+@app.get("/api/split_pdf_ss/version")
+def split_pdf_ss_version():
+    path = "/app/apps/split_pdf_ss/extractor/split_pdf_ss.py"
+    return {
+        "version": _read_script_version(path),
+        "changelog": _read_script_changelog(path),
+    }
 
-@app.get("/api/split_nominas/batches/{batch_id}/download")
-def split_nominas_download(batch_id: str = PathParam(...)):
-    """
-    Stream a ZIP of all PDFs generated for this batch.
-    Called by the web UI once status reaches DONE.
-    """
-    tool = registry.get_tool("split_nominas")
+
+def _download_pdf_batch_zip(tool_name: str, batch_id: str, zip_prefix: str) -> StreamingResponse:
+    """Build and stream a ZIP of all PDFs in the batch output directory."""
+    tool = registry.get_tool(tool_name)
     if not tool:
-        raise HTTPException(404, "Tool split_nominas not found")
+        raise HTTPException(404, f"Tool {tool_name} not found")
 
-    # Verify the batch is DONE before allowing download
     status_mgr = StatusManager(tool.status_dir)
     status = status_mgr.get_status(batch_id)
     if not status:
@@ -160,14 +163,13 @@ def split_nominas_download(batch_id: str = PathParam(...)):
     if not pdf_files:
         raise HTTPException(404, "No PDF files found in batch output")
 
-    # Build ZIP in memory and stream it
     zip_buffer = io.BytesIO()
     with zipfile.ZipFile(zip_buffer, mode="w", compression=zipfile.ZIP_DEFLATED) as zf:
         for pdf_path in pdf_files:
             zf.write(pdf_path, arcname=pdf_path.name)
     zip_buffer.seek(0)
 
-    zip_filename = f"nominas_{batch_id}.zip"
+    zip_filename = f"{zip_prefix}_{batch_id}.zip"
     return StreamingResponse(
         zip_buffer,
         media_type="application/zip",
@@ -176,6 +178,18 @@ def split_nominas_download(batch_id: str = PathParam(...)):
             "X-File-Count": str(len(pdf_files)),
         },
     )
+
+
+@app.get("/api/split_nominas/batches/{batch_id}/download")
+def split_nominas_download(batch_id: str = PathParam(...)):
+    """Stream a ZIP of all PDFs generated for this batch."""
+    return _download_pdf_batch_zip("split_nominas", batch_id, "nominas")
+
+
+@app.get("/api/split_pdf_ss/batches/{batch_id}/download")
+def split_pdf_ss_download(batch_id: str = PathParam(...)):
+    """Stream a ZIP of all PDFs generated for this batch."""
+    return _download_pdf_batch_zip("split_pdf_ss", batch_id, "ss")
 
 
 @app.post("/api/{tool_name}/batches")

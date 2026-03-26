@@ -158,6 +158,33 @@ tools:
 
     status_dir: /data/camion/status
 
+  # Split PDF Seguridad Social
+  - name: split_pdf_ss
+    enabled: true
+    display_name: "Split PDF Seguridad Social"
+    description: >
+      Divide un PDF de documentos de Seguridad Social multi-página en PDFs
+      individuales. El resultado se entrega como descarga directa de un ZIP
+      desde el navegador.
+
+    input:
+      formats: [pdf]
+      inbox: /data/split_pdf_ss/inbox
+
+    extractor:
+      type: python
+      path: /apps/split_pdf_ss/extractor/split_pdf_ss.py
+
+    output:
+      directory: /data/out
+      artifacts:
+        - "*.pdf"
+
+    email:
+      subject_template: ""
+
+    status_dir: /data/split_pdf_ss/status
+
   # Split Nóminas
   - name: split_nominas
     enabled: true
