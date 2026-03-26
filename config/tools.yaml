@@ -8,78 +8,82 @@ tools:
     enabled: true
     display_name: "Lear Cable Invoice Extractor"
     description: "Extracts data from Lear Cable invoices"
-    
+
     extractor:
       type: python
       path: /apps/lear_cable/extractor/extract_lear_fields.py
-    
+
     input:
       formats: [pdf]
       inbox: /data/lear_cable/inbox
-    
+
     output:
       directory: /data/out
       artifacts:
         - invoices_extracted.xlsx
-    
+
     email:
       subject_template: "[Lear Cable] Batch {batch_id} processed"
+
+    status_dir: /data/lear_cable/status
 
   # Import Partida
   - name: import_partida
     enabled: true
     display_name: "Import Partida Processor"
     description: "Processes import partida documents"
-    
+
     extractor:
       type: python
       path: /apps/import_partida/extractor/wrapper.py
-    
+
     input:
       formats: [pdf]
       inbox: /data/import_partida/inbox
-    
+
     output:
       directory: /data/out
       artifacts:
         - import_partida.csv
-    
+
     email:
       subject_template: "[Import Partida] Batch {batch_id} ready"
+
+    status_dir: /data/import_partida/status
 
   # Lear Rabat
   - name: lear_rabat
     enabled: true
     display_name: "Lear Rabat DUA Processor"
     description: "Extracts DUA data from Lear Automotive Morocco invoices"
-    
+
     extractor:
       type: python
       path: /apps/lear_rabat/extractor/extract_lear_rabat.py
-    
+
     input:
       formats: [pdf]
       inbox: /data/lear_rabat/inbox
-    
+
     output:
       directory: /data/out
       artifacts:
         - COMPLETADO_*.ods
-    
+
     email:
       subject_template: "[Lear Rabat] Batch {batch_id} - DUA files ready"
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Append this block to config/tools.yaml under the  tools:  list
-# ─────────────────────────────────────────────────────────────────────────────
+    status_dir: /data/lear_rabat/status
+
+  # Croton
   - name: croton
+    enabled: true
     display_name: "Croton Resumen Partidas Aduaneras"
     description: >
       Genera el resumen de partidas aduaneras a partir del packing-list
       (.ods o .xlsx) y el mapeo de productos / factura (.ods, .xlsx o .xls).
       El resultado se añade como hoja "Resumen_Partidas" a una copia enriquecida
       del fichero de packing de entrada.
-    enabled: true
 
     input:
       formats: [ods, xlsx, xls]
@@ -106,23 +110,25 @@ tools:
     enabled: true
     display_name: "Cuadre de Asientos Contables"
     description: "Procesa apuntes contables eliminando pares compensados"
-    
+
     extractor:
       type: python
       path: /apps/cuadre_asientos/extractor/cuadre_asientos_wrapper.py
-    
+
     input:
       formats: [xlsx, xls]
       inbox: /data/cuadre_asientos/inbox
-    
+
     output:
       directory: /data/out
       artifacts:
         - "*_procesado_*.xlsx"
         - "*_reporte_*.txt"
-    
+
     email:
       subject_template: "[Cuadre Asientos] Batch {batch_id} - Procesamiento completado"
+
+    status_dir: /data/cuadre_asientos/status
 
   # Camion Export Processor
   - name: camion
@@ -152,8 +158,7 @@ tools:
 
     status_dir: /data/camion/status
 
-# Split Nóminas
-  # Añadir este bloque al final de la lista tools: en config/tools.yaml
+  # Split Nóminas
   - name: split_nominas
     enabled: true
     display_name: "Split Nóminas"
@@ -173,11 +178,10 @@ tools:
       path: /apps/split_nominas/extractor/split_nominas.py
 
     output:
-      directory: /data/split_nominas/out
+      directory: /data/out
       artifacts:
         - "*.pdf"
 
-    # Sin email: la entrega es descarga directa ZIP desde la web UI
     email:
       subject_template: ""
 
