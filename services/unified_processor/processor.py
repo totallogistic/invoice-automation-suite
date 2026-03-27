@@ -304,14 +304,16 @@ class UnifiedProcessor:
             "--inject",
             "-o", str(out_file),
         ]
-        def _build_bl_cmd(self, tool: ToolConfig, files: List[Path]) -> List[str]:
-            BL_CSV_DIR.mkdir(parents=True, exist_ok=True)
-            return [
-                "python3",
-                str(tool.extractor_path),
-                *[str(f) for f in files],
-                "-o", str(BL_CSV_DIR),
-            ]
+
+    def _build_bl_cmd(self, tool: ToolConfig, files: List[Path]) -> List[str]:
+        bl_csv_dir = Path(os.getenv("BL_CSV_DIR", "/data/bl/csv"))
+        bl_csv_dir.mkdir(parents=True, exist_ok=True)
+        return [
+            "python3",
+            str(tool.extractor_path),
+            *[str(f) for f in files],
+            "-o", str(bl_csv_dir),
+        ] 
 
     def _build_camion_cmd(
         self,
