@@ -11,11 +11,11 @@ from typing import List
 import random
 import string
 
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Path as PathParam
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Path as PathParam # pyright: ignore[reportMissingImports]
+from fastapi.responses import JSONResponse, StreamingResponse # pyright: ignore[reportMissingImports]
 
 from .tool_registry import ToolRegistry
-from iasuite_common.status import StatusManager
+from iasuite_common.status import StatusManager # pyright: ignore[reportMissingImports]
 import re as _re
 
 

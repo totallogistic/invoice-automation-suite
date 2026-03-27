@@ -374,7 +374,7 @@ class UnifiedProcessor:
         return [
             "python3", str(tool.extractor_path),
             "--pdf", str(pdf_files[0]),
-            "-o", str(output_path),
+            "--output", str(output_path),
         ]
 
     def _get_recipients(self, tool_name: str) -> List[str]:
