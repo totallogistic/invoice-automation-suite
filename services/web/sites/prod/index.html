@@ -168,15 +168,11 @@
 
       <div class="section-title">Formularios</div>
       <div class="tools-list">
-        <a href="/bl" class="form-card">
-          <span class="form-card-badge operativo">OPERATIVO</span>
-          <h3>📋 BL Viewer</h3>
-          <p>Visualizador de Conocimientos de Embarque procesados. Filtros por naviera, fecha y búsqueda libre.</p>
-          <div class="form-card-footer">
-            <span class="form-card-schema">algeciras · destino</span>
-            <span class="form-card-arrow">→</span>
-          </div>
-        </a>
+<!-- Reemplazar el enlace BL Viewer en la sección Formularios -->
+      <a href="#" id="bl-viewer-link" target="_blank" class="external">
+        📋 BL Viewer — Conocimientos de Embarque
+        <span class="tool-badge badge-operativo">Operativo</span>
+      </a>
         <a href="#" id="form-generator-link" target="_blank" class="external">
           ⚙️ Lista de formularios de registro
           <span class="tool-badge badge-operativo">Operativo</span>
@@ -188,14 +184,16 @@
       © 2026 totallogistic
     </footer>
     <script>
-      fetch('/env.json')
-        .then(r => r.json())
-        .then(data => {
-          document.title = `Herramientas [${data.env.toUpperCase()}]`;
-          document.getElementById('env-badge').textContent = data.env.toUpperCase();
-          const formUrl = `http://${window.location.hostname}:${data.formPort}`;
-          document.getElementById('form-generator-link').href = formUrl;
-        });
+// Reemplazar el bloque <script>
+fetch('/env.json')
+    .then(r => r.json())
+    .then(data => {
+      document.title = `Herramientas [${data.env.toUpperCase()}]`;
+      document.getElementById('env-badge').textContent = data.env.toUpperCase();
+      const formUrl = `http://${window.location.hostname}:${data.formPort}`;
+      document.getElementById('form-generator-link').href = formUrl;
+      document.getElementById('bl-viewer-link').href = `${formUrl}/bl`;
+    });
     </script>
   </body>
 </html>
