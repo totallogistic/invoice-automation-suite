@@ -5,11 +5,15 @@ extract_croton_import.py  –  IFORTEX Factura PDF + XLSX → Excel
 Toma el XLSX que llega de producción (Feuil1 con todos los datos)
 y el PDF de la factura IFORTEX (imagen OCR).
 
-- Feuil1        → copia del input con ORDEN secuencial y COMPOSICION simplificada
-- PDF_Extraído  → tabla raw de lo que el OCR saca del PDF
-- Validación    → diff campo a campo Feuil1 vs PDF (verde OK, rojo error,
-                  naranja composición sin mapear en composicion_map.csv)
-- Hoja6         → agrupado por (descripción canónica + composición), HS code correcto
+Ficheros de configuración (mismo directorio que este script):
+  composicion_map.csv  →  raw → simplificado  (ej. "70% ALG 30% POL" → "ALGODON")
+  articulos.csv        →  desc_raw + composicion_sim → desc_canonica + hs_code
+
+Hojas de salida:
+  Feuil1        → datos producción con COMPOSICION simplificada y ORDEN secuencial
+  PDF_Extraído  → extracción OCR del PDF
+  Validación    → diff campo a campo (🟢 OK  🔴 error  🟡 sin mapear)
+  Hoja6         → agrupado por (desc_canonica, comp_sim) con HS code
 
 Uso:
     python3 extract_croton_import.py \\
@@ -19,26 +23,30 @@ Uso:
 """
 from __future__ import annotations
 
-SCRIPT_VERSION = "2026-03-27.v2"
+SCRIPT_VERSION = "2026-03-27.v3"
 
 SCRIPT_CHANGELOG = """
+## 2026-03-27.v3
+- Toda la lógica de negocio externalizada a CSV:
+    composicion_map.csv  →  composición raw → simplificada
+    articulos.csv        →  (desc_raw, comp_sim) → desc_canonica + hs_code
+- Sin dicts hardcodeados en el script para aliases ni HS codes
+- Fix: 70% ALG 30% POL → ALGODON (antes era COMP → sin HS code)
+
 ## 2026-03-27.v2
-- HS codes corregidos y diferenciados por composición (sint. vs algodón)
-- Tabla de aliases de descripción: agrupa CHAQUETA+CASACA, SOFTSHELL+AMERICANA,
-  DELANTAL+BATA, PANTALON CBRO→SR, etc.
+- HS codes corregidos y diferenciados por composición
+- Tabla de aliases de descripción
 - Hoja6 agrupa por (descripción canónica, composición simplificada)
-- composicion_map.csv ampliado con todas las composiciones conocidas
 
 ## 2026-03-27.v1
 - Eliminada dependencia de template xlsx
-- Entrada: PDF (OCR/validación) + XLSX (datos reales de producción)
-- Composición simplificada vía composicion_map.csv mantenible
+- Entrada: PDF + XLSX de producción
 - 4 hojas de salida: Feuil1, PDF_Extraído, Validación, Hoja6
-- Validación campo a campo con colores
 """
 
 import argparse, csv, io, re, sys
 from collections import defaultdict
+from dataclasses import dataclass, field
 from difflib import SequenceMatcher
 from pathlib import Path
 
@@ -54,81 +62,106 @@ except ImportError as e:
     sys.exit(1)
 
 
-# ── Partidas arancelarias (HS codes) ─────────────────────────────────────────
-# Clave: (descripcion_canónica, composicion_simplificada) o solo str
-# La función get_partida() gestiona la búsqueda con fallback.
-
-PARTIDAS: dict = {
-    # Diferenciadas por composición
-    ('CAMISA SR',        'F SINTETICAS'): 6205300000,
-    ('CAMISA SR',        'ALGODON'):      6205200090,
-    ('PANTALON SR',      'F SINTETICAS'): 6203431100,
-    ('PANTALON SR',      'ALGODON'):      6203421100,
-    ('PANTALON SRA',     'ALGODON'):      6204621100,
-    ('BATAS',            'ALGODON'):      6211421000,
-    ('DELANTAL Y BATAS', 'F SINTETICAS'): 6211431000,
-    # Sin distinción de composición
-    'SOFTSHELL Y AMERICANAS SRA': 6204331000,
-    'BLUSA SRA':                  6206400000,
-    'POLO SR':                    6105201000,
-    'CHAQUETA Y CASACA SR':       6203331000,
-    'COFIA':                      6505009090,
-}
-
-def get_partida(canonical_desc: str, comp_sim: str) -> int | None:
-    """Busca HS code por (desc, comp) con fallback a solo desc."""
-    return (
-        PARTIDAS.get((canonical_desc, comp_sim))
-        or PARTIDAS.get(canonical_desc)
-    )
+# ── Dataclasses ───────────────────────────────────────────────────────────────
+@dataclass
+class ArticuloEntry:
+    desc_canonica: str
+    hs_code:       int | None
 
 
-# ── Aliases de descripción ────────────────────────────────────────────────────
-# Fusionan artículos distintos en la misma línea de Hoja6.
+@dataclass
+class ArticuloMap:
+    """
+    Cargado desde articulos.csv.
+    Lookup: (desc_raw.upper(), comp_sim.upper()) → ArticuloEntry
+    Fallback: (desc_raw.upper(), '') para artículos sin distinción de composición (ej. COFIA).
+    """
+    _data: dict[tuple[str, str], ArticuloEntry] = field(default_factory=dict)
 
-DESC_ALIASES_SIMPLE: dict[str, str] = {
-    'SOFTSHELL SRA':  'SOFTSHELL Y AMERICANAS SRA',
-    'AMERICANA SRA':  'SOFTSHELL Y AMERICANAS SRA',
-    'CHAQUETA SR':    'CHAQUETA Y CASACA SR',
-    'CASACA SR':      'CHAQUETA Y CASACA SR',
-    'PANTALON CBRO':  'PANTALON SR',
-    'PANTALON':       'PANTALON SR',    # typo sin SR
-    'DELANTAL':       'DELANTAL Y BATAS',
-}
+    def get(self, desc_raw: str, comp_sim: str) -> ArticuloEntry | None:
+        key_full = (desc_raw.strip().upper(), comp_sim.strip().upper())
+        key_any  = (desc_raw.strip().upper(), '')
+        return self._data.get(key_full) or self._data.get(key_any)
 
-# Aliases dependientes de composición: {desc: {comp_sim: canonical}}
-DESC_ALIASES_BY_COMP: dict[str, dict[str, str]] = {
-    'BATA SR': {
-        'F SINTETICAS': 'DELANTAL Y BATAS',
-        'ALGODON':      'BATAS',
-    },
-}
+    def canonical(self, desc_raw: str, comp_sim: str) -> str:
+        entry = self.get(desc_raw, comp_sim)
+        return entry.desc_canonica if entry else desc_raw.strip()
 
-def canonical_desc(raw_desc: str, comp_sim: str) -> str:
-    d = raw_desc.strip()
-    if d in DESC_ALIASES_BY_COMP:
-        return DESC_ALIASES_BY_COMP[d].get(comp_sim, d)
-    return DESC_ALIASES_SIMPLE.get(d, d)
+    def hs_code(self, desc_raw: str, comp_sim: str) -> int | None:
+        entry = self.get(desc_raw, comp_sim)
+        return entry.hs_code if entry else None
+
+    @property
+    def known_descs(self) -> list[str]:
+        """Lista de desc_raw únicas para usar en el matcher OCR."""
+        return list({k[0].title() for k in self._data})
 
 
-# ── Composicion map por defecto ───────────────────────────────────────────────
-DEFAULT_COMP_MAP: dict[str, str] = {
-    # F SINTETICAS — mayoría sintética
-    '100% POLIESTER':          'F SINTETICAS',
-    '93% POL 7% ELASTAN':      'F SINTETICAS',
-    '67% POL 33% ALG':         'F SINTETICAS',
-    '65% POL 35% ALG':         'F SINTETICAS',
-    '65% POL 35% VISC':        'F SINTETICAS',
-    '70% POL 30% ALG':         'F SINTETICAS',
-    '52% POL 48% ALG':         'F SINTETICAS',
-    '50% POL 50% ALG':         'F SINTETICAS',
-    # ALGODON — mayoría algodón
-    '100% ALGODON':            'ALGODON',
-    '100% ALGODÓN':            'ALGODON',
-    '70% ALG 30% POL':         'ALGODON',
-    '59%ALG 39%POL 2%ELAST':   'ALGODON',
-    '60% ALG 40% POL':         'ALGODON',
-}
+# ── Loaders ───────────────────────────────────────────────────────────────────
+def _skip(line: str) -> bool:
+    return not line.strip() or line.strip().startswith('#')
+
+
+def load_composicion_map(script_dir: Path) -> dict[str, str]:
+    """
+    Carga composicion_map.csv → {RAW_UPPER: simplificado}.
+    Si no existe lo crea vacío con cabecera.
+    """
+    csv_path = script_dir / 'composicion_map.csv'
+    if not csv_path.exists():
+        csv_path.write_text('raw,simplificado\n', encoding='utf-8')
+        print(f'  ⚠ composicion_map.csv creado vacío en {csv_path}', flush=True)
+        return {}
+
+    mapping: dict[str, str] = {}
+    with open(csv_path, encoding='utf-8') as f:
+        for row in csv.DictReader(line for line in f if not _skip(line)):
+            raw = (row.get('raw') or '').strip().upper()
+            sim = (row.get('simplificado') or '').strip()
+            if raw and sim:
+                mapping[raw] = sim
+
+    print(f'  ✓ composicion_map.csv: {len(mapping)} entradas', flush=True)
+    return mapping
+
+
+def load_articulos(script_dir: Path) -> ArticuloMap:
+    """
+    Carga articulos.csv → ArticuloMap.
+    Columnas: desc_raw, desc_canonica, composicion_sim, hs_code
+    Si no existe lo crea vacío con cabecera.
+    """
+    csv_path = script_dir / 'articulos.csv'
+    if not csv_path.exists():
+        csv_path.write_text(
+            'desc_raw,desc_canonica,composicion_sim,hs_code\n',
+            encoding='utf-8',
+        )
+        print(f'  ⚠ articulos.csv creado vacío en {csv_path}', flush=True)
+        return ArticuloMap()
+
+    amap = ArticuloMap()
+    with open(csv_path, encoding='utf-8') as f:
+        for row in csv.DictReader(line for line in f if not _skip(line)):
+            desc_raw   = (row.get('desc_raw')       or '').strip()
+            desc_can   = (row.get('desc_canonica')  or '').strip()
+            comp_sim   = (row.get('composicion_sim') or '').strip()
+            hs_raw     = (row.get('hs_code')        or '').strip()
+            if not desc_raw or not desc_can:
+                continue
+            hs = int(hs_raw) if hs_raw.isdigit() else None
+            key = (desc_raw.upper(), comp_sim.upper())
+            amap._data[key] = ArticuloEntry(desc_can, hs)
+
+    print(f'  ✓ articulos.csv: {len(amap._data)} entradas', flush=True)
+    return amap
+
+
+def simplify_comp(raw: str, mapping: dict[str, str]) -> tuple[str, bool]:
+    key = (raw or '').strip().upper()
+    if key in mapping:
+        return mapping[key], True
+    return raw or '', False
 
 
 # ── Styles ────────────────────────────────────────────────────────────────────
@@ -159,39 +192,6 @@ def _header_row(ws, cols, row=1):
         cell = ws.cell(row, c, label)
         cell.fill = FILL_HEADER; cell.font = FONT_HEADER
         cell.border = _border(); cell.alignment = _center()
-
-
-# ── Composición map ───────────────────────────────────────────────────────────
-def load_composicion_map(script_dir: Path) -> dict[str, str]:
-    csv_path = script_dir / 'composicion_map.csv'
-
-    if not csv_path.exists():
-        lines = ['raw,simplificado\n']
-        lines += [f'{raw},{sim}\n' for raw, sim in sorted(DEFAULT_COMP_MAP.items())]
-        csv_path.write_text(''.join(lines), encoding='utf-8')
-        print(f'  ✓ composicion_map.csv creado con {len(DEFAULT_COMP_MAP)} entradas',
-              flush=True)
-
-    # Partir de defaults y sobreescribir con CSV
-    mapping = {k.upper(): v for k, v in DEFAULT_COMP_MAP.items()}
-    with open(csv_path, encoding='utf-8') as f:
-        for row in csv.DictReader(
-            line for line in f if not line.strip().startswith('#')
-        ):
-            raw = (row.get('raw') or '').strip().upper()
-            sim = (row.get('simplificado') or '').strip()
-            if raw and sim:
-                mapping[raw] = sim
-
-    print(f'  ✓ composicion_map: {len(mapping)} entradas', flush=True)
-    return mapping
-
-
-def simplify_comp(raw: str, mapping: dict[str, str]) -> tuple[str, bool]:
-    key = (raw or '').strip().upper()
-    if key in mapping:
-        return mapping[key], True
-    return raw or '', False
 
 
 # ── Leer XLSX de entrada ──────────────────────────────────────────────────────
@@ -251,19 +251,12 @@ _of_re   = re.compile(r'^([A-Z]{0,2}-?\d{2}/\d{4,6})')
 _ref_re  = re.compile(r'\b[A-Z]{1,5}\d+/\S+\b')
 _comp_re = re.compile(r'\d{1,3}%')
 
-KNOWN_DESC = list({
-    'SOFTSHELL SRA', 'AMERICANA SRA', 'BLUSA SRA', 'CAMISA SR',
-    'PANTALON SR', 'PANTALON SRA', 'PANTALON CBRO', 'POLO SR',
-    'CHAQUETA SR', 'CASACA SR', 'BATA SR', 'DELANTAL', 'COFIA',
-    'JERSEY POLAR CBRO', 'JERSEY POLAR SRA', 'SUDADERA SR',
-    'CAMISETA SR', 'CHALECO POLAR CBRO', 'CHALECO  POLAR CBRO',
-})
 
-def _best_match(ocr_text: str) -> str:
+def _best_match(ocr_text: str, known_descs: list[str]) -> str:
     t = re.sub(r'\s+', ' ', ocr_text.upper().strip())
     if not t: return ''
     best, best_score = None, 0
-    for desc in KNOWN_DESC:
+    for desc in known_descs:
         d = desc.upper()
         ow = set(t.split()); dw = set(d.split())
         score = (len(ow & dw) * 3
@@ -275,16 +268,16 @@ def _best_match(ocr_text: str) -> str:
     return best or t
 
 
-def parse_invoice(text: str) -> tuple[list[dict], dict]:
+def parse_invoice(text: str, known_descs: list[str]) -> tuple[list[dict], dict]:
     rows, orden = [], 0
     for line in text.splitlines():
         line = line.strip()
         m_of = _of_re.match(line)
         if not m_of: continue
-        of = 'MP-' + re.sub(r'^[A-Z]*-?', '', m_of.group(1))
+        of   = 'MP-' + re.sub(r'^[A-Z]*-?', '', m_of.group(1))
         rest = _ref_re.sub('', line[m_of.end():]).strip().lstrip('=,—- ')
         m_c  = _comp_re.search(rest)
-        desc = _best_match(rest[:m_c.start()].strip() if m_c else '')
+        desc = _best_match(rest[:m_c.start()].strip() if m_c else '', known_descs)
         nums = [_eu(m.group()) for m in _num_re.finditer(rest)]
         if len(nums) < 4: continue
         try:
@@ -326,7 +319,7 @@ def parse_packing_list(pages_text: list[str]) -> dict[str, int]:
 # ── Generador de Excel ────────────────────────────────────────────────────────
 def generate_output(
     xlsx_rows, pdf_rows, pdf_bultos, pdf_totals,
-    inv_number, comp_map, output_path,
+    inv_number, comp_map, amap: ArticuloMap, output_path,
 ) -> None:
     wb = openpyxl.Workbook()
     wb.remove(wb.active)
@@ -356,8 +349,8 @@ def generate_output(
                      ('J','bruto'),('K','neto'),('L','bultos')]:
         c = ws1[f'{col}{tr}']
         c.value = round(sum((r[src] or 0) for r in xlsx_rows), 4)
-        c.fill = FILL_TOTAL; c.font = fnb; c.border = _border()
-        c.alignment = _right()
+        c.fill = FILL_TOTAL; c.font = fnb
+        c.border = _border(); c.alignment = _right()
 
     ws1.cell(tr + 2, 1).value = (
         f'Factura: {inv_number}  |  '
@@ -411,14 +404,19 @@ def generate_output(
         c.fill = fill; c.font = fn; c.border = _border()
         c.alignment = align or _wrap()
 
-    unmapped: set[str] = set()
+    unmapped_comp: set[str] = set()
+    unmapped_art:  set[str] = set()
 
     for orden, xr in enumerate(xlsx_rows, 1):
         r  = orden + 1
         of = xr['of']
-        comp_sim, mapped = simplify_comp(xr['comp_raw'], comp_map)
-        if not mapped and xr['comp_raw']:
-            unmapped.add(xr['comp_raw'])
+        comp_sim, comp_mapped = simplify_comp(xr['comp_raw'], comp_map)
+        if not comp_mapped and xr['comp_raw']:
+            unmapped_comp.add(xr['comp_raw'])
+
+        # Advertir si el artículo no está en articulos.csv
+        if not amap.get(xr['descripcion'], comp_sim):
+            unmapped_art.add(f"{xr['descripcion']} / {comp_sim}")
 
         pr = (pdf_by_of.get(of) or [None])[0]
 
@@ -454,31 +452,35 @@ def generate_output(
 
         _put(ws3, r, 15, xr['comp_raw'])
         _put(ws3, r, 16, comp_sim)
-        if not xr['comp_raw'] or mapped:
+        if not xr['comp_raw'] or comp_mapped:
             _check(ws3, r, 17, ok=True)
         else:
             c = ws3.cell(r, 17, '⚠ sin mapear')
             c.fill = FILL_WARN; c.font = fnb
             c.border = _border(); c.alignment = _center()
 
-    if unmapped:
-        wr = len(xlsx_rows) + 3
-        ws3.cell(wr, 1).value = (
-            '⚠ Añadir a composicion_map.csv: '
-            + ', '.join(sorted(unmapped))
+    warn_row = len(xlsx_rows) + 3
+    if unmapped_comp:
+        ws3.cell(warn_row, 1).value = (
+            '⚠ Añadir a composicion_map.csv: ' + ', '.join(sorted(unmapped_comp))
         )
-        ws3.cell(wr, 1).font = _fn(bold=True, color='FFCC6600')
+        ws3.cell(warn_row, 1).font = _fn(bold=True, color='FFCC6600')
+        warn_row += 1
+    if unmapped_art:
+        ws3.cell(warn_row, 1).value = (
+            '⚠ Añadir a articulos.csv: ' + ', '.join(sorted(unmapped_art))
+        )
+        ws3.cell(warn_row, 1).font = _fn(bold=True, color='FFCC6600')
 
     # ── 4. Hoja6 ──────────────────────────────────────────────────────────────
     ws6 = wb.create_sheet('Hoja6')
     _header_row(ws6, ['HS CODE', 'Descripción', 'COMPOSICION', 'ORDEN',
                        'BULTOS', 'BRUTO', 'NETO', 'VALOR', 'UN'])
 
-    # Agrupar por (descripción canónica, composición simplificada)
     groups: dict[tuple[str,str], dict] = {}
     for orden, xr in enumerate(xlsx_rows, 1):
         comp_sim, _ = simplify_comp(xr['comp_raw'], comp_map)
-        cdesc = canonical_desc(xr['descripcion'], comp_sim)
+        cdesc = amap.canonical(xr['descripcion'], comp_sim)
         key   = (cdesc, comp_sim)
         if key not in groups:
             groups[key] = {'orden': orden, 'bultos': 0,
@@ -494,9 +496,9 @@ def generate_output(
     RIGHT6 = {1, 4, 5, 6, 7, 8, 9}
 
     for i, ((cdesc, comp_sim), g) in enumerate(groups.items(), 2):
-        partida = get_partida(cdesc, comp_sim)
+        hs = amap.hs_code(cdesc, comp_sim)
         row_data = [
-            partida or '⚠ sin partida', cdesc, comp_sim, g['orden'],
+            hs or '⚠ sin HS code', cdesc, comp_sim, g['orden'],
             g['bultos'] or None,
             round(g['bruto']),
             round(g['neto'], 4),
@@ -507,7 +509,7 @@ def generate_output(
             cell = ws6.cell(i, c, val)
             cell.fill   = FILL_HOJA6
             cell.border = _border()
-            cell.font   = fn if partida else FONT_WARN
+            cell.font   = fn if hs else FONT_WARN
             cell.alignment = _right() if c in RIGHT6 else _wrap()
 
     tr6 = len(groups) + 2
@@ -560,6 +562,9 @@ def main() -> int:
     print('\n📋 Cargando composicion_map.csv...', flush=True)
     comp_map = load_composicion_map(script_dir)
 
+    print('\n📋 Cargando articulos.csv...', flush=True)
+    amap = load_articulos(script_dir)
+
     print('\n📂 Leyendo XLSX de producción...', flush=True)
     xlsx_rows = read_input_xlsx(xlsx_path)
     print(f'  ✓ {len(xlsx_rows)} filas', flush=True)
@@ -572,7 +577,9 @@ def main() -> int:
     print(f'  ✓ {len(pages)} páginas', flush=True)
 
     print('\n📊 Parseando factura (página 1)...', flush=True)
-    pdf_rows, pdf_totals = parse_invoice(pages[0] if pages else '')
+    pdf_rows, pdf_totals = parse_invoice(
+        pages[0] if pages else '', amap.known_descs
+    )
     inv_number = parse_invoice_number(pages[0] if pages else '')
     print(f'  ✓ {len(pdf_rows)} artículos  |  Factura: {inv_number}', flush=True)
     for pr in pdf_rows:
@@ -589,13 +596,13 @@ def main() -> int:
         xlsx_rows=xlsx_rows, pdf_rows=pdf_rows,
         pdf_bultos=pdf_bultos, pdf_totals=pdf_totals,
         inv_number=inv_number, comp_map=comp_map,
-        output_path=str(out_path),
+        amap=amap, output_path=str(out_path),
     )
 
     print('\n✅ Listo!', flush=True)
     print(f'   Feuil1       → datos producción con COMPOSICION simplificada', flush=True)
     print(f'   PDF_Extraído → extracción OCR del PDF', flush=True)
-    print(f'   Validación   → diff XLSX vs PDF (🟢 OK  🔴 error  🟡 comp sin mapear)', flush=True)
+    print(f'   Validación   → diff XLSX vs PDF (🟢 OK  🔴 error  🟡 sin mapear)', flush=True)
     print(f'   Hoja6        → agrupado por artículo+composición con HS code', flush=True)
     return 0
 
