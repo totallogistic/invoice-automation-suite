@@ -7,7 +7,11 @@ y el PDF de la factura IFORTEX (imagen OCR).
 
 Ficheros de configuración (mismo directorio que este script):
   composicion_map.csv  →  raw → simplificado  (ej. "70% ALG 30% POL" → "ALGODON")
-  articulos.csv        →  desc_raw + composicion_sim → desc_canonica + hs_code
+  articulos.csv        →  desc_raw + composicion_sim → desc_canonica + hs_code + comp_hoja6
+
+  La columna comp_hoja6 en articulos.csv es opcional: si tiene valor, ese texto
+  se muestra en la columna COMPOSICION de Hoja6 en lugar del comp_sim.
+  Ejemplo: COFIA tiene comp_sim=ALGODON pero comp_hoja6=COMP.
 
 Hojas de salida:
   Feuil1        → datos producción con COMPOSICION simplificada y ORDEN secuencial
@@ -23,9 +27,15 @@ Uso:
 """
 from __future__ import annotations
 
-SCRIPT_VERSION = "2026-03-27.v3"
+SCRIPT_VERSION = "2026-03-27.v4"
 
 SCRIPT_CHANGELOG = """
+## 2026-03-27.v4
+- Nueva columna comp_hoja6 en articulos.csv: permite mostrar una composición
+  distinta en Hoja6 sin afectar al lookup interno.
+  Caso de uso: COFIA → comp_sim=ALGODON (para lookup) pero comp_hoja6=COMP
+  (para mostrar en Hoja6, igual que el manual).
+
 ## 2026-03-27.v3
 - Toda la lógica de negocio externalizada a CSV:
     composicion_map.csv  →  composición raw → simplificada
@@ -67,6 +77,7 @@ except ImportError as e:
 class ArticuloEntry:
     desc_canonica: str
     hs_code:       int | None
+    comp_hoja6:    str | None   # si no es None, se usa este texto en Hoja6
 
 
 @dataclass
@@ -74,7 +85,7 @@ class ArticuloMap:
     """
     Cargado desde articulos.csv.
     Lookup: (desc_raw.upper(), comp_sim.upper()) → ArticuloEntry
-    Fallback: (desc_raw.upper(), '') para artículos sin distinción de composición (ej. COFIA).
+    Fallback: (desc_raw.upper(), '') para artículos sin distinción de composición.
     """
     _data: dict[tuple[str, str], ArticuloEntry] = field(default_factory=dict)
 
@@ -91,9 +102,15 @@ class ArticuloMap:
         entry = self.get(desc_raw, comp_sim)
         return entry.hs_code if entry else None
 
+    def comp_display(self, desc_raw: str, comp_sim: str) -> str:
+        """Composición a mostrar en Hoja6: comp_hoja6 si existe, sino comp_sim."""
+        entry = self.get(desc_raw, comp_sim)
+        if entry and entry.comp_hoja6:
+            return entry.comp_hoja6
+        return comp_sim
+
     @property
     def known_descs(self) -> list[str]:
-        """Lista de desc_raw únicas para usar en el matcher OCR."""
         return list({k[0].title() for k in self._data})
 
 
@@ -103,10 +120,6 @@ def _skip(line: str) -> bool:
 
 
 def load_composicion_map(script_dir: Path) -> dict[str, str]:
-    """
-    Carga composicion_map.csv → {RAW_UPPER: simplificado}.
-    Si no existe lo crea vacío con cabecera.
-    """
     csv_path = script_dir / 'composicion_map.csv'
     if not csv_path.exists():
         csv_path.write_text('raw,simplificado\n', encoding='utf-8')
@@ -128,13 +141,12 @@ def load_composicion_map(script_dir: Path) -> dict[str, str]:
 def load_articulos(script_dir: Path) -> ArticuloMap:
     """
     Carga articulos.csv → ArticuloMap.
-    Columnas: desc_raw, desc_canonica, composicion_sim, hs_code
-    Si no existe lo crea vacío con cabecera.
+    Columnas: desc_raw, desc_canonica, composicion_sim, hs_code, comp_hoja6 (opcional)
     """
     csv_path = script_dir / 'articulos.csv'
     if not csv_path.exists():
         csv_path.write_text(
-            'desc_raw,desc_canonica,composicion_sim,hs_code\n',
+            'desc_raw,desc_canonica,composicion_sim,hs_code,comp_hoja6\n',
             encoding='utf-8',
         )
         print(f'  ⚠ articulos.csv creado vacío en {csv_path}', flush=True)
@@ -143,15 +155,16 @@ def load_articulos(script_dir: Path) -> ArticuloMap:
     amap = ArticuloMap()
     with open(csv_path, encoding='utf-8') as f:
         for row in csv.DictReader(line for line in f if not _skip(line)):
-            desc_raw   = (row.get('desc_raw')       or '').strip()
-            desc_can   = (row.get('desc_canonica')  or '').strip()
-            comp_sim   = (row.get('composicion_sim') or '').strip()
-            hs_raw     = (row.get('hs_code')        or '').strip()
+            desc_raw  = (row.get('desc_raw')        or '').strip()
+            desc_can  = (row.get('desc_canonica')   or '').strip()
+            comp_sim  = (row.get('composicion_sim') or '').strip()
+            hs_raw    = (row.get('hs_code')         or '').strip()
+            comp_h6   = (row.get('comp_hoja6')      or '').strip() or None
             if not desc_raw or not desc_can:
                 continue
             hs = int(hs_raw) if hs_raw.isdigit() else None
             key = (desc_raw.upper(), comp_sim.upper())
-            amap._data[key] = ArticuloEntry(desc_can, hs)
+            amap._data[key] = ArticuloEntry(desc_can, hs, comp_h6)
 
     print(f'  ✓ articulos.csv: {len(amap._data)} entradas', flush=True)
     return amap
@@ -413,8 +426,6 @@ def generate_output(
         comp_sim, comp_mapped = simplify_comp(xr['comp_raw'], comp_map)
         if not comp_mapped and xr['comp_raw']:
             unmapped_comp.add(xr['comp_raw'])
-
-        # Advertir si el artículo no está en articulos.csv
         if not amap.get(xr['descripcion'], comp_sim):
             unmapped_art.add(f"{xr['descripcion']} / {comp_sim}")
 
@@ -477,15 +488,23 @@ def generate_output(
     _header_row(ws6, ['HS CODE', 'Descripción', 'COMPOSICION', 'ORDEN',
                        'BULTOS', 'BRUTO', 'NETO', 'VALOR', 'UN'])
 
+    # Agrupar por (desc_canonica, comp_sim) — clave interna
+    # comp_display puede diferir (ej. COFIA usa COMP aunque comp_sim=ALGODON)
     groups: dict[tuple[str,str], dict] = {}
     for orden, xr in enumerate(xlsx_rows, 1):
         comp_sim, _ = simplify_comp(xr['comp_raw'], comp_map)
-        cdesc = amap.canonical(xr['descripcion'], comp_sim)
-        key   = (cdesc, comp_sim)
+        cdesc   = amap.canonical(xr['descripcion'], comp_sim)
+        key     = (cdesc, comp_sim)
         if key not in groups:
-            groups[key] = {'orden': orden, 'bultos': 0,
-                           'bruto': 0.0, 'neto': 0.0,
-                           'valor': 0.0, 'un': 0}
+            groups[key] = {
+                'orden':    orden,
+                'display':  amap.comp_display(xr['descripcion'], comp_sim),
+                'bultos':   0,
+                'bruto':    0.0,
+                'neto':     0.0,
+                'valor':    0.0,
+                'un':       0,
+            }
         g = groups[key]
         g['bultos'] += (xr['bultos'] or 0)
         g['bruto']  += (xr['bruto']  or 0.0)
@@ -498,7 +517,10 @@ def generate_output(
     for i, ((cdesc, comp_sim), g) in enumerate(groups.items(), 2):
         hs = amap.hs_code(cdesc, comp_sim)
         row_data = [
-            hs or '⚠ sin HS code', cdesc, comp_sim, g['orden'],
+            hs or '⚠ sin HS code',
+            cdesc,
+            g['display'],           # ← comp_hoja6 si existe, sino comp_sim
+            g['orden'],
             g['bultos'] or None,
             round(g['bruto']),
             round(g['neto'], 4),
@@ -513,14 +535,14 @@ def generate_output(
             cell.alignment = _right() if c in RIGHT6 else _wrap()
 
     tr6 = len(groups) + 2
-    for c, vals in [
-        (5, [g['bultos'] for g in groups.values()]),
-        (6, [round(g['bruto']) for g in groups.values()]),
-        (7, [g['neto']   for g in groups.values()]),
-        (8, [g['valor']  for g in groups.values()]),
-        (9, [g['un']     for g in groups.values()]),
+    for c, vals, decimals in [
+        (5, [g['bultos'] for g in groups.values()], 0),
+        (6, [round(g['bruto']) for g in groups.values()], 0),
+        (7, [g['neto']   for g in groups.values()], 2),
+        (8, [g['valor']  for g in groups.values()], 2),
+        (9, [g['un']     for g in groups.values()], 0),
     ]:
-        cell = ws6.cell(tr6, c, round(sum(vals), 4))
+        cell = ws6.cell(tr6, c, round(sum(vals), decimals))
         cell.fill = FILL_TOTAL; cell.font = fnb
         cell.border = _border(); cell.alignment = _right()
 
