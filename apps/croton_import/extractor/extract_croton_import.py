@@ -54,11 +54,19 @@ SCRIPT_CHANGELOG = """
 - 4 hojas de salida: Feuil1, PDF_Extraído, Validación, Hoja6
 """
 
-import argparse, csv, io, re, sys
+import argparse, csv, io, math, re, sys
 from collections import defaultdict
 from dataclasses import dataclass, field
 from difflib import SequenceMatcher
 from pathlib import Path
+
+
+def round_half_up(x: float) -> int:
+    """Redondeo matemático estándar (0.5 siempre sube).
+    Python round() usa banker's rounding: round(2.5)=2.
+    round_half_up(2.5)=3, igual que Excel y el manual."""
+    return math.floor(x + 0.5)
+
 
 try:
     import pytesseract
@@ -522,7 +530,7 @@ def generate_output(
             g['display'],           # ← comp_hoja6 si existe, sino comp_sim
             g['orden'],
             g['bultos'] or None,
-            round(g['bruto']),
+            round_half_up(g['bruto']),
             round(g['neto'], 4),
             round(g['valor'], 2),
             g['un'],
@@ -537,7 +545,7 @@ def generate_output(
     tr6 = len(groups) + 2
     for c, vals, decimals in [
         (5, [g['bultos'] for g in groups.values()], 0),
-        (6, [round(g['bruto']) for g in groups.values()], 0),
+        (6, [round_half_up(g['bruto']) for g in groups.values()], 0),
         (7, [g['neto']   for g in groups.values()], 2),
         (8, [g['valor']  for g in groups.values()], 2),
         (9, [g['un']     for g in groups.values()], 0),
