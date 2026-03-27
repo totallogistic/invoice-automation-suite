@@ -442,7 +442,7 @@ tools:
       y el Resumen y Hoja6 se actualizan solos.
 
     input:
-      formats: [pdf]
+      formats: [pdf, xlsx]
       inbox: /data/croton_import/inbox
 
     extractor:

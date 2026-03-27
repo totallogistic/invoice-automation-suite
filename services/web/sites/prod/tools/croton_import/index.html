@@ -21,6 +21,7 @@
       .row { display: flex; align-items: center; gap: 1rem; margin-top: 1rem; }
       button { background: #2563a8; color: white; border: none; padding: 0.65rem 1.5rem; border-radius: 6px; font-size: 0.875rem; font-weight: 600; cursor: pointer; }
       button:hover { background: #1d4ed8; }
+      button:disabled { background: #9ca3af; cursor: not-allowed; }
       .muted { color: #6b7280; font-size: 0.875rem; }
       .error { color: #dc2626; font-size: 0.875rem; }
       .mono { font-family: monospace; font-size: 0.8rem; color: #374151; }
@@ -49,15 +50,17 @@
     </header>
     <main>
       <p class="muted">
-        Sube la factura IFORTEX en PDF. El sistema extrae automáticamente los artículos (OF, UN, precio, promedio, bultos)
-        y genera un Excel basado en plantilla con fórmulas activas.
-        La columna <strong>BRUTO</strong> (en amarillo) se completa a mano — el resto se calcula solo.
+        Sube la factura IFORTEX (PDF) y el archivo Excel de producción (XLSX).
+        El sistema valida los datos contra el PDF, simplifica las composiciones
+        y genera un Excel con cuatro hojas: <strong>Feuil1</strong> (datos producción),
+        <strong>PDF_Extraído</strong> (OCR), <strong>Validación</strong> (diff) y
+        <strong>Hoja6</strong> (agrupado con partida arancelaria).
       </p>
 
       <div class="info-box">
-        ℹ️ <strong>Nota:</strong> El sistema reconoce automáticamente los artículos de la factura.
-        Una vez descargado el Excel, rellena la columna <strong>BRUTO (J)</strong> en la hoja <em>Feuil1</em>
-        y las hojas <em>Resumen</em> y <em>Hoja6</em> se actualizarán solas.
+        ℹ️ <strong>Nota:</strong> Las composiciones nuevas que no estén mapeadas aparecerán
+        en naranja en la hoja <em>Validación</em>. Comunícalo para añadirlas al mapa
+        de composiciones y que se simplifiquen automáticamente en el siguiente proceso.
       </div>
 
       <div class="card">
@@ -65,6 +68,11 @@
           <label>📄 Factura IFORTEX <span style="color:#dc2626">*</span></label>
           <input id="pdfInput" type="file" accept=".pdf,application/pdf" />
           <span class="hint">PDF de la factura IFORTEX (puede incluir packing list en páginas siguientes)</span>
+        </div>
+        <div class="file-field">
+          <label>📊 Archivo Excel de producción <span style="color:#dc2626">*</span></label>
+          <input id="xlsxInput" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" />
+          <span class="hint">XLSX recibido de producción con la hoja Feuil1 (ARCHIVO_EXCEL_FRA_XX.xlsx)</span>
         </div>
         <div class="row">
           <button id="btnUpload">Procesar</button>
@@ -145,30 +153,30 @@
             if (!r.ok) return;
             const d = await r.json();
 
-            $('state').textContent  = d.state  || '—';
-            $('state').className    = `badge ${badgeClass(d.state)}`;
-            $('stage').textContent  = d.stage  || '—';
-            $('stage').className    = `badge ${badgeClass(d.stage)}`;
+            $('state').textContent   = d.state  || '—';
+            $('state').className     = `badge ${badgeClass(d.state)}`;
+            $('stage').textContent   = d.stage  || '—';
+            $('stage').className     = `badge ${badgeClass(d.stage)}`;
             $('message').textContent = d.message || '—';
             $('updated').textContent = new Date().toLocaleTimeString();
 
             const total = d.total_files || 1;
             const done  = d.processed_files || 0;
             const pct   = d.state === 'DONE' ? 100 : Math.round((done / total) * 90);
-            $('bar').value       = pct;
-            $('pct').textContent = pct + '%';
+            $('bar').value             = pct;
+            $('pct').textContent       = pct + '%';
             $('processed').textContent = done;
             $('total').textContent     = total;
 
             if (d.state === 'DONE' || d.state === 'ERROR') {
               stopPolling();
+              $('btnUpload').disabled = false;
               if (d.state === 'DONE') {
                 $('finalNote').innerHTML =
                   `<p style="color:#065f46;font-weight:600">✅ Procesado. Revisa tu email con el Excel adjunto.</p>
-                   <p class="muted" style="margin-top:4px">Rellena la columna BRUTO (amarillo) en Feuil1 y el resto se calcula solo.</p>`;
+                   <p class="muted" style="margin-top:4px">Revisa la hoja <strong>Validación</strong> (naranja = composición sin mapear).</p>`;
               } else {
-                $('finalNote').innerHTML =
-                  `<p class="error">❌ Error: ${d.message}</p>`;
+                $('finalNote').innerHTML = `<p class="error">❌ Error: ${d.message}</p>`;
               }
             }
           } catch(e) { /* ignore */ }
@@ -202,18 +210,24 @@
         .catch(() => { $('scriptVersion').textContent = '?'; });
 
       $('btnUpload').addEventListener('click', async () => {
-        const pdfFile = $('pdfInput').files[0];
-        if (!pdfFile) return setUploadMsg('Selecciona la factura PDF.', true);
-        if (!/\.pdf$/i.test(pdfFile.name)) return setUploadMsg('El archivo debe ser .pdf', true);
+        const pdfFile  = $('pdfInput').files[0];
+        const xlsxFile = $('xlsxInput').files[0];
+
+        if (!pdfFile)  return setUploadMsg('Selecciona la factura PDF.', true);
+        if (!xlsxFile) return setUploadMsg('Selecciona el archivo Excel de producción.', true);
+        if (!/\.pdf$/i.test(pdfFile.name))   return setUploadMsg('El primer archivo debe ser .pdf', true);
+        if (!/\.xlsx$/i.test(xlsxFile.name)) return setUploadMsg('El segundo archivo debe ser .xlsx', true);
 
         setUploadMsg('Subiendo…');
         $('statusCard').style.display = 'none';
         $('finalNote').innerHTML = '';
+        $('btnUpload').disabled = true;
         stopPolling();
 
         try {
           const fd = new FormData();
-          fd.append('files', pdfFile, pdfFile.name);
+          fd.append('files', pdfFile,  pdfFile.name);
+          fd.append('files', xlsxFile, xlsxFile.name);
 
           const r = await fetch('/api/croton_import/batches', { method: 'POST', body: fd });
           if (!r.ok) {
@@ -228,6 +242,7 @@
           await startPolling(batchId);
         } catch(e) {
           setUploadMsg(e.message, true);
+          $('btnUpload').disabled = false;
         }
       });
     </script>

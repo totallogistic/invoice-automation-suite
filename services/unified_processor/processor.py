@@ -362,22 +362,17 @@ class UnifiedProcessor:
 
         return cmd
 
-    def _build_croton_import_cmd(
-        self,
-        tool: ToolConfig,
-        files: List[Path],
-        output_path: Path,
-    ) -> List[str]:
-        """Build command for the IFORTEX/croton_import extractor."""
-        pdf_files = [f for f in files if f.suffix.lower() == ".pdf"]
+    def _build_croton_import_cmd(self, tool, files, output_path):
+        pdf_files  = [f for f in files if f.suffix.lower() == '.pdf']
+        xlsx_files = [f for f in files if f.suffix.lower() == '.xlsx']
         if len(pdf_files) != 1:
-            raise RuntimeError(
-                f"[{tool.name}] croton_import_mode expects exactly 1 PDF file, "
-                f"got {len(pdf_files)}."
-            )
+            raise RuntimeError(f"[{tool.name}] esperaba 1 PDF, recibió {len(pdf_files)}")
+        if len(xlsx_files) != 1:
+            raise RuntimeError(f"[{tool.name}] esperaba 1 XLSX, recibió {len(xlsx_files)}")
         return [
             "python3", str(tool.extractor_path),
-            "--pdf", str(pdf_files[0]),
+            "--pdf",  str(pdf_files[0]),
+            "--xlsx", str(xlsx_files[0]),
             "--output", str(output_path),
         ]
 
