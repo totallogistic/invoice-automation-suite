@@ -381,7 +381,7 @@ def main() -> int:
     args = parser.parse_args()
 
     pdf_path = Path(args.pdf)
-    tpl_path = Path(args.template) if args.template else Path(__file__).parent / 'IFORTEX_TEMPLATE.xlsx'
+    tpl_path = Path(args.template) if args.template else Path(__file__).parent / 'croton_import_template.xlsx'
     out_path = _derive_output_path(pdf_path, args.output)
 
     if not tpl_path.exists():

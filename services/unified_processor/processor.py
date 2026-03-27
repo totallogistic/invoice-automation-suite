@@ -220,7 +220,11 @@ class UnifiedProcessor:
         result = subprocess.run(cmd, capture_output=True, text=True)
 
         if result.returncode != 0:
-            raise RuntimeError(f"Extractor failed: {result.stderr}")
+            raise RuntimeError(
+                f"Extractor failed:\n"
+                f"  stdout: {result.stdout.strip()}\n"
+                f"  stderr: {result.stderr.strip()}"
+            )
         
         report_path = output_path / f"reporte_{batch_id}.txt"
         report_path.write_text(result.stdout, encoding="utf-8")
