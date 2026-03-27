@@ -69,6 +69,28 @@ tools:
     email:
       subject_template: "[Lear Rabat] Batch {batch_id} - DUA files ready"
 
+  # Croton
+  - name: croton
+    enabled: true
+    display_name: "Croton — Packing List"
+    description: "Procesa packing-list ODS de Croton/IFORTEX y genera resumen por partida aduanera"
+    
+    extractor:
+      type: python
+      path: /apps/croton/extractor/extract_croton.py
+    
+    input:
+      formats: [ods]
+      inbox: /data/croton/inbox
+    
+    output:
+      directory: /data/out
+      artifacts:
+        - croton_resumen_*.ods
+    
+    email:
+      subject_template: "[Croton] Batch {batch_id} - Resumen partidas listo"
+
   # Cuadre Asientos
   - name: cuadre_asientos
     enabled: true

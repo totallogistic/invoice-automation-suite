@@ -75,6 +75,10 @@ def lear_rabat_version():
 def lear_cable_version():
     return {"version": _read_script_version("/app/apps/lear_cable/extractor/extract_lear_fields.py")}
 
+@app.get("/api/croton/version")
+def croton_version():
+    return {"version": _read_script_version("/app/apps/croton/extractor/extract_croton.py")}
+
 @app.post("/api/{tool_name}/batches")
 async def create_batch(
     tool_name: str = PathParam(...),
