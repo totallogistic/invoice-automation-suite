@@ -99,6 +99,11 @@ def camion_version():
     path = "/app/apps/camion/extractor/camion_export_processor.py"
     return {"version": _read_script_version(path), "changelog": _read_script_changelog(path)}
 
+@app.get("/api/croton_import/version")
+def croton_import_version():
+    path = "/app/apps/croton_import/extractor/extract_croton_import.py"
+    return {"version": _read_script_version(path), "changelog": _read_script_changelog(path)}
+
 @app.get("/api/split_nominas/version")
 def split_nominas_version():
     path = "/app/apps/split_nominas/extractor/split_nominas.py"

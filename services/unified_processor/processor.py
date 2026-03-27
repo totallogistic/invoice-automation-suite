@@ -196,6 +196,8 @@ class UnifiedProcessor:
         
         if tool.inject_mode:
             cmd = self._build_inject_cmd(tool, files, output_path)
+        elif tool.croton_import_mode:
+            cmd = self._build_croton_import_cmd(tool, files, output_path)
         elif tool.camion_mode:
             skip_validation = (processing_path / "_SKIP_VALIDATION").exists()
             skip_t1  = (processing_path / "_SKIP_T1").exists()
@@ -355,6 +357,25 @@ class UnifiedProcessor:
             cmd.append("--skip-dae")
 
         return cmd
+
+    def _build_croton_import_cmd(
+        self,
+        tool: ToolConfig,
+        files: List[Path],
+        output_path: Path,
+    ) -> List[str]:
+        """Build command for the IFORTEX/croton_import extractor."""
+        pdf_files = [f for f in files if f.suffix.lower() == ".pdf"]
+        if len(pdf_files) != 1:
+            raise RuntimeError(
+                f"[{tool.name}] croton_import_mode expects exactly 1 PDF file, "
+                f"got {len(pdf_files)}."
+            )
+        return [
+            "python3", str(tool.extractor_path),
+            "--pdf", str(pdf_files[0]),
+            "-o", str(output_path),
+        ]
 
     def _get_recipients(self, tool_name: str) -> List[str]:
         tool_key = f"MAIL_TO_{tool_name.upper()}"
