@@ -1,0 +1,235 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Croton Import — IFORTEX</title>
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background: #f5f5f5; }
+      header { background: linear-gradient(135deg, #1a4d7e 0%, #2563a8 100%); color: white; padding: 1.5rem; display: flex; align-items: center; gap: 1rem; }
+      header h1 { font-size: 1.25rem; font-weight: 600; }
+      .version-badge { font-size: 0.75rem; background: rgba(255,255,255,0.2); padding: 0.25rem 0.6rem; border-radius: 12px; cursor: pointer; }
+      .version-badge:hover { background: rgba(255,255,255,0.35); }
+      main { max-width: 700px; margin: 2rem auto; padding: 0 1.5rem; }
+      p.muted { color: #6b7280; font-size: 0.9rem; margin-bottom: 1.5rem; line-height: 1.5; }
+      .card { background: white; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); padding: 1.5rem; margin-bottom: 1.5rem; }
+      .file-field { margin-bottom: 1.25rem; }
+      .file-field label { display: block; font-weight: 600; font-size: 0.875rem; margin-bottom: 0.5rem; color: #374151; }
+      .file-field input[type=file] { width: 100%; padding: 0.6rem; border: 1px solid #d1d5db; border-radius: 6px; font-size: 0.875rem; }
+      .hint { display: block; font-size: 0.8rem; color: #9ca3af; margin-top: 0.35rem; }
+      .row { display: flex; align-items: center; gap: 1rem; margin-top: 1rem; }
+      button { background: #2563a8; color: white; border: none; padding: 0.65rem 1.5rem; border-radius: 6px; font-size: 0.875rem; font-weight: 600; cursor: pointer; }
+      button:hover { background: #1d4ed8; }
+      .muted { color: #6b7280; font-size: 0.875rem; }
+      .error { color: #dc2626; font-size: 0.875rem; }
+      .mono { font-family: monospace; font-size: 0.8rem; color: #374151; }
+      .badge { display: inline-block; padding: 0.2rem 0.6rem; border-radius: 4px; font-size: 0.75rem; font-weight: 600; }
+      .badge-done    { background: #d1fae5; color: #065f46; }
+      .badge-error   { background: #fee2e2; color: #991b1b; }
+      .badge-running { background: #dbeafe; color: #1e40af; }
+      .badge-waiting { background: #f3f4f6; color: #6b7280; }
+      progress { width: 100%; height: 8px; border-radius: 4px; }
+      .kv { display: grid; grid-template-columns: 120px 1fr; gap: 0.5rem 1rem; font-size: 0.875rem; margin-top: 0.75rem; }
+      .kv .muted { font-weight: 500; }
+      .back-link { display: inline-block; margin-top: 1.5rem; color: #2563a8; text-decoration: none; font-weight: 500; font-size: 0.875rem; }
+      .back-link:hover { text-decoration: underline; }
+      .info-box { background: #fffbeb; border: 1px solid #fcd34d; border-radius: 6px; padding: 1rem; font-size: 0.85rem; color: #78350f; line-height: 1.5; margin-bottom: 1.25rem; }
+      .modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:100; align-items:center; justify-content:center; }
+      .modal-overlay.open { display:flex; }
+      .modal { background:white; border-radius:8px; padding:1.5rem; max-width:600px; width:90%; max-height:80vh; display:flex; flex-direction:column; }
+      .modal-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem; }
+      .modal-body { overflow-y:auto; white-space:pre-wrap; font-size:0.85rem; color:#374151; }
+      .modal-close { background:none; border:none; font-size:1.25rem; cursor:pointer; color:#6b7280; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>📦 Croton Import — IFORTEX <span class="version-badge" id="scriptVersion">…</span></h1>
+    </header>
+    <main>
+      <p class="muted">
+        Sube la factura IFORTEX en PDF. El sistema extrae automáticamente los artículos (OF, UN, precio, promedio, bultos)
+        y genera un Excel basado en plantilla con fórmulas activas.
+        La columna <strong>BRUTO</strong> (en amarillo) se completa a mano — el resto se calcula solo.
+      </p>
+
+      <div class="info-box">
+        ℹ️ <strong>Nota:</strong> El sistema reconoce automáticamente los artículos de la factura.
+        Una vez descargado el Excel, rellena la columna <strong>BRUTO (J)</strong> en la hoja <em>Feuil1</em>
+        y las hojas <em>Resumen</em> y <em>Hoja6</em> se actualizarán solas.
+      </div>
+
+      <div class="card">
+        <div class="file-field">
+          <label>📄 Factura IFORTEX <span style="color:#dc2626">*</span></label>
+          <input id="pdfInput" type="file" accept=".pdf,application/pdf" />
+          <span class="hint">PDF de la factura IFORTEX (puede incluir packing list en páginas siguientes)</span>
+        </div>
+        <div class="row">
+          <button id="btnUpload">Procesar</button>
+          <span id="uploadMsg" class="muted"></span>
+        </div>
+        <p class="muted" style="margin-top:10px">
+          Endpoint: <span class="mono">POST /api/croton_import/batches</span>
+        </p>
+      </div>
+
+      <div id="statusCard" class="card" style="display:none">
+        <div class="row" style="justify-content:space-between">
+          <div>
+            <div class="muted">Batch</div>
+            <div class="mono" id="batchId">—</div>
+          </div>
+          <div>
+            <span class="badge" id="state">—</span>
+            <span class="badge" id="stage">—</span>
+          </div>
+        </div>
+
+        <div style="margin:12px 0">
+          <progress id="bar" value="0" max="100"></progress>
+          <div class="muted" id="pct" style="margin-top:6px">0%</div>
+        </div>
+
+        <div class="kv">
+          <div class="muted">Mensaje</div> <div id="message">—</div>
+          <div class="muted">Archivos</div> <div><span id="processed">0</span> / <span id="total">0</span></div>
+          <div class="muted">Updated</div>  <div class="mono" id="updated">—</div>
+        </div>
+
+        <div id="finalNote" style="margin-top:12px"></div>
+      </div>
+
+      <a href="/" class="back-link">← Volver</a>
+    </main>
+
+    <div class="modal-overlay" id="changelogOverlay">
+      <div class="modal">
+        <div class="modal-header">
+          <h2>Changelog — <span id="modalVersion">…</span></h2>
+          <button class="modal-close" id="modalClose">✕</button>
+        </div>
+        <div class="modal-body" id="modalBody">Cargando…</div>
+      </div>
+    </div>
+
+    <script>
+      const $ = id => document.getElementById(id);
+      let pollTimer = null;
+
+      function setUploadMsg(text, isErr=false) {
+        $('uploadMsg').textContent = text || '';
+        $('uploadMsg').className = isErr ? 'error' : 'muted';
+      }
+
+      function badgeClass(state) {
+        if (!state) return '';
+        const s = state.toUpperCase();
+        if (s === 'DONE')       return 'badge-done';
+        if (s === 'ERROR')      return 'badge-error';
+        if (s === 'PROCESSING' || s === 'RUNNING_EXTRACTOR') return 'badge-running';
+        return 'badge-waiting';
+      }
+
+      function stopPolling() {
+        if (pollTimer) clearInterval(pollTimer);
+        pollTimer = null;
+      }
+
+      async function startPolling(batchId) {
+        stopPolling();
+        pollTimer = setInterval(async () => {
+          try {
+            const r = await fetch(`/api/croton_import/batches/${batchId}/status`, { cache: 'no-store' });
+            if (!r.ok) return;
+            const d = await r.json();
+
+            $('state').textContent  = d.state  || '—';
+            $('state').className    = `badge ${badgeClass(d.state)}`;
+            $('stage').textContent  = d.stage  || '—';
+            $('stage').className    = `badge ${badgeClass(d.stage)}`;
+            $('message').textContent = d.message || '—';
+            $('updated').textContent = new Date().toLocaleTimeString();
+
+            const total = d.total_files || 1;
+            const done  = d.processed_files || 0;
+            const pct   = d.state === 'DONE' ? 100 : Math.round((done / total) * 90);
+            $('bar').value       = pct;
+            $('pct').textContent = pct + '%';
+            $('processed').textContent = done;
+            $('total').textContent     = total;
+
+            if (d.state === 'DONE' || d.state === 'ERROR') {
+              stopPolling();
+              if (d.state === 'DONE') {
+                $('finalNote').innerHTML =
+                  `<p style="color:#065f46;font-weight:600">✅ Procesado. Revisa tu email con el Excel adjunto.</p>
+                   <p class="muted" style="margin-top:4px">Rellena la columna BRUTO (amarillo) en Feuil1 y el resto se calcula solo.</p>`;
+              } else {
+                $('finalNote').innerHTML =
+                  `<p class="error">❌ Error: ${d.message}</p>`;
+              }
+            }
+          } catch(e) { /* ignore */ }
+        }, 2500);
+      }
+
+      function openChangelog(version) {
+        $('modalVersion').textContent = version;
+        fetch('/api/croton_import/version', { cache: 'no-store' })
+          .then(r => r.json())
+          .then(d => {
+            $('modalBody').textContent = d.changelog || 'Sin changelog disponible.';
+            $('changelogOverlay').classList.add('open');
+          });
+      }
+
+      $('modalClose').addEventListener('click', () => $('changelogOverlay').classList.remove('open'));
+      $('changelogOverlay').addEventListener('click', e => {
+        if (e.target === $('changelogOverlay')) $('changelogOverlay').classList.remove('open');
+      });
+
+      // Load version
+      fetch('/api/croton_import/version', { cache: 'no-store' })
+        .then(r => r.json())
+        .then(d => {
+          const v = d.version || '?';
+          $('scriptVersion').textContent = v;
+          $('scriptVersion').title = 'Ver changelog';
+          $('scriptVersion').addEventListener('click', () => openChangelog(v));
+        })
+        .catch(() => { $('scriptVersion').textContent = '?'; });
+
+      $('btnUpload').addEventListener('click', async () => {
+        const pdfFile = $('pdfInput').files[0];
+        if (!pdfFile) return setUploadMsg('Selecciona la factura PDF.', true);
+        if (!/\.pdf$/i.test(pdfFile.name)) return setUploadMsg('El archivo debe ser .pdf', true);
+
+        setUploadMsg('Subiendo…');
+        $('statusCard').style.display = 'none';
+        $('finalNote').innerHTML = '';
+        stopPolling();
+
+        try {
+          const fd = new FormData();
+          fd.append('files', pdfFile, pdfFile.name);
+
+          const r = await fetch('/api/croton_import/batches', { method: 'POST', body: fd });
+          if (!r.ok) {
+            const t = await r.text();
+            throw new Error(`HTTP ${r.status}: ${t}`);
+          }
+          const data = await r.json();
+          const batchId = data.batch_id;
+          $('statusCard').style.display = 'block';
+          $('batchId').textContent = batchId;
+          setUploadMsg(`✓ Batch creado: ${batchId}`);
+          await startPolling(batchId);
+        } catch(e) {
+          setUploadMsg(e.message, true);
+        }
+      });
+    </script>
+  </body>
+</html>
