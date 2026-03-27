@@ -114,6 +114,10 @@ def split_cotizaciones_version():
     path = "/app/apps/split_cotizaciones/extractor/split_cotizaciones.py"
     return {"version": _read_script_version(path), "changelog": _read_script_changelog(path)}
 
+@app.get("/api/bl/version")
+def bl_version():
+    path = "/app/apps/bl/extractor/extract_bl.py"
+    return {"version": _read_script_version(path), "changelog": _read_script_changelog(path)}
 
 # ── Shared ZIP download helper ────────────────────────────────────────────────
 

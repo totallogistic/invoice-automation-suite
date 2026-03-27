@@ -40,6 +40,7 @@ class ToolConfig:
     # T1 files are identified by "t1" in the filename; the DOC file by "doc".
     camion_mode: bool = False
     croton_import_mode: bool = False
+    bl_mode: bool = False
 
 class ToolRegistry:
     """Registry of all available tools."""
@@ -89,6 +90,8 @@ class ToolRegistry:
                 filename_pattern=tool_data.get("output", {}).get("filename_pattern", ""),
                 camion_mode=tool_data.get("extractor", {}).get("camion_mode", False),
                 croton_import_mode=tool_data.get("extractor", {}).get("croton_import_mode", False),
+                bl_mode=tool_data.get("extractor", {}).get("bl_mode", False),
+
             )
             
             # Ensure directories exist

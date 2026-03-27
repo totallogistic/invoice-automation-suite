@@ -458,3 +458,32 @@ tools:
       subject_template: "[Croton Import] Batch {batch_id} - Factura procesada"
 
     status_dir: /data/croton_import/status
+
+# BL - Conocimientos de Embarque
+  - name: bl
+    enabled: true
+    display_name: "BL Extractor - Conocimientos de Embarque"
+    description: >
+      Extrae datos de Conocimientos de Embarque (BL) de las navieras
+      AML, Balearia, DFDS, RFS y Trasmediterranea. Filtra automáticamente
+      los documentos con destino ALGECIRAS y genera un CSV acumulativo
+      bl_YYYYMMDD.csv en /data/bl/csv/.
+
+    input:
+      formats: [pdf]
+      inbox: /data/bl/inbox
+
+    extractor:
+      type: python
+      path: /apps/bl/extractor/extract_bl.py
+      bl_mode: true
+
+    output:
+      directory: /data/bl/out
+      artifacts:
+        - "reporte_*.txt"
+
+    email:
+      subject_template: ""
+
+    status_dir: /data/bl/status

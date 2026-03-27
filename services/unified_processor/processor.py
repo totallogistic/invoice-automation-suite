@@ -19,6 +19,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger("processor")
 
+BL_CSV_DIR = Path(os.getenv("BL_CSV_DIR", "/data/bl/csv"))
 
 class UnifiedProcessor:
     """Multi-tool processor."""
@@ -208,6 +209,8 @@ class UnifiedProcessor:
                 skip_t1=skip_t1,
                 skip_dae=skip_dae,
             )
+        elif tool.bl_mode:
+            cmd = self._build_bl_cmd(tool, files) 
         else:
             cmd = [
                 "python3",
@@ -301,7 +304,15 @@ class UnifiedProcessor:
             "--inject",
             "-o", str(out_file),
         ]
-    
+        def _build_bl_cmd(self, tool: ToolConfig, files: List[Path]) -> List[str]:
+            BL_CSV_DIR.mkdir(parents=True, exist_ok=True)
+            return [
+                "python3",
+                str(tool.extractor_path),
+                *[str(f) for f in files],
+                "-o", str(BL_CSV_DIR),
+            ]
+
     def _build_camion_cmd(
         self,
         tool: ToolConfig,
