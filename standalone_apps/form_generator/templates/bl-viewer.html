@@ -1,0 +1,323 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>BL Viewer — Conocimientos de Embarque</title>
+  <style>
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      background: #f5f5f5;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── Header ── */
+    header {
+      background: linear-gradient(135deg, #1a4d7e 0%, #2563a8 100%);
+      color: white;
+      padding: 1.5rem 2rem;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+    header a {
+      color: rgba(255,255,255,0.75);
+      text-decoration: none;
+      font-size: 0.875rem;
+      white-space: nowrap;
+    }
+    header a:hover { color: white; }
+    header h1 { font-size: 1.25rem; font-weight: 500; }
+    header p  { font-size: 0.8rem; opacity: 0.75; margin-top: 0.15rem; }
+
+    main { flex:1; max-width:1280px; width:100%; margin:1.5rem auto; padding:0 1.5rem; }
+
+    /* ── Stats ── */
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 0.875rem;
+      margin-bottom: 1.25rem;
+    }
+    .stat {
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+      padding: 1rem 1.25rem;
+      text-align: center;
+    }
+    .stat .val {
+      font-size: 1.75rem;
+      font-weight: 700;
+      color: #1a4d7e;
+      line-height: 1;
+    }
+    .stat .lbl {
+      font-size: 0.72rem;
+      color: #6b7280;
+      margin-top: 0.3rem;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+    }
+
+    /* ── Filters ── */
+    .filters {
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+      padding: 0.875rem 1.25rem;
+      margin-bottom: 1.25rem;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.625rem;
+      align-items: flex-end;
+    }
+    .fg { display:flex; flex-direction:column; gap:0.25rem; }
+    .fg label { font-size:0.7rem; color:#6b7280; font-weight:600; text-transform:uppercase; letter-spacing:0.4px; }
+    .fg input, .fg select {
+      padding: 0.4rem 0.625rem;
+      border: 1px solid #d1d5db;
+      border-radius: 6px;
+      font-size: 0.85rem;
+      color: #374151;
+      background: #f9fafb;
+    }
+    .fg input:focus, .fg select:focus { outline:none; border-color:#2563a8; background:white; }
+    .fg input[type=search] { width: 220px; }
+    .btn-f {
+      padding: 0.45rem 1rem;
+      background: #1a4d7e;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      font-size: 0.85rem;
+      font-weight: 500;
+      cursor: pointer;
+      align-self: flex-end;
+    }
+    .btn-f:hover { background:#1e3a5f; }
+    .btn-c {
+      padding: 0.45rem 0.75rem;
+      background: white;
+      color: #6b7280;
+      border: 1px solid #d1d5db;
+      border-radius: 6px;
+      font-size: 0.85rem;
+      cursor: pointer;
+      align-self: flex-end;
+    }
+    .btn-c:hover { background:#f3f4f6; }
+
+    /* ── Table ── */
+    .table-wrap {
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+      overflow: hidden;
+    }
+    .table-meta {
+      padding: 0.75rem 1.25rem;
+      border-bottom: 1px solid #f1f5f9;
+      font-size: 0.82rem;
+      color: #6b7280;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .table-meta strong { color: #1a4d7e; }
+    table { width:100%; border-collapse:collapse; font-size:0.82rem; }
+    thead th {
+      background: #f8fafc;
+      padding: 0.625rem 0.875rem;
+      text-align: left;
+      font-size: 0.7rem;
+      font-weight: 600;
+      color: #374151;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+      border-bottom: 1px solid #e5e7eb;
+      white-space: nowrap;
+    }
+    tbody tr { border-bottom: 1px solid #f1f5f9; }
+    tbody tr:last-child { border-bottom: none; }
+    tbody tr:hover { background: #f8fafc; }
+    tbody td { padding: 0.6rem 0.875rem; color: #374151; vertical-align: middle; }
+    td.mono { font-family: 'SF Mono','Fira Code',monospace; font-size:0.78rem; }
+    .empty { padding: 2.5rem; text-align:center; color:#9ca3af; font-size:0.875rem; }
+    #loading { display:none; padding:2rem; text-align:center; color:#6b7280; font-size:0.875rem; }
+    #loading.on { display:block; }
+
+    /* ── Naviera badges ── */
+    .nav {
+      display: inline-block;
+      padding: 0.15rem 0.5rem;
+      border-radius: 10px;
+      font-size: 0.7rem;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+    .nav-AML      { background:#dbeafe; color:#1e40af; }
+    .nav-BALEARIA { background:#fce7f3; color:#9d174d; }
+    .nav-DFDS     { background:#d1fae5; color:#065f46; }
+    .nav-RFS      { background:#fef3c7; color:#92400e; }
+    .nav-TRASME   { background:#ede9fe; color:#5b21b6; }
+
+    footer { text-align:center; padding:1.25rem; color:#6b7280; font-size:0.8rem; }
+
+    @media (max-width:640px) {
+      header { flex-direction:column; align-items:flex-start; }
+      .fg input[type=search] { width:160px; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <a href="/">← Volver</a>
+    </div>
+    <div>
+      <h1>📋 BL Viewer — Conocimientos de Embarque</h1>
+      <p>AML · Balearia · DFDS · RFS · Trasmediterranea &nbsp;|&nbsp; Destino: ALGECIRAS</p>
+    </div>
+  </header>
+
+  <main>
+    <!-- Stats -->
+    <div class="stats">
+      <div class="stat"><div class="val" id="s-total">—</div><div class="lbl">Total BLs</div></div>
+      <div class="stat"><div class="val" id="s-aml">—</div><div class="lbl">AML</div></div>
+      <div class="stat"><div class="val" id="s-balearia">—</div><div class="lbl">Balearia</div></div>
+      <div class="stat"><div class="val" id="s-dfds">—</div><div class="lbl">DFDS</div></div>
+      <div class="stat"><div class="val" id="s-rfs">—</div><div class="lbl">RFS</div></div>
+      <div class="stat"><div class="val" id="s-trasme">—</div><div class="lbl">Trasme</div></div>
+      <div class="stat"><div class="val" id="s-fechamax">—</div><div class="lbl">Último BL</div></div>
+    </div>
+
+    <!-- Filters -->
+    <div class="filters">
+      <div class="fg">
+        <label>Naviera</label>
+        <select id="f-nav">
+          <option value="">Todas</option>
+          <option>AML</option><option>BALEARIA</option><option>DFDS</option>
+          <option>RFS</option><option>TRASME</option>
+        </select>
+      </div>
+      <div class="fg">
+        <label>Desde</label>
+        <input type="date" id="f-desde"/>
+      </div>
+      <div class="fg">
+        <label>Hasta</label>
+        <input type="date" id="f-hasta"/>
+      </div>
+      <div class="fg">
+        <label>Buscar</label>
+        <input type="search" id="f-q" placeholder="Matrícula, nombre, BL…"/>
+      </div>
+      <button class="btn-f" onclick="cargar()">Filtrar</button>
+      <button class="btn-c" onclick="limpiar()">Limpiar</button>
+    </div>
+
+    <!-- Table -->
+    <div class="table-wrap">
+      <div class="table-meta">
+        <div>Mostrando <strong id="count">0</strong> registros</div>
+        <div id="csv-info" style="font-size:0.75rem;"></div>
+      </div>
+      <div id="loading" class="on">Cargando…</div>
+      <div id="tbl"></div>
+    </div>
+  </main>
+
+  <footer>© 2026 totallogistic · BL Viewer</footer>
+
+  <script>
+    const COLS = [
+      { k:'fecha',          h:'Fecha' },
+      { k:'hora',           h:'Hora' },
+      { k:'naviera',        h:'Naviera',  badge:true },
+      { k:'num_bl',         h:'Nº BL' },
+      { k:'nombre',         h:'Embarcador' },
+      { k:'buque',          h:'Buque' },
+      { k:'matricula',      h:'Matrícula', mono:true },
+      { k:'puerto_destino', h:'Destino' },
+      { k:'archivo',        h:'Fichero',  mono:true },
+    ];
+
+    async function cargarStats() {
+      try {
+        const d = await fetch('/api/bl/stats').then(r => r.json());
+        document.getElementById('s-total').textContent    = d.total_registros;
+        document.getElementById('s-aml').textContent      = d.navieras['AML']      ?? 0;
+        document.getElementById('s-balearia').textContent = d.navieras['BALEARIA'] ?? 0;
+        document.getElementById('s-dfds').textContent     = d.navieras['DFDS']     ?? 0;
+        document.getElementById('s-rfs').textContent      = d.navieras['RFS']      ?? 0;
+        document.getElementById('s-trasme').textContent   = d.navieras['TRASME']   ?? 0;
+        document.getElementById('s-fechamax').textContent = d.fecha_max ?? '—';
+        if (d.csvs?.length) {
+          document.getElementById('csv-info').textContent = `${d.csvs.length} CSV(s) · ${d.csvs[0]}`;
+        }
+      } catch(e) { console.warn('stats error', e); }
+    }
+
+    async function cargar() {
+      document.getElementById('loading').classList.add('on');
+      document.getElementById('tbl').innerHTML = '';
+      const p = new URLSearchParams({
+        naviera:     document.getElementById('f-nav').value,
+        fecha_desde: document.getElementById('f-desde').value,
+        fecha_hasta: document.getElementById('f-hasta').value,
+        q:           document.getElementById('f-q').value,
+      });
+      try {
+        const d = await fetch(`/api/bl/registros?${p}`).then(r => r.json());
+        document.getElementById('count').textContent = d.total;
+        renderTabla(d.registros);
+      } catch(e) {
+        document.getElementById('tbl').innerHTML = `<div class="empty">Error al cargar: ${e.message}</div>`;
+      } finally {
+        document.getElementById('loading').classList.remove('on');
+      }
+    }
+
+    function renderTabla(rows) {
+      if (!rows.length) {
+        document.getElementById('tbl').innerHTML = '<div class="empty">Sin registros para los filtros seleccionados</div>';
+        return;
+      }
+      const head = COLS.map(c => `<th>${c.h}</th>`).join('');
+      const body = rows.map(r => {
+        const cells = COLS.map(c => {
+          const v = r[c.k] || '—';
+          if (c.badge) return `<td><span class="nav nav-${v}">${v}</span></td>`;
+          if (c.mono)  return `<td class="mono">${v}</td>`;
+          return `<td>${v}</td>`;
+        }).join('');
+        return `<tr>${cells}</tr>`;
+      }).join('');
+      document.getElementById('tbl').innerHTML =
+        `<table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`;
+    }
+
+    function limpiar() {
+      ['f-nav','f-desde','f-hasta','f-q'].forEach(id => {
+        const el = document.getElementById(id);
+        el.value = el.tagName === 'SELECT' ? '' : '';
+      });
+      cargar();
+    }
+
+    document.getElementById('f-q').addEventListener('keydown', e => {
+      if (e.key === 'Enter') cargar();
+    });
+
+    cargarStats();
+    cargar();
+  </script>
+</body>
+</html>

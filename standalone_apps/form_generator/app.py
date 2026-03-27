@@ -13,6 +13,9 @@ import json
 from pathlib import Path
 from typing import Any, Dict
 
+import csv as _csv
+import glob as _glob
+
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -1001,6 +1004,95 @@ async def save_maquinaria_mlg(data: dict):
         "email_sent": email_sent
     }
 
+
+
+# Directorio donde el unified_processor escribe los CSVs de BL
+# Configurar en el .env del servicio: BL_CSV_DIR=/data/ias_prod/data/bl/csv
+BL_CSV_DIR = Path(os.getenv("BL_CSV_DIR", "/data/bl/csv"))
+
+
+def _bl_leer_registros() -> list[dict]:
+    """Lee y combina todos los bl_*.csv bajo BL_CSV_DIR (sin duplicados)."""
+    registros = []
+    vistos: set[tuple] = set()
+
+    csvs = sorted(
+        _glob.glob(str(BL_CSV_DIR / "bl_*.csv")),
+        reverse=True          # más reciente primero
+    )
+
+    for csv_path in csvs:
+        try:
+            with open(csv_path, newline="", encoding="utf-8") as f:
+                for row in _csv.DictReader(f):
+                    clave = (row.get("archivo", ""), row.get("naviera", ""), row.get("num_bl", ""))
+                    if clave in vistos:
+                        continue
+                    vistos.add(clave)
+                    row["_csv_file"] = Path(csv_path).name
+                    registros.append(row)
+        except Exception as e:
+            print(f"[BL] No se pudo leer {csv_path}: {e}")
+
+    registros.sort(
+        key=lambda r: (r.get("fecha", ""), r.get("hora", "")),
+        reverse=True
+    )
+    return registros
+
+
+@app.get("/bl", response_class=HTMLResponse)
+async def bl_viewer(request: Request):
+    """Visualizador de Conocimientos de Embarque."""
+    return templates.TemplateResponse("bl-viewer.html", {"request": request})
+
+
+@app.get("/api/bl/registros")
+def bl_registros(
+    naviera:     str = "",
+    fecha_desde: str = "",
+    fecha_hasta: str = "",
+    q:           str = "",
+):
+    """Devuelve registros BL con filtros opcionales."""
+    registros = _bl_leer_registros()
+
+    if naviera:
+        registros = [r for r in registros if r.get("naviera", "").upper() == naviera.upper()]
+    if fecha_desde:
+        registros = [r for r in registros if r.get("fecha", "") >= fecha_desde]
+    if fecha_hasta:
+        registros = [r for r in registros if r.get("fecha", "") <= fecha_hasta]
+    if q:
+        q_low = q.lower()
+        registros = [
+            r for r in registros
+            if any(q_low in str(v).lower() for v in r.values())
+        ]
+
+    return JSONResponse({"total": len(registros), "registros": registros})
+
+
+@app.get("/api/bl/stats")
+def bl_stats():
+    """Estadísticas rápidas para las tarjetas del dashboard."""
+    registros = _bl_leer_registros()
+
+    navieras: dict[str, int] = {}
+    for r in registros:
+        nav = r.get("naviera", "—")
+        navieras[nav] = navieras.get(nav, 0) + 1
+
+    fechas = [r.get("fecha", "") for r in registros if r.get("fecha", "")]
+    csvs = [Path(p).name for p in sorted(_glob.glob(str(BL_CSV_DIR / "bl_*.csv")), reverse=True)]
+
+    return JSONResponse({
+        "total_registros": len(registros),
+        "navieras": navieras,
+        "fecha_min": min(fechas) if fechas else None,
+        "fecha_max": max(fechas) if fechas else None,
+        "csvs": csvs,
+    })
 
 if __name__ == "__main__":
     print("=" * 60)
