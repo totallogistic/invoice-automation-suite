@@ -21,7 +21,7 @@
     header h1 { font-size:1.25rem; font-weight:500; }
     header p  { font-size:0.8rem; opacity:0.75; margin-top:0.15rem; }
 
-    main { flex:1; max-width:1320px; width:100%; margin:1.5rem auto; padding:0 1.5rem; }
+    main { flex:1; max-width:1280px; width:100%; margin:1.5rem auto; padding:0 1.5rem; }
 
     /* Stats */
     .stats { display:grid; grid-template-columns:repeat(auto-fit, minmax(130px,1fr)); gap:0.875rem; margin-bottom:1.25rem; }
@@ -70,7 +70,7 @@
       text-transform:uppercase; letter-spacing:0.4px;
       border-bottom:1px solid #e5e7eb; white-space:nowrap;
     }
-    thead th.th-hecho { text-align:center; width:60px; }
+    thead th.th-hecho { text-align:center; width:56px; }
     tbody tr { border-bottom:1px solid #f1f5f9; transition:background 0.1s; }
     tbody tr:last-child { border-bottom:none; }
     tbody tr:hover { background:#f8fafc; }
@@ -80,23 +80,38 @@
     tbody tr.done td { color:#6b7280; }
     td.mono { font-family:'SF Mono','Fira Code',monospace; font-size:0.78rem; }
     td.td-hecho { text-align:center; }
+
+    /* PDF link */
+    .pdf-link {
+      color:#1a4d7e; text-decoration:none; font-family:'SF Mono','Fira Code',monospace;
+      font-size:0.78rem; display:inline-flex; align-items:center; gap:0.3rem;
+    }
+    .pdf-link:hover { text-decoration:underline; color:#2563a8; }
+    .pdf-link::before { content:'↓'; font-size:0.7rem; opacity:0.6; }
+
+    /* Checkbox */
+    .check-hecho { width:18px; height:18px; cursor:pointer; accent-color:#059669; }
+    .check-hecho:disabled { cursor:wait; opacity:0.5; }
+
     .empty { padding:2.5rem; text-align:center; color:#9ca3af; font-size:0.875rem; }
     #loading { display:none; padding:2rem; text-align:center; color:#6b7280; font-size:0.875rem; }
     #loading.on { display:block; }
 
-    /* Checkbox estilo */
-    .check-hecho {
-      width:18px; height:18px; cursor:pointer; accent-color:#059669;
+    /* ── Naviera badges — colores de marca ── */
+    .nav {
+      display:inline-block; padding:0.2rem 0.55rem; border-radius:10px;
+      font-size:0.7rem; font-weight:700; white-space:nowrap; letter-spacing:0.3px;
     }
-    .check-hecho:disabled { cursor:wait; opacity:0.5; }
-
-    /* Naviera badges */
-    .nav { display:inline-block; padding:0.15rem 0.5rem; border-radius:10px; font-size:0.7rem; font-weight:600; white-space:nowrap; }
-    .nav-AML      { background:#dbeafe; color:#1e40af; }
-    .nav-BALEARIA { background:#fce7f3; color:#9d174d; }
-    .nav-DFDS     { background:#d1fae5; color:#065f46; }
-    .nav-RFS      { background:#fef3c7; color:#92400e; }
-    .nav-TRASME   { background:#ede9fe; color:#5b21b6; }
+    /* AML — rojo corporativo */
+    .nav-AML      { background:#fde8ea; color:#C8102E; border:1px solid #f5c0c6; }
+    /* Balearia — azul marino oscuro */
+    .nav-BALEARIA { background:#e6eaf3; color:#0A2240; border:1px solid #b8c4d8; }
+    /* DFDS — azul marino con acento amarillo */
+    .nav-DFDS     { background:#fff8e1; color:#002B5C; border:1px solid #F0AB00; }
+    /* RFS — rojo */
+    .nav-RFS      { background:#fde8e8; color:#CC0000; border:1px solid #f5b8b8; }
+    /* Trasmediterranea — naranja corporativo */
+    .nav-TRASME   { background:#fef0e6; color:#C04000; border:1px solid #f5c99a; }
 
     footer { text-align:center; padding:1.25rem; color:#6b7280; font-size:0.8rem; }
   </style>
@@ -138,7 +153,7 @@
         <label>Estado</label>
         <select id="f-estado">
           <option value="">Todos</option>
-          <option value="0">Pendientes</option>
+          <option value="0" selected>Pendientes</option>
           <option value="1">Hechos</option>
         </select>
       </div>
@@ -172,16 +187,16 @@
   <footer>© 2026 totallogistic · BL Viewer</footer>
 
   <script>
+    // Columnas — sin puerto_destino
     const COLS = [
-      { k:'fecha',          h:'Fecha' },
-      { k:'hora',           h:'Hora' },
-      { k:'naviera',        h:'Naviera',   badge:true },
-      { k:'num_bl',         h:'Nº BL' },
-      { k:'nombre',         h:'Embarcador' },
-      { k:'buque',          h:'Buque' },
-      { k:'matricula',      h:'Matrícula', mono:true },
-      { k:'puerto_destino', h:'Destino' },
-      { k:'archivo',        h:'Fichero',   mono:true },
+      { k:'fecha',     h:'Fecha' },
+      { k:'hora',      h:'Hora' },
+      { k:'naviera',   h:'Naviera',   badge:true },
+      { k:'num_bl',    h:'Nº BL' },
+      { k:'nombre',    h:'Embarcador' },
+      { k:'buque',     h:'Buque' },
+      { k:'matricula', h:'Matrícula', mono:true },
+      { k:'archivo',   h:'Fichero',   pdf:true },
     ];
 
     function clave(r) {
@@ -205,7 +220,6 @@
           document.getElementById('csv-info').textContent =
             `${dStats.csvs.length} CSV(s) · ${dStats.csvs[0]}`;
         }
-        // Pendientes / hechos desde los registros sin filtro
         const hechos = dRegs.registros.filter(r => r.hecho).length;
         document.getElementById('s-hecho').textContent = hechos;
         document.getElementById('s-pend').textContent  = dStats.total_registros - hechos;
@@ -252,8 +266,14 @@
         </td>`;
         const cells = COLS.map(c => {
           const v = r[c.k] || '—';
-          if (c.badge) return `<td><span class="nav nav-${v}">${v}</span></td>`;
-          if (c.mono)  return `<td class="mono">${v}</td>`;
+          if (c.badge) {
+            return `<td><span class="nav nav-${v}">${v}</span></td>`;
+          }
+          if (c.pdf && v !== '—') {
+            const encoded = encodeURIComponent(v);
+            return `<td><a class="pdf-link" href="/api/bl/pdf/${encoded}" target="_blank">${v}</a></td>`;
+          }
+          if (c.mono) return `<td class="mono">${v}</td>`;
           return `<td>${v}</td>`;
         }).join('');
         return `<tr class="${ok ? 'done' : ''}" data-clave="${k}">${chk}${cells}</tr>`;
@@ -273,13 +293,11 @@
         });
         const d = await res.json();
         cb.checked = d.hecho;
-        // Actualizar estilo de la fila
         const tr = document.querySelector(`tr[data-clave="${k}"]`);
         if (tr) tr.className = d.hecho ? 'done' : '';
-        // Refrescar contadores sin recargar tabla
         cargarStats();
       } catch(e) {
-        cb.checked = !cb.checked;  // revertir si falla
+        cb.checked = !cb.checked;
         console.error('toggle error', e);
       } finally {
         cb.disabled = false;
@@ -288,7 +306,7 @@
 
     function limpiar() {
       document.getElementById('f-nav').value    = '';
-      document.getElementById('f-estado').value = '';
+      document.getElementById('f-estado').value = '0';  // vuelve a Pendientes
       document.getElementById('f-desde').value  = '';
       document.getElementById('f-hasta').value  = '';
       document.getElementById('f-q').value      = '';
@@ -300,7 +318,7 @@
     });
 
     cargarStats();
-    cargar();
+    cargar();   // arranca ya con filtro Pendientes (selected en el HTML)
   </script>
 </body>
 </html>

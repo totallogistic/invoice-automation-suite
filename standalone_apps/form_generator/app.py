@@ -21,6 +21,7 @@ from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from fastapi.responses import FileResponse as _FileResponse
 from jsonschema import Draft202012Validator, ValidationError, validate, Draft7Validator
 
 import uvicorn
@@ -55,10 +56,38 @@ MAIL_FROM = os.getenv("MAIL_FROM", "")
 # Ensure directories exist
 OUTPUT_DIR.mkdir(exist_ok=True)
 
+# Directorios donde el processor guarda los PDFs procesados
+BL_PROCESSED_ROOTS = [
+    Path(os.getenv("BL_DATA_ROOT", "/data/bl")) / "processed",
+    Path(os.getenv("BL_DATA_ROOT", "/data/bl")) / "error",
+]
+
 # Initialize FastAPI
 app = FastAPI(title="JSON Schema Form Generator", version="1.0")
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 templates = Jinja2Templates(directory=TEMPLATES_DIR)
+
+@app.get("/api/bl/pdf/{filename}")
+def bl_pdf_download(filename: str):
+    """Busca el PDF por nombre en los directorios de batches y lo sirve."""
+    # Sanitizar: solo nombre de fichero, sin rutas
+    safe_name = Path(filename).name
+    if not safe_name.lower().endswith(".pdf"):
+        raise HTTPException(400, "Solo se permiten ficheros PDF")
+ 
+    for root in BL_PROCESSED_ROOTS:
+        if not root.exists():
+            continue
+        # Buscar en todos los subdirectorios de batch
+        matches = sorted(root.glob(f"*/{safe_name}"), reverse=True)
+        if matches:
+            return _FileResponse(
+                path=str(matches[0]),
+                media_type="application/pdf",
+                filename=safe_name,
+            )
+ 
+    raise HTTPException(404, f"PDF no encontrado: {safe_name}")
 
 def send_email_with_json(to_email: str, subject: str, schema_name: str, data: dict, json_path: str):
     """
