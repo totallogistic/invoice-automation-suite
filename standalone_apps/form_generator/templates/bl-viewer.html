@@ -8,158 +8,90 @@
     * { margin:0; padding:0; box-sizing:border-box; }
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-      background: #f5f5f5;
-      min-height: 100vh;
-      display: flex;
-      flex-direction: column;
+      background: #f5f5f5; min-height:100vh; display:flex; flex-direction:column;
     }
-
-    /* ── Header ── */
     header {
       background: linear-gradient(135deg, #1a4d7e 0%, #2563a8 100%);
-      color: white;
-      padding: 1.5rem 2rem;
+      color: white; padding: 1.5rem 2rem;
       box-shadow: 0 2px 8px rgba(0,0,0,0.15);
-      display: flex;
-      align-items: center;
-      gap: 1rem;
+      display: flex; align-items: center; gap: 1rem;
     }
-    header a {
-      color: rgba(255,255,255,0.75);
-      text-decoration: none;
-      font-size: 0.875rem;
-      white-space: nowrap;
-    }
-    header a:hover { color: white; }
-    header h1 { font-size: 1.25rem; font-weight: 500; }
-    header p  { font-size: 0.8rem; opacity: 0.75; margin-top: 0.15rem; }
+    header a { color:rgba(255,255,255,0.75); text-decoration:none; font-size:0.875rem; white-space:nowrap; }
+    header a:hover { color:white; }
+    header h1 { font-size:1.25rem; font-weight:500; }
+    header p  { font-size:0.8rem; opacity:0.75; margin-top:0.15rem; }
 
-    main { flex:1; max-width:1280px; width:100%; margin:1.5rem auto; padding:0 1.5rem; }
+    main { flex:1; max-width:1320px; width:100%; margin:1.5rem auto; padding:0 1.5rem; }
 
-    /* ── Stats ── */
-    .stats {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-      gap: 0.875rem;
-      margin-bottom: 1.25rem;
-    }
-    .stat {
-      background: white;
-      border-radius: 8px;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
-      padding: 1rem 1.25rem;
-      text-align: center;
-    }
-    .stat .val {
-      font-size: 1.75rem;
-      font-weight: 700;
-      color: #1a4d7e;
-      line-height: 1;
-    }
-    .stat .lbl {
-      font-size: 0.72rem;
-      color: #6b7280;
-      margin-top: 0.3rem;
-      text-transform: uppercase;
-      letter-spacing: 0.4px;
-    }
+    /* Stats */
+    .stats { display:grid; grid-template-columns:repeat(auto-fit, minmax(130px,1fr)); gap:0.875rem; margin-bottom:1.25rem; }
+    .stat { background:white; border-radius:8px; box-shadow:0 1px 3px rgba(0,0,0,0.08); padding:1rem 1.25rem; text-align:center; }
+    .stat .val { font-size:1.75rem; font-weight:700; color:#1a4d7e; line-height:1; }
+    .stat .val.pendiente { color:#d97706; }
+    .stat .val.hecho     { color:#059669; }
+    .stat .lbl { font-size:0.7rem; color:#6b7280; margin-top:0.3rem; text-transform:uppercase; letter-spacing:0.4px; }
 
-    /* ── Filters ── */
+    /* Filters */
     .filters {
-      background: white;
-      border-radius: 8px;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
-      padding: 0.875rem 1.25rem;
-      margin-bottom: 1.25rem;
-      display: flex;
-      flex-wrap: wrap;
-      gap: 0.625rem;
-      align-items: flex-end;
+      background:white; border-radius:8px; box-shadow:0 1px 3px rgba(0,0,0,0.08);
+      padding:0.875rem 1.25rem; margin-bottom:1.25rem;
+      display:flex; flex-wrap:wrap; gap:0.625rem; align-items:flex-end;
     }
     .fg { display:flex; flex-direction:column; gap:0.25rem; }
     .fg label { font-size:0.7rem; color:#6b7280; font-weight:600; text-transform:uppercase; letter-spacing:0.4px; }
     .fg input, .fg select {
-      padding: 0.4rem 0.625rem;
-      border: 1px solid #d1d5db;
-      border-radius: 6px;
-      font-size: 0.85rem;
-      color: #374151;
-      background: #f9fafb;
+      padding:0.4rem 0.625rem; border:1px solid #d1d5db; border-radius:6px;
+      font-size:0.85rem; color:#374151; background:#f9fafb;
     }
     .fg input:focus, .fg select:focus { outline:none; border-color:#2563a8; background:white; }
-    .fg input[type=search] { width: 220px; }
+    .fg input[type=search] { width:200px; }
     .btn-f {
-      padding: 0.45rem 1rem;
-      background: #1a4d7e;
-      color: white;
-      border: none;
-      border-radius: 6px;
-      font-size: 0.85rem;
-      font-weight: 500;
-      cursor: pointer;
-      align-self: flex-end;
+      padding:0.45rem 1rem; background:#1a4d7e; color:white; border:none;
+      border-radius:6px; font-size:0.85rem; font-weight:500; cursor:pointer; align-self:flex-end;
     }
     .btn-f:hover { background:#1e3a5f; }
     .btn-c {
-      padding: 0.45rem 0.75rem;
-      background: white;
-      color: #6b7280;
-      border: 1px solid #d1d5db;
-      border-radius: 6px;
-      font-size: 0.85rem;
-      cursor: pointer;
-      align-self: flex-end;
+      padding:0.45rem 0.75rem; background:white; color:#6b7280;
+      border:1px solid #d1d5db; border-radius:6px; font-size:0.85rem; cursor:pointer; align-self:flex-end;
     }
     .btn-c:hover { background:#f3f4f6; }
 
-    /* ── Table ── */
-    .table-wrap {
-      background: white;
-      border-radius: 8px;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
-      overflow: hidden;
-    }
+    /* Table */
+    .table-wrap { background:white; border-radius:8px; box-shadow:0 1px 3px rgba(0,0,0,0.08); overflow:hidden; }
     .table-meta {
-      padding: 0.75rem 1.25rem;
-      border-bottom: 1px solid #f1f5f9;
-      font-size: 0.82rem;
-      color: #6b7280;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
+      padding:0.75rem 1.25rem; border-bottom:1px solid #f1f5f9;
+      font-size:0.82rem; color:#6b7280; display:flex; justify-content:space-between; align-items:center;
     }
-    .table-meta strong { color: #1a4d7e; }
+    .table-meta strong { color:#1a4d7e; }
     table { width:100%; border-collapse:collapse; font-size:0.82rem; }
     thead th {
-      background: #f8fafc;
-      padding: 0.625rem 0.875rem;
-      text-align: left;
-      font-size: 0.7rem;
-      font-weight: 600;
-      color: #374151;
-      text-transform: uppercase;
-      letter-spacing: 0.4px;
-      border-bottom: 1px solid #e5e7eb;
-      white-space: nowrap;
+      background:#f8fafc; padding:0.625rem 0.875rem; text-align:left;
+      font-size:0.7rem; font-weight:600; color:#374151;
+      text-transform:uppercase; letter-spacing:0.4px;
+      border-bottom:1px solid #e5e7eb; white-space:nowrap;
     }
-    tbody tr { border-bottom: 1px solid #f1f5f9; }
-    tbody tr:last-child { border-bottom: none; }
-    tbody tr:hover { background: #f8fafc; }
-    tbody td { padding: 0.6rem 0.875rem; color: #374151; vertical-align: middle; }
-    td.mono { font-family: 'SF Mono','Fira Code',monospace; font-size:0.78rem; }
-    .empty { padding: 2.5rem; text-align:center; color:#9ca3af; font-size:0.875rem; }
+    thead th.th-hecho { text-align:center; width:60px; }
+    tbody tr { border-bottom:1px solid #f1f5f9; transition:background 0.1s; }
+    tbody tr:last-child { border-bottom:none; }
+    tbody tr:hover { background:#f8fafc; }
+    tbody tr.done { background:#f0fdf4; }
+    tbody tr.done:hover { background:#dcfce7; }
+    tbody td { padding:0.6rem 0.875rem; color:#374151; vertical-align:middle; }
+    tbody tr.done td { color:#6b7280; }
+    td.mono { font-family:'SF Mono','Fira Code',monospace; font-size:0.78rem; }
+    td.td-hecho { text-align:center; }
+    .empty { padding:2.5rem; text-align:center; color:#9ca3af; font-size:0.875rem; }
     #loading { display:none; padding:2rem; text-align:center; color:#6b7280; font-size:0.875rem; }
     #loading.on { display:block; }
 
-    /* ── Naviera badges ── */
-    .nav {
-      display: inline-block;
-      padding: 0.15rem 0.5rem;
-      border-radius: 10px;
-      font-size: 0.7rem;
-      font-weight: 600;
-      white-space: nowrap;
+    /* Checkbox estilo */
+    .check-hecho {
+      width:18px; height:18px; cursor:pointer; accent-color:#059669;
     }
+    .check-hecho:disabled { cursor:wait; opacity:0.5; }
+
+    /* Naviera badges */
+    .nav { display:inline-block; padding:0.15rem 0.5rem; border-radius:10px; font-size:0.7rem; font-weight:600; white-space:nowrap; }
     .nav-AML      { background:#dbeafe; color:#1e40af; }
     .nav-BALEARIA { background:#fce7f3; color:#9d174d; }
     .nav-DFDS     { background:#d1fae5; color:#065f46; }
@@ -167,18 +99,11 @@
     .nav-TRASME   { background:#ede9fe; color:#5b21b6; }
 
     footer { text-align:center; padding:1.25rem; color:#6b7280; font-size:0.8rem; }
-
-    @media (max-width:640px) {
-      header { flex-direction:column; align-items:flex-start; }
-      .fg input[type=search] { width:160px; }
-    }
   </style>
 </head>
 <body>
   <header>
-    <div>
-      <a href="/">← Volver</a>
-    </div>
+    <div><a href="/">← Volver</a></div>
     <div>
       <h1>📋 BL Viewer — Conocimientos de Embarque</h1>
       <p>AML · Balearia · DFDS · RFS · Trasmediterranea &nbsp;|&nbsp; Destino: ALGECIRAS</p>
@@ -189,6 +114,8 @@
     <!-- Stats -->
     <div class="stats">
       <div class="stat"><div class="val" id="s-total">—</div><div class="lbl">Total BLs</div></div>
+      <div class="stat"><div class="val pendiente" id="s-pend">—</div><div class="lbl">Pendientes</div></div>
+      <div class="stat"><div class="val hecho" id="s-hecho">—</div><div class="lbl">Hechos</div></div>
       <div class="stat"><div class="val" id="s-aml">—</div><div class="lbl">AML</div></div>
       <div class="stat"><div class="val" id="s-balearia">—</div><div class="lbl">Balearia</div></div>
       <div class="stat"><div class="val" id="s-dfds">—</div><div class="lbl">DFDS</div></div>
@@ -205,6 +132,14 @@
           <option value="">Todas</option>
           <option>AML</option><option>BALEARIA</option><option>DFDS</option>
           <option>RFS</option><option>TRASME</option>
+        </select>
+      </div>
+      <div class="fg">
+        <label>Estado</label>
+        <select id="f-estado">
+          <option value="">Todos</option>
+          <option value="0">Pendientes</option>
+          <option value="1">Hechos</option>
         </select>
       </div>
       <div class="fg">
@@ -240,28 +175,40 @@
     const COLS = [
       { k:'fecha',          h:'Fecha' },
       { k:'hora',           h:'Hora' },
-      { k:'naviera',        h:'Naviera',  badge:true },
+      { k:'naviera',        h:'Naviera',   badge:true },
       { k:'num_bl',         h:'Nº BL' },
       { k:'nombre',         h:'Embarcador' },
       { k:'buque',          h:'Buque' },
       { k:'matricula',      h:'Matrícula', mono:true },
       { k:'puerto_destino', h:'Destino' },
-      { k:'archivo',        h:'Fichero',  mono:true },
+      { k:'archivo',        h:'Fichero',   mono:true },
     ];
+
+    function clave(r) {
+      return `${r.archivo}|${r.naviera}|${r.num_bl}`;
+    }
 
     async function cargarStats() {
       try {
-        const d = await fetch('/api/bl/stats').then(r => r.json());
-        document.getElementById('s-total').textContent    = d.total_registros;
-        document.getElementById('s-aml').textContent      = d.navieras['AML']      ?? 0;
-        document.getElementById('s-balearia').textContent = d.navieras['BALEARIA'] ?? 0;
-        document.getElementById('s-dfds').textContent     = d.navieras['DFDS']     ?? 0;
-        document.getElementById('s-rfs').textContent      = d.navieras['RFS']      ?? 0;
-        document.getElementById('s-trasme').textContent   = d.navieras['TRASME']   ?? 0;
-        document.getElementById('s-fechamax').textContent = d.fecha_max ?? '—';
-        if (d.csvs?.length) {
-          document.getElementById('csv-info').textContent = `${d.csvs.length} CSV(s) · ${d.csvs[0]}`;
+        const [dStats, dRegs] = await Promise.all([
+          fetch('/api/bl/stats').then(r => r.json()),
+          fetch('/api/bl/registros').then(r => r.json()),
+        ]);
+        document.getElementById('s-total').textContent    = dStats.total_registros;
+        document.getElementById('s-aml').textContent      = dStats.navieras['AML']      ?? 0;
+        document.getElementById('s-balearia').textContent = dStats.navieras['BALEARIA'] ?? 0;
+        document.getElementById('s-dfds').textContent     = dStats.navieras['DFDS']     ?? 0;
+        document.getElementById('s-rfs').textContent      = dStats.navieras['RFS']      ?? 0;
+        document.getElementById('s-trasme').textContent   = dStats.navieras['TRASME']   ?? 0;
+        document.getElementById('s-fechamax').textContent = dStats.fecha_max ?? '—';
+        if (dStats.csvs?.length) {
+          document.getElementById('csv-info').textContent =
+            `${dStats.csvs.length} CSV(s) · ${dStats.csvs[0]}`;
         }
+        // Pendientes / hechos desde los registros sin filtro
+        const hechos = dRegs.registros.filter(r => r.hecho).length;
+        document.getElementById('s-hecho').textContent = hechos;
+        document.getElementById('s-pend').textContent  = dStats.total_registros - hechos;
       } catch(e) { console.warn('stats error', e); }
     }
 
@@ -273,13 +220,15 @@
         fecha_desde: document.getElementById('f-desde').value,
         fecha_hasta: document.getElementById('f-hasta').value,
         q:           document.getElementById('f-q').value,
+        solo_hecho:  document.getElementById('f-estado').value,
       });
       try {
         const d = await fetch(`/api/bl/registros?${p}`).then(r => r.json());
         document.getElementById('count').textContent = d.total;
         renderTabla(d.registros);
       } catch(e) {
-        document.getElementById('tbl').innerHTML = `<div class="empty">Error al cargar: ${e.message}</div>`;
+        document.getElementById('tbl').innerHTML =
+          `<div class="empty">Error al cargar: ${e.message}</div>`;
       } finally {
         document.getElementById('loading').classList.remove('on');
       }
@@ -287,28 +236,62 @@
 
     function renderTabla(rows) {
       if (!rows.length) {
-        document.getElementById('tbl').innerHTML = '<div class="empty">Sin registros para los filtros seleccionados</div>';
+        document.getElementById('tbl').innerHTML =
+          '<div class="empty">Sin registros para los filtros seleccionados</div>';
         return;
       }
-      const head = COLS.map(c => `<th>${c.h}</th>`).join('');
+      const head = `<th class="th-hecho">Hecho</th>` +
+                   COLS.map(c => `<th>${c.h}</th>`).join('');
       const body = rows.map(r => {
+        const k  = clave(r);
+        const ok = r.hecho;
+        const chk = `<td class="td-hecho">
+          <input type="checkbox" class="check-hecho"
+            data-clave="${k}" ${ok ? 'checked' : ''}
+            onchange="toggleHecho(this)">
+        </td>`;
         const cells = COLS.map(c => {
           const v = r[c.k] || '—';
           if (c.badge) return `<td><span class="nav nav-${v}">${v}</span></td>`;
           if (c.mono)  return `<td class="mono">${v}</td>`;
           return `<td>${v}</td>`;
         }).join('');
-        return `<tr>${cells}</tr>`;
+        return `<tr class="${ok ? 'done' : ''}" data-clave="${k}">${chk}${cells}</tr>`;
       }).join('');
       document.getElementById('tbl').innerHTML =
         `<table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`;
     }
 
+    async function toggleHecho(cb) {
+      const k = cb.dataset.clave;
+      cb.disabled = true;
+      try {
+        const res = await fetch('/api/bl/toggle', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({clave: k}),
+        });
+        const d = await res.json();
+        cb.checked = d.hecho;
+        // Actualizar estilo de la fila
+        const tr = document.querySelector(`tr[data-clave="${k}"]`);
+        if (tr) tr.className = d.hecho ? 'done' : '';
+        // Refrescar contadores sin recargar tabla
+        cargarStats();
+      } catch(e) {
+        cb.checked = !cb.checked;  // revertir si falla
+        console.error('toggle error', e);
+      } finally {
+        cb.disabled = false;
+      }
+    }
+
     function limpiar() {
-      ['f-nav','f-desde','f-hasta','f-q'].forEach(id => {
-        const el = document.getElementById(id);
-        el.value = el.tagName === 'SELECT' ? '' : '';
-      });
+      document.getElementById('f-nav').value    = '';
+      document.getElementById('f-estado').value = '';
+      document.getElementById('f-desde').value  = '';
+      document.getElementById('f-hasta').value  = '';
+      document.getElementById('f-q').value      = '';
       cargar();
     }
 

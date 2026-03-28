@@ -10,6 +10,7 @@ Then open: http://localhost:8200
 """
 
 import json
+import json as _json
 from pathlib import Path
 from typing import Any, Dict
 
@@ -1046,6 +1047,24 @@ async def bl_viewer(request: Request):
     """Visualizador de Conocimientos de Embarque."""
     return templates.TemplateResponse("bl-viewer.html", {"request": request})
 
+BL_ESTADO_FILE = BL_CSV_DIR / "bl_estado.json"
+
+def _bl_leer_estado() -> dict:
+    """Lee el fichero de estado. Devuelve {} si no existe."""
+    try:
+        if BL_ESTADO_FILE.exists():
+            return _json.loads(BL_ESTADO_FILE.read_text(encoding="utf-8"))
+    except Exception as e:
+        print(f"[BL] Error leyendo estado: {e}")
+    return {}
+
+
+def _bl_guardar_estado(estado: dict) -> None:
+    BL_CSV_DIR.mkdir(parents=True, exist_ok=True)
+    BL_ESTADO_FILE.write_text(
+        _json.dumps(estado, ensure_ascii=False, indent=2),
+        encoding="utf-8"
+    )
 
 @app.get("/api/bl/registros")
 def bl_registros(
@@ -1053,9 +1072,15 @@ def bl_registros(
     fecha_desde: str = "",
     fecha_hasta: str = "",
     q:           str = "",
+    solo_hecho:  str = "",   # "1" = solo hechos, "0" = solo pendientes
 ):
-    """Devuelve registros BL con filtros opcionales."""
     registros = _bl_leer_registros()
+    estado    = _bl_leer_estado()
+
+    # Inyectar campo hecho en cada registro
+    for r in registros:
+        clave = f"{r.get('archivo','')}|{r.get('naviera','')}|{r.get('num_bl','')}"
+        r["hecho"] = estado.get(clave, False)
 
     if naviera:
         registros = [r for r in registros if r.get("naviera", "").upper() == naviera.upper()]
@@ -1063,6 +1088,10 @@ def bl_registros(
         registros = [r for r in registros if r.get("fecha", "") >= fecha_desde]
     if fecha_hasta:
         registros = [r for r in registros if r.get("fecha", "") <= fecha_hasta]
+    if solo_hecho == "1":
+        registros = [r for r in registros if r.get("hecho")]
+    elif solo_hecho == "0":
+        registros = [r for r in registros if not r.get("hecho")]
     if q:
         q_low = q.lower()
         registros = [
@@ -1072,6 +1101,20 @@ def bl_registros(
 
     return JSONResponse({"total": len(registros), "registros": registros})
 
+@app.post("/api/bl/toggle")
+async def bl_toggle(request: Request):
+    """Cambia el estado hecho/pendiente de un BL."""
+    body   = await request.json()
+    clave  = body.get("clave", "").strip()
+    if not clave:
+        raise HTTPException(400, "clave requerida")
+
+    estado = _bl_leer_estado()
+    nuevo  = not estado.get(clave, False)
+    estado[clave] = nuevo
+    _bl_guardar_estado(estado)
+
+    return JSONResponse({"clave": clave, "hecho": nuevo})
 
 @app.get("/api/bl/stats")
 def bl_stats():
