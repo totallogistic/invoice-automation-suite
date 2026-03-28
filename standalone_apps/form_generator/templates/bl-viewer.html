@@ -174,18 +174,29 @@
     async function cargar() {
       document.getElementById('loading').classList.add('on');
       document.getElementById('tbl').innerHTML = '';
-      const p = new URLSearchParams({
-        naviera:    document.getElementById('f-nav').value,
-        fecha_desde:document.getElementById('f-desde').value,
-        fecha_hasta:document.getElementById('f-hasta').value,
-        q:          document.getElementById('f-q').value,
-        solo_hecho: document.getElementById('f-est').value,
+
+      // Stats: solo filtra por fecha para mostrar el estado real del día
+      const pStats = new URLSearchParams({
+        fecha_desde: document.getElementById('f-desde').value,
+        fecha_hasta: document.getElementById('f-hasta').value,
       });
+      // Tabla: todos los filtros
+      const pTabla = new URLSearchParams({
+        naviera:     document.getElementById('f-nav').value,
+        fecha_desde: document.getElementById('f-desde').value,
+        fecha_hasta: document.getElementById('f-hasta').value,
+        q:           document.getElementById('f-q').value,
+        solo_hecho:  document.getElementById('f-est').value,
+      });
+
       try {
-        const d = await fetch(`/api/bl/registros?${p}`).then(r=>r.json());
-        document.getElementById('count').textContent = d.total;
-        actualizarStats(d.registros);
-        renderTabla(d.registros);
+        const [dStats, dTabla] = await Promise.all([
+          fetch(`/api/bl/registros?${pStats}`).then(r=>r.json()),
+          fetch(`/api/bl/registros?${pTabla}`).then(r=>r.json()),
+        ]);
+        actualizarStats(dStats.registros);
+        document.getElementById('count').textContent = dTabla.total;
+        renderTabla(dTabla.registros);
       } catch(e) {
         document.getElementById('tbl').innerHTML = `<div class="empty">Error: ${e.message}</div>`;
       } finally {
