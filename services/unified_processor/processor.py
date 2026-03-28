@@ -210,7 +210,7 @@ class UnifiedProcessor:
                 skip_dae=skip_dae,
             )
         elif tool.bl_mode:
-            cmd = self._build_bl_cmd(tool, files) 
+            cmd = self._build_bl_cmd(tool, files)
         else:
             cmd = [
                 "python3",
@@ -313,7 +313,7 @@ class UnifiedProcessor:
             str(tool.extractor_path),
             *[str(f) for f in files],
             "-o", str(bl_csv_dir),
-        ] 
+        ]
 
     def _build_camion_cmd(
         self,

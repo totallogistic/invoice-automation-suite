@@ -1,0 +1,17 @@
+[Unit]
+Description=BL Inbox Watcher — empaqueta PDFs de Samba en batches
+After=network.target
+
+[Service]
+Type=simple
+User={{USER}}
+ExecStart={{PYTHON}} {{SCRIPT}} --inbox {{INBOX}} --quiet {{QUIET}} --poll {{POLL}}
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=bl-inbox-watcher
+Environment="PYTHONUNBUFFERED=1"
+
+[Install]
+WantedBy=multi-user.target
