@@ -23,6 +23,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import FileResponse as _FileResponse
 from jsonschema import Draft202012Validator, ValidationError, validate, Draft7Validator
+from fastapi.responses import FileResponse as _FileResponse
 
 import uvicorn
 import os
@@ -67,27 +68,6 @@ app = FastAPI(title="JSON Schema Form Generator", version="1.0")
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 templates = Jinja2Templates(directory=TEMPLATES_DIR)
 
-@app.get("/api/bl/pdf/{filename}")
-def bl_pdf_download(filename: str):
-    """Busca el PDF por nombre en los directorios de batches y lo sirve."""
-    # Sanitizar: solo nombre de fichero, sin rutas
-    safe_name = Path(filename).name
-    if not safe_name.lower().endswith(".pdf"):
-        raise HTTPException(400, "Solo se permiten ficheros PDF")
- 
-    for root in BL_PROCESSED_ROOTS:
-        if not root.exists():
-            continue
-        # Buscar en todos los subdirectorios de batch
-        matches = sorted(root.glob(f"*/{safe_name}"), reverse=True)
-        if matches:
-            return _FileResponse(
-                path=str(matches[0]),
-                media_type="application/pdf",
-                filename=safe_name,
-            )
- 
-    raise HTTPException(404, f"PDF no encontrado: {safe_name}")
 
 def send_email_with_json(to_email: str, subject: str, schema_name: str, data: dict, json_path: str):
     """
@@ -1036,135 +1016,153 @@ async def save_maquinaria_mlg(data: dict):
 
 
 
-# Directorio donde el unified_processor escribe los CSVs de BL
-# Configurar en el .env del servicio: BL_CSV_DIR=/data/ias_prod/data/bl/csv
-BL_CSV_DIR = Path(os.getenv("BL_CSV_DIR", "/data/bl/csv"))
-
-
-def _bl_leer_registros() -> list[dict]:
-    """Lee y combina todos los bl_*.csv bajo BL_CSV_DIR (sin duplicados)."""
+# ── Rutas de datos ────────────────────────────────────────────────────────────
+# BL_DATA_ROOT se define en .env.prod  ej: /data/ias_prod/data/bl
+_BL_ROOT     = Path(os.getenv("BL_DATA_ROOT", "/data/bl"))
+BL_CSV_DIR   = Path(os.getenv("BL_CSV_DIR",   str(_BL_ROOT / "csv")))
+BL_ESTADO_FILE = BL_CSV_DIR / "bl_estado.json"
+ 
+_BL_PDF_ROOTS = [_BL_ROOT / "processed", _BL_ROOT / "error"]
+ 
+ 
+# ── Helpers ───────────────────────────────────────────────────────────────────
+ 
+def _bl_leer_registros() -> list:
     registros = []
-    vistos: set[tuple] = set()
-
-    csvs = sorted(
-        _glob.glob(str(BL_CSV_DIR / "bl_*.csv")),
-        reverse=True          # más reciente primero
-    )
-
-    for csv_path in csvs:
+    vistos: set = set()
+    for csv_path in sorted(_glob.glob(str(BL_CSV_DIR / "bl_*.csv")), reverse=True):
         try:
             with open(csv_path, newline="", encoding="utf-8") as f:
                 for row in _csv.DictReader(f):
-                    clave = (row.get("archivo", ""), row.get("naviera", ""), row.get("num_bl", ""))
-                    if clave in vistos:
+                    k = (row.get("archivo",""), row.get("naviera",""), row.get("num_bl",""))
+                    if k in vistos:
                         continue
-                    vistos.add(clave)
+                    vistos.add(k)
                     row["_csv_file"] = Path(csv_path).name
                     registros.append(row)
         except Exception as e:
-            print(f"[BL] No se pudo leer {csv_path}: {e}")
-
-    registros.sort(
-        key=lambda r: (r.get("fecha", ""), r.get("hora", "")),
-        reverse=True
-    )
+            print(f"[BL] Error leyendo {csv_path}: {e}")
+    registros.sort(key=lambda r: (r.get("fecha",""), r.get("hora","")), reverse=True)
     return registros
-
-
-@app.get("/bl", response_class=HTMLResponse)
-async def bl_viewer(request: Request):
-    """Visualizador de Conocimientos de Embarque."""
-    return templates.TemplateResponse("bl-viewer.html", {"request": request})
-
-BL_ESTADO_FILE = BL_CSV_DIR / "bl_estado.json"
-
+ 
+ 
 def _bl_leer_estado() -> dict:
-    """Lee el fichero de estado. Devuelve {} si no existe."""
     try:
         if BL_ESTADO_FILE.exists():
             return _json.loads(BL_ESTADO_FILE.read_text(encoding="utf-8"))
     except Exception as e:
         print(f"[BL] Error leyendo estado: {e}")
     return {}
-
-
+ 
+ 
 def _bl_guardar_estado(estado: dict) -> None:
-    BL_CSV_DIR.mkdir(parents=True, exist_ok=True)
-    BL_ESTADO_FILE.write_text(
-        _json.dumps(estado, ensure_ascii=False, indent=2),
-        encoding="utf-8"
-    )
-
+    try:
+        BL_CSV_DIR.mkdir(parents=True, exist_ok=True)
+        BL_ESTADO_FILE.write_text(
+            _json.dumps(estado, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
+    except Exception as e:
+        print(f"[BL] Error guardando estado: {e}")
+        raise
+ 
+ 
+# ── Endpoints ─────────────────────────────────────────────────────────────────
+ 
+@app.get("/bl", response_class=HTMLResponse)
+async def bl_viewer(request: Request):
+    return templates.TemplateResponse("bl-viewer.html", {"request": request})
+ 
+ 
 @app.get("/api/bl/registros")
 def bl_registros(
     naviera:     str = "",
     fecha_desde: str = "",
     fecha_hasta: str = "",
     q:           str = "",
-    solo_hecho:  str = "",   # "1" = solo hechos, "0" = solo pendientes
+    solo_hecho:  str = "",
 ):
     registros = _bl_leer_registros()
     estado    = _bl_leer_estado()
-
-    # Inyectar campo hecho en cada registro
+ 
     for r in registros:
         clave = f"{r.get('archivo','')}|{r.get('naviera','')}|{r.get('num_bl','')}"
         r["hecho"] = estado.get(clave, False)
-
+ 
     if naviera:
-        registros = [r for r in registros if r.get("naviera", "").upper() == naviera.upper()]
+        registros = [r for r in registros if r.get("naviera","").upper() == naviera.upper()]
     if fecha_desde:
-        registros = [r for r in registros if r.get("fecha", "") >= fecha_desde]
+        registros = [r for r in registros if r.get("fecha","") >= fecha_desde]
     if fecha_hasta:
-        registros = [r for r in registros if r.get("fecha", "") <= fecha_hasta]
+        registros = [r for r in registros if r.get("fecha","") <= fecha_hasta]
     if solo_hecho == "1":
         registros = [r for r in registros if r.get("hecho")]
     elif solo_hecho == "0":
         registros = [r for r in registros if not r.get("hecho")]
     if q:
         q_low = q.lower()
-        registros = [
-            r for r in registros
-            if any(q_low in str(v).lower() for v in r.values())
-        ]
-
+        registros = [r for r in registros if any(q_low in str(v).lower() for v in r.values())]
+ 
     return JSONResponse({"total": len(registros), "registros": registros})
-
-@app.post("/api/bl/toggle")
-async def bl_toggle(request: Request):
-    """Cambia el estado hecho/pendiente de un BL."""
-    body   = await request.json()
-    clave  = body.get("clave", "").strip()
-    if not clave:
-        raise HTTPException(400, "clave requerida")
-
-    estado = _bl_leer_estado()
-    nuevo  = not estado.get(clave, False)
-    estado[clave] = nuevo
-    _bl_guardar_estado(estado)
-
-    return JSONResponse({"clave": clave, "hecho": nuevo})
-
+ 
+ 
 @app.get("/api/bl/stats")
 def bl_stats():
-    """Estadísticas rápidas para las tarjetas del dashboard."""
     registros = _bl_leer_registros()
-
-    navieras: dict[str, int] = {}
+    estado    = _bl_leer_estado()
+ 
+    navieras: dict = {}
     for r in registros:
         nav = r.get("naviera", "—")
         navieras[nav] = navieras.get(nav, 0) + 1
-
-    fechas = [r.get("fecha", "") for r in registros if r.get("fecha", "")]
-    csvs = [Path(p).name for p in sorted(_glob.glob(str(BL_CSV_DIR / "bl_*.csv")), reverse=True)]
-
+ 
+    fechas = [r.get("fecha","") for r in registros if r.get("fecha","")]
+    csvs   = [Path(p).name for p in sorted(_glob.glob(str(BL_CSV_DIR / "bl_*.csv")), reverse=True)]
+ 
+    hechos = sum(1 for r in registros
+                 if estado.get(f"{r.get('archivo','')}|{r.get('naviera','')}|{r.get('num_bl','')}", False))
+ 
     return JSONResponse({
         "total_registros": len(registros),
-        "navieras": navieras,
-        "fecha_min": min(fechas) if fechas else None,
-        "fecha_max": max(fechas) if fechas else None,
-        "csvs": csvs,
+        "hechos":          hechos,
+        "pendientes":      len(registros) - hechos,
+        "navieras":        navieras,
+        "fecha_min":       min(fechas) if fechas else None,
+        "fecha_max":       max(fechas) if fechas else None,
+        "csvs":            csvs,
     })
+ 
+ 
+@app.post("/api/bl/toggle")
+async def bl_toggle(request: Request):
+    try:
+        body  = await request.json()
+        clave = body.get("clave", "").strip()
+        if not clave:
+            raise HTTPException(400, "clave requerida")
+        estado = _bl_leer_estado()
+        nuevo  = not estado.get(clave, False)
+        estado[clave] = nuevo
+        _bl_guardar_estado(estado)
+        return JSONResponse({"clave": clave, "hecho": nuevo})
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[BL] toggle error: {e}")
+        raise HTTPException(500, f"Error al guardar estado: {e}")
+ 
+ 
+@app.get("/api/bl/pdf/{filename}")
+def bl_pdf_download(filename: str):
+    safe = Path(filename).name
+    if not safe.lower().endswith(".pdf"):
+        raise HTTPException(400, "Solo ficheros PDF")
+    for root in _BL_PDF_ROOTS:
+        if not root.exists():
+            continue
+        matches = sorted(root.glob(f"*/{safe}"), reverse=True)
+        if matches:
+            return _FileResponse(str(matches[0]), media_type="application/pdf", filename=safe)
+    raise HTTPException(404, f"PDF no encontrado: {safe}")
 
 if __name__ == "__main__":
     print("=" * 60)
