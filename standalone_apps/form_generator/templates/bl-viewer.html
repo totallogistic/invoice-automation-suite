@@ -65,6 +65,28 @@
     .nav-TRASME   { background:#FFFFFF; color:#dd052b; border:1px solid #dd052b; }
 
     footer { text-align:center; padding:1.25rem; color:#6b7280; font-size:0.8rem; }
+
+    @media print {
+      body { background:white; }
+      header, .filters, .table-meta, footer, .check-h, .thc, .tdc { display:none !important; }
+      main { margin:0; padding:0; max-width:100%; }
+      .stats { display:none !important; }
+      .table-wrap { box-shadow:none; border:none; }
+      table { font-size:10pt; }
+      thead th { background:#1a4d7e !important; color:white !important; -webkit-print-color-adjust:exact; print-color-adjust:exact; padding:6pt 8pt; }
+      tbody td { padding:5pt 8pt; border-bottom:1px solid #e5e7eb !important; }
+      tbody tr.done td { color:#6b7280; background:#f0fdf4 !important; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+      .nav { border:1px solid currentColor !important; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+      #print-header { display:block !important; }
+    }
+    #print-header {
+      display:none;
+      margin-bottom:1rem;
+      border-bottom:2px solid #1a4d7e;
+      padding-bottom:0.5rem;
+    }
+    #print-header h2 { color:#1a4d7e; font-size:14pt; margin-bottom:0.25rem; }
+    #print-header p  { font-size:9pt; color:#6b7280; }
   </style>
 </head>
 <body>
@@ -110,6 +132,12 @@
       <div class="fg"><label>Buscar</label><input type="search" id="f-q" placeholder="Matrícula, nombre, BL…"/></div>
       <button class="btn-f" onclick="cargar()">Filtrar</button>
       <button class="btn-c" onclick="limpiar()">Limpiar</button>
+      <button class="btn-c" onclick="exportarPDF()" style="margin-left:auto;">⬇ Exportar PDF</button>
+    </div>
+
+    <div id="print-header">
+      <h2>📋 Conocimientos de Embarque — ALGECIRAS</h2>
+      <p id="print-meta"></p>
     </div>
 
     <div class="table-wrap">
@@ -135,6 +163,9 @@
       {k:'matricula', h:'Matrícula', mono:true},
       {k:'archivo',   h:'Fichero',   pdf:true},
     ];
+
+    // Columnas para el PDF exportado — sin FICHERO
+    const COLS_PRINT = COLS.filter(c => !c.pdf);
 
     const TODAY = new Date().toISOString().split('T')[0];
 
@@ -211,7 +242,7 @@
       }
       const head = '<th class="thc">Hecho</th>' + COLS.map(c=>`<th>${c.h}</th>`).join('');
       const body = rows.map(r => {
-        const k = `${r.archivo}|${r.naviera}|${r.num_bl}|${r.fecha}`;
+        const k  = `${r.archivo}|${r.naviera}|${r.num_bl}`;
         const ok = r.hecho;
         const chk = `<td class="tdc"><input type="checkbox" class="check-h" data-k="${encodeURIComponent(k)}" ${ok?'checked':''} onchange="toggleHecho(this)"></td>`;
         const cells = COLS.map(c => {
@@ -258,6 +289,83 @@
       document.getElementById('f-hasta').value = TODAY;
       document.getElementById('f-q').value    = '';
       cargar();
+    }
+
+    function exportarPDF() {
+      const desde  = document.getElementById('f-desde').value;
+      const hasta  = document.getElementById('f-hasta').value;
+      const nav    = document.getElementById('f-nav').value;
+      const estado = document.getElementById('f-est').value;
+      const count  = document.getElementById('count').textContent;
+
+      // Construir cabecera de impresión
+      const partes = [];
+      if (desde || hasta) partes.push(`Período: ${desde || '—'} → ${hasta || '—'}`);
+      if (nav)            partes.push(`Naviera: ${nav}`);
+      if (estado === '0') partes.push('Estado: Pendientes');
+      if (estado === '1') partes.push('Estado: Hechos');
+      partes.push(`${count} registros`);
+      partes.push(`Exportado: ${new Date().toLocaleString('es-ES')}`);
+      document.getElementById('print-meta').textContent = partes.join('  ·  ');
+
+      // Reconstruir tabla solo con columnas de impresión
+      const rows = [...document.querySelectorAll('#tbl tbody tr')];
+      const head = COLS_PRINT.map(c => `<th>${c.h}</th>`).join('');
+
+      const body = rows.map(tr => {
+        const tds = [...tr.querySelectorAll('td')];
+        // tds[0] = checkbox (oculto en print), tds[1..] = datos en orden COLS
+        const cells = COLS_PRINT.map((c, i) => {
+          const td = tds[i + 1]; // +1 por el checkbox
+          if (!td) return '<td>—</td>';
+          // Para naviera conservar el badge con sus colores
+          if (c.badge) return `<td>${td.innerHTML}</td>`;
+          return `<td>${td.textContent.trim()}</td>`;
+        }).join('');
+        const done = tr.classList.contains('done') ? ' class="done"' : '';
+        return `<tr${done}>${cells}</tr>`;
+      }).join('');
+
+      const win = window.open('', '_blank');
+      win.document.write(`<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>BL Export ${desde}–${hasta}</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif; padding:1.5cm; font-size:10pt; color:#1f2937; }
+  .hdr { border-bottom:2px solid #1a4d7e; padding-bottom:0.5rem; margin-bottom:1rem; }
+  .hdr h1 { color:#1a4d7e; font-size:14pt; margin-bottom:0.3rem; }
+  .hdr p  { font-size:8.5pt; color:#6b7280; }
+  table { width:100%; border-collapse:collapse; }
+  thead th { background:#1a4d7e; color:white; padding:6pt 8pt; text-align:left; font-size:8.5pt; text-transform:uppercase; letter-spacing:0.3pt; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+  tbody td { padding:5pt 8pt; border-bottom:1px solid #e5e7eb; font-size:9.5pt; }
+  tbody tr.done td { background:#f0fdf4; color:#6b7280; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+  tbody tr.done td:first-child::before { content:'✓ '; color:#059669; font-weight:700; }
+  .nav { display:inline-block; padding:2pt 5pt; border-radius:8pt; font-size:8pt; font-weight:700; border:1pt solid currentColor; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+  .nav-AML      { color:#C8102E; background:#fde8ea; }
+  .nav-BALEARIA { color:#0A2240; background:#e6eaf3; }
+  .nav-DFDS     { color:#002B5C; background:#fff8e1; border-color:#F0AB00; }
+  .nav-RFS      { color:#CC0000; background:#fde8e8; }
+  .nav-TRASME   { color:#C04000; background:#fef0e6; }
+  .footer { margin-top:1rem; font-size:8pt; color:#9ca3af; text-align:right; }
+  @media print { @page { margin:1.5cm; size:A4 landscape; } }
+</style>
+</head>
+<body>
+<div class="hdr">
+  <h1>Conocimientos de Embarque — ALGECIRAS</h1>
+  <p>${partes.join('  ·  ')}</p>
+</div>
+<table>
+  <thead><tr>${head}</tr></thead>
+  <tbody>${body}</tbody>
+</table>
+<div class="footer">totallogistic · BL Viewer · ${new Date().toLocaleString('es-ES')}</div>
+<script>setTimeout(()=>window.print(),400);<\/script>
+</body></html>`);
+      win.document.close();
     }
 
     document.getElementById('f-q').addEventListener('keydown', e => { if(e.key==='Enter') cargar(); });
