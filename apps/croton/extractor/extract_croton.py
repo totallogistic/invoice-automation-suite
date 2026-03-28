@@ -71,6 +71,12 @@ from openpyxl.workbook.views import BookView
 
 EXTRACTOR_DIR = Path(__file__).parent
 DEFAULT_MAPPING_FILE = EXTRACTOR_DIR / "product_mapping.csv"
+# Alternative names the mapping CSV may be saved under
+_MAPPING_CANDIDATES = [
+    "product_mapping.csv",
+    "mapping_partidas_v2.csv",
+    "mapping_partidas.csv",
+]
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 log = logging.getLogger("croton")
@@ -178,6 +184,26 @@ def _has_pol(fibers: Dict[str, float]) -> bool:
 def _is_blanqueado(desc: str) -> bool:
     up = desc.upper()
     return "BLANCO" in up or "BLANCA" in up
+
+
+def _extract_width(desc: str) -> float:
+    """Extract fabric width in metres from description, e.g. 'A 1,60' or 'A 100' (cm)."""
+    m = re.search(r"\bA\s+(\d+(?:[.,]\d+)?)\b", (desc or "").upper())
+    if m:
+        val = float(m.group(1).replace(",", "."))
+        return val / 100.0 if val >= 10 else val   # >=10 → centimetres
+    return 0.0
+
+
+def _calc_gramaje(neto_kg: float, m2: float, cant_total: float = 0.0, desc: str = "") -> Optional[float]:
+    """Return gramaje in g/m².  Uses m2 if available, else cant_total × width."""
+    if m2 and m2 > 0:
+        return neto_kg / m2 * 1000.0
+    if cant_total and cant_total > 0:
+        ancho = _extract_width(desc)
+        if ancho > 0:
+            return neto_kg / (cant_total * ancho) * 1000.0
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -426,17 +452,40 @@ def read_packing(path: str) -> Tuple[List[Dict[str, Any]], str, str, float]:
 # ---------------------------------------------------------------------------
 
 def load_mapping(csv_path: str) -> List[Dict[str, str]]:
+    """
+    Load product mapping CSV.  Accepts two column layouts:
+
+    Classic layout:  CODIGO | DESCRIPCION_CONTAINS | MERCANCIA | PARTIDA
+    Extended layout: CODIGO | DESCRIPCION | … | PARTIDA | DESC_ADUANERA | …
+
+    Both layouts are auto-detected by checking the header row.
+    """
     rules = []
     with open(csv_path, newline="", encoding="utf-8") as f:
-        for row in csv.DictReader(f):
+        reader = csv.DictReader(f)
+        fieldnames = [c.strip().upper() for c in (reader.fieldnames or [])]
+        # Detect layout
+        has_extended = "DESC_ADUANERA" in fieldnames
+        for row in reader:
             codigo = row.get("CODIGO", "").strip()
-            if not codigo or codigo.startswith("#"):
+            if not codigo or codigo.startswith("#") or codigo.startswith("?"):
+                continue
+            if has_extended:
+                # Extended layout: CODIGO is the unique key, no description filter needed.
+                # DESC_ADUANERA is the customs description to use.
+                mercancia = row.get("DESC_ADUANERA", "").strip()
+                contains  = ""   # match by CODIGO only
+            else:
+                mercancia = row.get("MERCANCIA", "").strip()
+                contains  = row.get("DESCRIPCION_CONTAINS", "").strip().upper()
+            partida = row.get("PARTIDA", "").strip()
+            if not partida or not mercancia:
                 continue
             rules.append({
-                "codigo": _norm_ref(codigo),
-                "contains": row.get("DESCRIPCION_CONTAINS", "").strip().upper(),
-                "mercancia": row.get("MERCANCIA", "").strip(),
-                "partida": row.get("PARTIDA", "").strip(),
+                "codigo":   _norm_ref(codigo),
+                "contains": contains,
+                "mercancia": mercancia,
+                "partida":  partida,
             })
     log.info("Loaded %d mapping rules from %s", len(rules), csv_path)
     return rules
@@ -609,103 +658,137 @@ def _contains(text: str, *needles: str) -> bool:
     return any(n.upper() in up for n in needles)
 
 
-def classify_from_text(descripcion: str, referencia: str = "", factura_desc: str = "") -> Tuple[Optional[str], Optional[str], Optional[str]]:
+def classify_from_text(descripcion: str, referencia: str = "", factura_desc: str = "",
+                       gramaje: Optional[float] = None) -> Tuple[Optional[str], Optional[str], Optional[str]]:
     """
     Returns (mercancia_desc, partida_arancelaria, error_msg_or_None).
 
-    Classification logic based on EU customs tariff for textiles.
-    Primary fiber (by weight%) determines the heading:
-    - ALG > 50%: cotton chapter
-    - POL/ACR/PA (synthetic) > ALG: synthetic chapter
-    - When in doubt, use 'predominant fiber' rules
+    EU CN textile classification using fiber composition + gramaje (g/m²):
+
+    SARGAS (twill weave):
+      Sint ≥85%, >170 g/m²  → 5512.xx
+      Sint <85% dominant, >170 g/m² → 5514 (blanqueada=5514120000, teñida=5514220000)
+      Sint <85% dominant, ≤170 g/m² → 5513 (blanqueada=5513112000, teñida=5513210000)
+      ALG ≥85%, >200 g/m²  → 5209 (blanqueada=5209220000, teñida=5209320000)
+      ALG ≥85%, ≤200 g/m²  → 5208.xx (rare)
+      ALG dom. <85% mixed, >200 g/m² → 5211320090
+      ALG dom. <85% mixed, ≤200 g/m² → 5210320090
+
+    TAFETAN/PLANA (plain weave), ≤170 g/m²:
+      Sint ≥85% → 5512199000 (teñida)
+      Sint <85% dominant → 5513210000 (teñida), 5513112000 (blanqueada)
+      ALG dom. → 5210/5211/5208 (uncommon in Croton)
+
+    PUNTO (knitted): no gramaje thresholds, fiber dominance only.
+    FELPA: fiber dominance determines 6001920000 (sint) vs 6001910000 (alg).
+    REJILLA: fiber dominance determines 5804101000 (sint) vs 5804109000 (alg/other).
     """
     desc = (factura_desc or descripcion or "").upper()
     fibers = _extract_fiber_pcts(factura_desc or descripcion or "")
     blanqueado = _is_blanqueado(factura_desc or descripcion or "")
 
+    alg  = fibers.get("ALG", 0.0)
+    pol  = fibers.get("POL", 0.0)
+    # man-made = synthetic (POL, PA, ACR, ACRMOD) + artificial (VISC, MODAL)
+    man_made = sum(v for k, v in fibers.items() if k in ("POL", "PA", "ACR", "ACRMOD", "VISC", "MODAL"))
+    # pure synthetic (not artificial): POL, PA, ACR, ACRMOD
+    sint = sum(v for k, v in fibers.items() if k in ("POL", "PA", "ACR", "ACRMOD"))
+    sint_dominant = man_made > alg  # man-made > cotton → synthetic chapter
+    alg_high = alg >= 85.0          # ≥85% cotton → pure-cotton chapters (5208/5209)
+    sint_high = sint >= 85.0        # ≥85% synthetic → high-sint chapters (5512)
+
+    g = gramaje  # may be None when not calculable
+
     # ---- Accessories / non-fabric ----------------------------------------
     if _contains(desc, "CREMALLERA"):
+        if _contains(desc, "METAL"):
+            return "CREMALLERA DIENTE METAL", "9607110000", None
         return "CREMALLERA DIENTE PLASTICO", "9607190000", None
+    if _contains(desc, "TRANSFER"):
+        return "TRANSFER", "5807909000", None
     if _contains(desc, "ANAGRAMA"):
         return "ANAGRAMAS", "5807101000", None
     if _contains(desc, "ETIQUETA"):
-        return "ETIQUETA CARTON", "4821109000", None
+        if _contains(desc, "CARTON"):
+            return "ETIQUETA CARTON", "4821109000", None
+        return "ETIQUETAS COSER", "5807101000", None
     if _contains(desc, "REFLECTANTE"):
         return "REFLECTANTES", "3920610090", None
 
     # ---- Rejilla (lace / mesh) -------------------------------------------
     if _contains(desc, "REJILLA"):
-        # Always 5804109000 regardless of colour
+        # 5804101000 = man-made fibres; 5804109000 = other (cotton-dominant)
+        if sint_dominant:
+            return "TEJIDOS DE REJILLA DE FIBRAS SINTETICAS", "5804101000", None
         return "TEJIDOS DE REJILLA", "5804109000", None
 
     # ---- Felpa (terry / velour) ------------------------------------------
     if _contains(desc, "FELPA"):
-        return "TEJIDOS DE FELPA DE FIBRAS SINTETICAS", "6001920000", None
+        # Tie (man_made = alg) → synthetic chapter (EU CN last-chapter rule)
+        if man_made >= alg and man_made > 0:
+            return "TEJIDOS DE FELPA DE FIBRAS SINTETICAS", "6001920000", None
+        return "TEJIDOS DE FELPA PRED EL ALGODON", "6001910000", None
 
     # ---- Punto / tejido de punto (knitted) ------------------------------
     if _contains(desc, "PUNTO", "PIQUE", "CANALE"):
-        alg = fibers.get("ALG", 0.0)
-        # EU customs: man-made fibres include polyester, acrylic and viscose/modal.
-        # If man_made >= alg → synthetic chapter; if man_made < alg → cotton chapter.
-        man_made = sum(v for k, v in fibers.items() if k in ("POL", "ACR", "ACRMOD", "VISC", "MODAL"))
-
-        if blanqueado and not _contains(desc, "CANALE"):
-            # Blanqueado synthetic blend
+        if blanqueado:
             return "TEJIDOS DE PUNTO BLANQUEADOS DE FIBRAS SINTETICAS", "6006310000", None
-
-        if _contains(desc, "CANALE") and blanqueado:
-            return "TEJIDOS DE PUNTO BLANQUEADOS DE FIBRAS SINTETICAS", "6006310000", None
-
         if man_made >= alg and man_made > 0:
             return "TEJIDOS TEÑIDOS DE PUNTO DE FIBRAS SINTETICAS MEZCLADOS CON ALGODON", "6006320000", None
-
-        # man_made < alg or purely cotton
         return "TEJIDOS TEÑIDOS DE PUNTO DE ALGODON", "6006220000", None
 
     # ---- Woven SARGA (twill) ---------------------------------------------
     if _contains(desc, "SARGA"):
-        alg = fibers.get("ALG", 0.0)
-        pol = fibers.get("POL", 0.0)
-        sint_dominant = pol > alg  # polyester is the decisive synthetic for sarga
+        # Thresholds: 5513/5514 split at 170 g/m²; 5208/5209 vs 5210/5211 at 200 g/m²
+        g_hi = g is not None and g > 200.0   # >200 g/m²
+        g_mid = g is not None and g > 170.0  # >170 g/m²
 
         if blanqueado:
+            if sint_high:                        # ≥85% sint, blanqueada
+                return "TEJIDOS BLANQUEADOS DE SARGA DE FIBRAS SINTETICAS", "5512120000", None
             if sint_dominant:
-                # Blanqueado, fibras sintéticas mezcladas con algodón
                 return "TEJIDOS BLANQUEADOS DE SARGA DE FIBRAS SINTETICAS MEZCLADOS CON ALGODON", "5514120000", None
-            else:
-                # Blanqueado, algodón mezclado con fibras sintéticas
-                return "TEJIDOS BLANQUEADOS DE SARGA DE ALGODON MEZCLADOS CON FIBRAS SINTETICAS", "5212110000", None
+            if alg_high:
+                return "TEJIDOS BLANQUEADOS DE SARGA DE ALGODON", "5209220000", None
+            # ALG dom. <85% mixed, blanqueada
+            if g_hi:
+                return "TEJIDOS BLANQUEADOS DE SARGA DE ALGODON MEZCLADOS CON FIBRAS SINTETICAS", "5211120090", None
+            return "TEJIDOS BLANQUEADOS DE SARGA DE ALGODON MEZCLADOS CON FIBRAS SINTETICAS", "5210120090", None
 
+        # Teñida
+        if sint_high:                            # ≥85% sint, teñida
+            return "TEJIDOS TEÑIDOS DE SARGA DE FIBRAS SINTETICAS", "5512199000", None
         if sint_dominant:
-            return "TEJIDOS TEÑIDOS DE SARGA DE FIBRAS SINTETICAS MEZCLADAS CON ALGODON", "5514220000", None
-        else:
+            # Sint <85% dominant: 5514 if >170 g/m², 5513 if ≤170 g/m²
+            # Default to 5514 when gramaje unknown (most common case)
+            if g is None or g_mid:
+                return "TEJIDOS TEÑIDOS DE SARGA DE FIBRAS SINTETICAS MEZCLADAS CON ALGODON", "5514220000", None
+            return "TEJIDOS TEÑIDOS DE SARGA DE FIBRAS SINTETICAS MEZCLADAS CON ALGODON", "5513210000", None
+        if alg_high:
+            return "TEJIDOS TEÑIDOS DE SARGA DE ALGODON", "5209320000", None
+        # ALG dom. <85% mixed: 5211 if >200, 5210 if ≤200
+        if g is None or g_hi:
             return "TEJIDOS TEÑIDOS DE SARGA DE ALGODON MEZCLADOS CON FIBRAS SINTETICAS", "5211320090", None
+        return "TEJIDOS TEÑIDOS DE SARGA DE ALGODON MEZCLADOS CON FIBRAS SINTETICAS", "5210320090", None
 
-    # ---- Woven TAFETAN / POPELIN (plain weave) ---------------------------
+    # ---- Woven TAFETAN / POPELIN / PLANA (plain weave) -------------------
     if _contains(desc, "POPELIN", "TAFETAN", "PLANA"):
-        # Distinguish blanqueado vs teñido
-        alg = fibers.get("ALG", 0.0)
-        pol = fibers.get("POL", 0.0)
-        sint_dominant = pol > alg
-
+        # Tafetán/plana are typically ≤170 g/m² → chapters 5512/5513
         if blanqueado:
             if sint_dominant:
                 return "TEJIDOS BLANQUEADOS DE TAFETAN DE FIBRAS SINTETICAS MEZCLADOS CON ALGODON", "5513112000", None
-            else:
-                return "TEJIDOS BLANQUEADOS DE TAFETAN DE ALGODON MEZCLADOS CON FIBRAS SINTETICAS", "5212110000", None
+            return "TEJIDOS BLANQUEADOS DE TAFETAN DE ALGODON", "5208110000", None
 
-        # Teñido
+        if sint_high:                            # ≥85% sint, teñida
+            return "TEJIDOS TEÑIDOS DE TAFETAN DE FIBRAS SINTETICAS", "5512199000", None
         if sint_dominant:
             return "TEJIDOS TEÑIDOS DE TAFETAN DE FIBRAS SINTETICAS MEZCLADOS CON ALGODON", "5513210000", None
-        else:
-            return "TEJIDOS TEÑIDOS DE TAFETAN DE ALGODON MEZCLADOS CON FIBRAS SINTETICAS", "5211420090", None
-
-    # ---- Woven generic (65%POL 35%VISC flat) ----------------------------
-    if _contains(desc, "65%POL 35%VISC"):
-        return "TEJIDOS PLANOS DE FIBRAS SINTETICAS", "5514301000", None
-
-    if _contains(desc, "100%ALG") and _contains(desc, "SARGA"):
-        return "TEJIDOS TEÑIDOS DE SARGA DE ALGODON", "5209320000", None
+        # Specific case from Croton: 65%POL 35%VISC → 5514301000 (plana)
+        visc = fibers.get("VISC", 0.0)
+        if visc > 0 and pol > 0 and not alg:
+            return "TEJIDOS PLANOS DE FIBRAS SINTETICAS", "5514301000", None
+        # ALG dominant tafetan (uncommon, e.g. 100%ALG POPELIN)
+        return "TEJIDOS TEÑIDOS DE TAFETAN DE ALGODON", "5209310000", None
 
     return None, None, "No classification rule matched"
 
@@ -731,7 +814,10 @@ def apply_classification(lineas: List[Dict[str, Any]], factura: Optional[Dict[st
             entries = factura.get(match[0], [])
             if match[1] < len(entries):
                 inv_desc = entries[match[1]].get("descripcion", "")
-        merc, part, err = classify_from_text(l.get("descripcion", ""), l.get("referencia", ""), inv_desc)
+        merc, part, err = classify_from_text(
+            l.get("descripcion", ""), l.get("referencia", ""), inv_desc,
+            gramaje=l.get("gramaje")
+        )
         if merc and part:
             l["mercancia"] = merc
             l["partida_arancel"] = part
@@ -991,9 +1077,30 @@ def process(packing_path: str, output_path: str, factura_path: Optional[str] = N
     lineas, sheet_name, layout, pallet_bruto = read_packing(packing_path)
     log.info("Parsed %d line groups from packing (pallet_bruto=%.2f kg)", len(lineas), pallet_bruto)
 
+    # ── Compute gramaje (g/m²) for each line group ──────────────────────────
+    for l in lineas:
+        g = _calc_gramaje(
+            neto_kg=l.get("neto") or 0.0,
+            m2=l.get("m2") or 0.0,
+            cant_total=l.get("cant_total") or 0.0,
+            desc=l.get("descripcion") or "",
+        )
+        if g and 10.0 < g < 2000.0:   # sanity range
+            l["gramaje"] = round(g, 1)
+        else:
+            l["gramaje"] = None
+
     rules = None
-    csv_path = mapping_path or (str(DEFAULT_MAPPING_FILE) if DEFAULT_MAPPING_FILE.exists() else None)
-    if csv_path and os.path.exists(csv_path):
+    if mapping_path and os.path.exists(mapping_path):
+        csv_path = mapping_path
+    else:
+        # Auto-detect: look for any known mapping filename next to the script
+        csv_path = next(
+            (str(EXTRACTOR_DIR / name) for name in _MAPPING_CANDIDATES
+             if (EXTRACTOR_DIR / name).exists()),
+            None
+        )
+    if csv_path:
         rules = load_mapping(csv_path)
     else:
         log.info("No product mapping CSV provided/found. Continuing with built-in heuristics.")
