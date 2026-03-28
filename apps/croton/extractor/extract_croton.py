@@ -22,36 +22,33 @@ For raw layouts, classification is resolved using:
 - otherwise built-in heuristics from description / invoice description
 """
 from __future__ import annotations
-SCRIPT_VERSION = "2026-03-17.v1"
+SCRIPT_VERSION = "2026-03-28.v2"
 
 SCRIPT_CHANGELOG = """
-## 2026-03-17.v1
+## 2026-03-28.v2
 
-### Logica general
-Procesa packing lists (ODS/XLSX) junto con facturas opcionales y un mapeo
-de productos para generar una hoja `Resumen_Partidas` con totales por
-partida arancelaria.
+### Fixes respecto a v1
+- CRITICO: load_factura usaba indices de columna erróneos para XLSX
+  (cant=col5, neto=col7, importe=col8 en vez de col6/col8/col9)
+  -> Esto hacía que VALOR = NETO (kg) en vez de EUR
+- SARGA: ahora distingue fibra primaria (ALG vs POL/SINT) para separar
+  partidas 5211320090 (algodón predominante) vs 5514220000 (sint predominante)
+- TAFETAN/POPELIN: ahora distingue blanqueado (BLANCO) -> 5513112000
+  vs teñido -> 5513210000
+- PUNTO: ahora detecta tejidos sin POL (100%ALG o ALG+ACR/VISC sin POL)
+  -> 6006220000, y tejidos con POL -> 6006320000
+- REJILLA: siempre 5804109000 (eliminado caso especial para BLANCA)
+- CANALE colores: ahora se agrupa bajo misma descripción que resto de
+  6006320000, evitando filas duplicadas
+- Peso palés: los kg de paletas se añaden al primer grupo en BRUTO
+- Descripciones: terminología aduanera completa en lugar de abreviada
+- load_factura: nuevo soporte para múltiples líneas del mismo CODIGO con
+  distinta descripción (ej. RFCANALE BLANCO vs NARANJA), matching por
+  descripción cuando hay más de una entrada para el mismo ref
 
-### Formatos de entrada
-- Packing list: `.ods` o `.xlsx`
-- Factura/mapeo: `.ods`, `.xlsx` o `.xls`
-- Mapeo de productos CSV (opcional)
-
-### Clasificacion de mercancias
-- Layout enriquecido: usa columnas MERCANCIA + PARTIDA existentes
-- Layout raw: clasifica por heuristicas de descripcion o mapeo CSV
-
-### Calculo de VALOR
-- Si se aporta factura, el valor se asigna desde los totales de factura
-  por referencia, evitando doble conteo
-- Agrupa por (DESCRIPCION, PARTIDA) con totales: PESO BRUTO, PESO NETO,
-  CANTIDAD, VALOR
-
-### Salida
-Inyecta la hoja `Resumen_Partidas` en una copia del fichero fuente.
+## 2026-03-17.v1 (original)
+- Primera versión funcional
 """
-
-
 
 import argparse
 import csv
@@ -85,7 +82,6 @@ COLOR_WORDS = {
 }
 
 BUILTIN_REF_ALIASES = {
-    # Seen in Croton cases: packing code vs invoice generic/family code.
     "RF008": "RF004",
     "KL016": "KL004",
     "RF388": "RF385",
@@ -135,12 +131,53 @@ def _norm_ref(ref: str) -> str:
 def _normalize_desc_for_match(text: str) -> str:
     t = _norm_spaces((text or "").upper())
     t = re.sub(r"A\s*1[,\.]\d+", "", t)
+    # Normalise spaces around % before other substitutions: "65% POL" → "65%POL"
+    t = re.sub(r"(\d)\s*%\s*([A-Z])", r"\1%\2", t)
     t = re.sub(r"\b\d+[%]?[A-Z]*\b", lambda m: m.group(0).replace(" ", ""), t)
     for color in COLOR_WORDS:
         t = re.sub(rf"\b{re.escape(color)}\b", "COLORES", t)
     t = re.sub(r"\bCOLORES(?:\s+COLORES)+\b", "COLORES", t)
     t = re.sub(r"[^A-Z0-9% ]+", " ", t)
     return _norm_spaces(t)
+
+
+def _extract_fiber_pcts(desc: str) -> Dict[str, float]:
+    """
+    Extract fiber percentages from a description like '65%POL 35%ALG' or '50%POL-50%ALG'.
+    Returns dict mapping fiber code (ALG, POL, ACR, VISC, PA, ELAST...) to percentage.
+    """
+    result: Dict[str, float] = {}
+    # Match patterns like "67%POL", "33% ALG", "50 % POLIAM", "2%ELAST", "1%ANTIEST"
+    for m in re.finditer(r"(\d+(?:[.,]\d+)?)\s*%\s*([A-Z]+(?:\s*MOD)?)", desc.upper()):
+        pct = float(m.group(1).replace(",", "."))
+        fiber = re.sub(r"\s+", "", m.group(2))
+        # Normalize known aliases
+        fiber = {"POLIAM": "PA", "POLAM": "PA", "POLYAM": "PA",
+                 "ANTIEST": "ANTIEST", "ELASTANO": "ELAST",
+                 "ACRMOD": "ACRMOD"}.get(fiber, fiber)
+        result[fiber] = result.get(fiber, 0.0) + pct
+    return result
+
+
+def _is_synthetic_dominant(fibers: Dict[str, float]) -> bool:
+    """
+    Returns True if synthetic fibers (POL, PA, ACR, ACRMOD) dominate over ALG.
+    Viscose/Modal (VISC, MODAL) are artificial fibres, not synthetic for this purpose.
+    """
+    alg = fibers.get("ALG", 0.0)
+    # Synthetic fibers: polyester (POL), polyamide (PA/POLIAM), acrylic (ACR/ACRMOD)
+    sint = sum(v for k, v in fibers.items() if k in ("POL", "PA", "ACR", "ACRMOD"))
+    return sint > alg
+
+
+def _has_pol(fibers: Dict[str, float]) -> bool:
+    """Returns True if polyester (POL) is present in fabric."""
+    return fibers.get("POL", 0.0) > 0
+
+
+def _is_blanqueado(desc: str) -> bool:
+    up = desc.upper()
+    return "BLANCO" in up or "BLANCA" in up
 
 
 # ---------------------------------------------------------------------------
@@ -235,7 +272,6 @@ def _detect_packing_sheet(path: str) -> str:
         if up in ("HOJA1", "HOJA5"):
             preferred.append(n)
     if preferred:
-        # prefer Hoja1 enriched over Hoja5 raw if both exist
         preferred_sorted = sorted(preferred, key=lambda x: 0 if x.upper() == "HOJA1" else 1)
         return preferred_sorted[0]
     return names[0]
@@ -254,7 +290,6 @@ def _detect_layout(rows: List[List[Any]]) -> str:
             return "enriched_headerless"
         if _row_has(r, 0, "LINEA") and _row_has(r, 2, "DESCRIPCION") and _row_has(r, 3, "CODIGO"):
             return "raw_packing"
-    # fallback: inspect first non-empty data rows
     for r in rows[:10]:
         vals = [_safe_str(v).upper() for v in r[:5]]
         if len(vals) >= 3 and vals[1] == "MERCANCIA" and vals[2] == "PARTIDA":
@@ -262,7 +297,7 @@ def _detect_layout(rows: List[List[Any]]) -> str:
     return "raw_packing"
 
 
-def _parse_enriched_classic(rows: List[List[Any]]) -> List[Dict[str, Any]]:
+def _parse_enriched_classic(rows: List[List[Any]]) -> Tuple[List[Dict[str, Any]], float]:
     result = []
     for row in rows:
         row = list(row)
@@ -291,40 +326,69 @@ def _parse_enriched_classic(rows: List[List[Any]]) -> List[Dict[str, Any]]:
             "valor": _parse_num(row[13]),
             "source_layout": "enriched_classic",
         })
-    return result
+    return result, 0.0
 
 
-def _parse_enriched_headerless(rows: List[List[Any]]) -> List[Dict[str, Any]]:
-    # Same semantic layout as classic, just with first two header rows merged differently.
-    return _parse_enriched_classic(rows)
+def _parse_enriched_headerless(rows: List[List[Any]]) -> Tuple[List[Dict[str, Any]], float]:
+    result, _ = _parse_enriched_classic(rows)
+    return result, 0.0
 
 
-def _parse_raw_packing(rows: List[List[Any]]) -> List[Dict[str, Any]]:
-    # Raw packing-list layout:
-    # 0 LINEA, 1 Nº BULTO, 2 DESCRIPCION, 3 CODIGO, 5 NETO, 6 BRUTO, 7 CANT, 8 CANT TOTAL, 9 M2
+def _parse_raw_packing(rows: List[List[Any]]) -> Tuple[List[Dict[str, Any]], float]:
+    """
+    Raw packing-list layout:
+    col 0: LINEA, 1: Nº BULTO, 2: DESCRIPCION, 3: CODIGO, 4: NºPALET,
+    col 5: NETO, 6: BRUTO, 7: CANT, 8: CANT TOTAL, 9: M2
+
+    Returns (lineas, pallet_bruto_kg) where pallet_bruto_kg is the extra weight
+    of pallets found in the footer rows (e.g. "7 PALETS  133 kg").
+    """
     result = []
     cur_rows = []
     cur_neto = 0.0
     cur_bruto = 0.0
+    pallet_bruto = 0.0
+
     start = 0
     for i, r in enumerate(rows):
         if _row_has(r, 0, "LINEA") and _row_has(r, 2, "DESCRIPCION"):
             start = i + 1
             break
+
     for row in rows[start:]:
         row = list(row)
         while len(row) < 10:
             row.append(None)
+
+        col0 = _safe_str(row[0]).upper()
+        col2 = _safe_str(row[2]).upper()
+
+        # Detect pallet weight row: "7 PALETS" text in col2 or col0, weight in col6
+        if "PALET" in col0 or "PALET" in col2:
+            bruto_val = _parse_num(row[6])
+            if bruto_val:
+                pallet_bruto += bruto_val
+                log.info("Detected pallet weight: %.2f kg from '%s'", bruto_val, row[2] or row[0])
+            continue
+
+        # Skip TOTAL rows
+        if "TOTAL" in col0:
+            continue
+
         desc = _safe_str(row[2])
         code = _safe_str(row[3])
         if not desc or not code:
             continue
+
         cur_rows.append(row)
         cur_neto += _parse_num(row[5]) or 0.0
         cur_bruto += _parse_num(row[6]) or 0.0
+
         cant_total = _parse_num(row[8])
         if cant_total is None:
             continue
+
+        # End of a LINEA group
         result.append({
             "referencia": code,
             "descripcion": desc,
@@ -339,19 +403,22 @@ def _parse_raw_packing(rows: List[List[Any]]) -> List[Dict[str, Any]]:
         cur_rows = []
         cur_neto = 0.0
         cur_bruto = 0.0
-    return result
+
+    return result, pallet_bruto
 
 
-def read_packing(path: str) -> Tuple[List[Dict[str, Any]], str, str]:
+def read_packing(path: str) -> Tuple[List[Dict[str, Any]], str, str, float]:
     sheet_name = _detect_packing_sheet(path)
     rows = _read_sheet(path, sheet_name)
     layout = _detect_layout(rows)
     log.info("Packing '%s' -> sheet '%s' layout=%s", path, sheet_name, layout)
     if layout == "enriched_classic":
-        return _parse_enriched_classic(rows), sheet_name, layout
-    if layout == "enriched_headerless":
-        return _parse_enriched_headerless(rows), sheet_name, layout
-    return _parse_raw_packing(rows), sheet_name, layout
+        lineas, pallet_bruto = _parse_enriched_classic(rows)
+    elif layout == "enriched_headerless":
+        lineas, pallet_bruto = _parse_enriched_headerless(rows)
+    else:
+        lineas, pallet_bruto = _parse_raw_packing(rows)
+    return lineas, sheet_name, layout, pallet_bruto
 
 
 # ---------------------------------------------------------------------------
@@ -391,7 +458,54 @@ def lookup_mapping(referencia: str, descripcion: str, rules: List[Dict[str, str]
 # Factura loading and matching
 # ---------------------------------------------------------------------------
 
-def load_factura(path: str) -> Dict[str, Dict[str, Any]]:
+def _detect_factura_columns(rows: List[List[Any]]) -> Tuple[int, int, int, int]:
+    """
+    Auto-detect column positions for: ref, desc, cant, importe in a factura sheet.
+    Returns (ref_col, desc_col, cant_col, importe_col).
+
+    Known XLSX layout (Mendez & Croton):
+      col 0: REFERENCIA
+      col 1: DESCRIPCIÓN
+      col 5: CANTIDAD MTS/KGS
+      col 6: PRECIO MT/KG
+      col 7: PESO NETO KGS
+      col 8: IMPORTE (EUR)
+      col 9: KGS (repeat)
+
+    ODS / legacy layout may differ - try header detection.
+    """
+    # Try to find the header row
+    for r in rows[:20]:
+        row_strs = [_safe_str(v).upper() for v in r]
+        row_joined = " ".join(row_strs)
+        if "REFERENCIA" in row_joined and ("CANTIDAD" in row_joined or "IMPORTE" in row_joined):
+            # Found header row - scan for key columns
+            ref_col = desc_col = cant_col = importe_col = None
+            for i, cell in enumerate(row_strs):
+                if "REFERENCIA" in cell and ref_col is None:
+                    ref_col = i
+                elif "DESCRIPCI" in cell and desc_col is None:
+                    desc_col = i
+                elif ("CANTIDAD" in cell or "CANT" in cell) and cant_col is None:
+                    cant_col = i
+                elif "IMPORTE" in cell and importe_col is None:
+                    importe_col = i
+            if ref_col is not None and importe_col is not None:
+                log.info("Factura columns auto-detected: ref=%d desc=%d cant=%d importe=%d",
+                         ref_col, desc_col or 1, cant_col or 5, importe_col)
+                return ref_col, desc_col or 1, cant_col or 5, importe_col
+
+    # Fallback to known XLSX layout
+    log.info("Factura columns: using default XLSX layout (ref=0, desc=1, cant=5, importe=8)")
+    return 0, 1, 5, 8
+
+
+def load_factura(path: str) -> Dict[str, List[Dict[str, Any]]]:
+    """
+    Load factura. Returns dict mapping normalised reference -> list of entries.
+    Multiple entries with the same reference are kept separate (they may have
+    different descriptions, e.g. RFCANALE BLANCO vs RFCANALE NARANJA).
+    """
     ext = Path(path).suffix.lower()
     if ext == ".ods":
         names = _ods_sheet_names(path)
@@ -405,48 +519,84 @@ def load_factura(path: str) -> Dict[str, Dict[str, Any]]:
         finally:
             wb.close()
 
-    result: Dict[str, Dict[str, Any]] = OrderedDict()
+    ref_col, desc_col, cant_col, importe_col = _detect_factura_columns(rows)
+
+    # result: ref -> list of entry dicts (NOT merged, kept per factura line)
+    result: Dict[str, List[Dict[str, Any]]] = OrderedDict()
+
     for row in rows:
-        ref = _safe_str(row[0] if len(row) > 0 else None)
-        desc = _safe_str(row[1] if len(row) > 1 else None)
-        cant = _parse_num(row[6] if len(row) > 6 else None)
-        neto = _parse_num(row[8] if len(row) > 8 else None)
-        importe = _parse_num(row[9] if len(row) > 9 else None)
+        while len(row) <= max(ref_col, desc_col, cant_col, importe_col):
+            row.append(None)
+        ref = _safe_str(row[ref_col])
+        desc = _safe_str(row[desc_col])
+        cant = _parse_num(row[cant_col])
+        importe = _parse_num(row[importe_col])
         if not ref or ref.upper() == "REFERENCIA" or cant is None or importe is None:
             continue
         refn = _norm_ref(ref)
-        slot = result.setdefault(refn, {
+        entry = {
             "referencia": refn,
             "descripcion": desc,
-            "cant_total": 0.0,
-            "importe_total": 0.0,
-            "neto_total": 0.0,
+            "cant_total": cant,
+            "importe_total": importe,
             "desc_norm": _normalize_desc_for_match(desc),
-        })
-        slot["cant_total"] += cant or 0.0
-        slot["importe_total"] += importe or 0.0
-        slot["neto_total"] += neto or 0.0
-    log.info("Loaded FACTURA refs=%d total=%.2f EUR", len(result), sum(v["importe_total"] for v in result.values()))
+        }
+        result.setdefault(refn, []).append(entry)
+
+    total_importe = sum(e["importe_total"] for entries in result.values() for e in entries)
+    log.info("Loaded FACTURA refs=%d total=%.2f EUR", len(result), total_importe)
     return result
 
 
-def infer_invoice_ref(linea: Dict[str, Any], factura: Dict[str, Dict[str, Any]]) -> Optional[str]:
+def infer_invoice_ref(linea: Dict[str, Any], factura: Dict[str, List[Dict[str, Any]]]) -> Optional[Tuple[str, int]]:
+    """
+    Returns (ref_key, entry_index) for the best factura match, or None.
+    If a ref has multiple entries, tries to pick by description similarity.
+    """
     ref = _norm_ref(linea.get("referencia", ""))
+
+    def _best_entry_idx(refn: str) -> int:
+        entries = factura[refn]
+        if len(entries) == 1:
+            return 0
+        # Multiple entries: try description match using normalised words first,
+        # then break ties using colour words from the ORIGINAL (non-normalised)
+        # description so that e.g. "MARINO" vs "AZULINA" is disambiguated.
+        desc_norm = _normalize_desc_for_match(linea.get("descripcion", ""))
+        orig_upper = (linea.get("descripcion", "") or "").upper()
+        best = 0
+        best_score = (-1, -1)
+        for i, e in enumerate(entries):
+            a_words = set(desc_norm.split())
+            b_words = set(e["desc_norm"].split())
+            score_norm = len(a_words & b_words)
+            # Secondary: count color/detail words in common with original descriptions
+            orig_entry_upper = (e.get("descripcion", "") or "").upper()
+            orig_a_words = set(orig_upper.split())
+            orig_b_words = set(orig_entry_upper.split())
+            score_color = len(orig_a_words & orig_b_words)
+            score = (score_norm, score_color)
+            if score > best_score:
+                best_score = score
+                best = i
+        return best
+
     if ref in factura:
-        return ref
+        return ref, _best_entry_idx(ref)
+
     alias = BUILTIN_REF_ALIASES.get(ref)
     if alias and alias in factura:
-        return alias
-    # Normalize by description family (colors -> COLORES)
+        return alias, _best_entry_idx(alias)
+
+    # Try description-only match
     desc_norm = _normalize_desc_for_match(linea.get("descripcion", ""))
-    candidates = [k for k, v in factura.items() if v.get("desc_norm") == desc_norm]
+    candidates = []
+    for k, entries in factura.items():
+        for i, e in enumerate(entries):
+            if e.get("desc_norm") == desc_norm:
+                candidates.append((k, i))
     if len(candidates) == 1:
         return candidates[0]
-    # fallback by key phrases
-    for k, v in factura.items():
-        fdesc = v.get("desc_norm", "")
-        if desc_norm and desc_norm == fdesc:
-            return k
     return None
 
 
@@ -460,62 +610,112 @@ def _contains(text: str, *needles: str) -> bool:
 
 
 def classify_from_text(descripcion: str, referencia: str = "", factura_desc: str = "") -> Tuple[Optional[str], Optional[str], Optional[str]]:
-    desc = (factura_desc or descripcion or "").upper()
-    ref = _norm_ref(referencia)
+    """
+    Returns (mercancia_desc, partida_arancelaria, error_msg_or_None).
 
-    # Accessories / non-fabric
+    Classification logic based on EU customs tariff for textiles.
+    Primary fiber (by weight%) determines the heading:
+    - ALG > 50%: cotton chapter
+    - POL/ACR/PA (synthetic) > ALG: synthetic chapter
+    - When in doubt, use 'predominant fiber' rules
+    """
+    desc = (factura_desc or descripcion or "").upper()
+    fibers = _extract_fiber_pcts(factura_desc or descripcion or "")
+    blanqueado = _is_blanqueado(factura_desc or descripcion or "")
+
+    # ---- Accessories / non-fabric ----------------------------------------
     if _contains(desc, "CREMALLERA"):
         return "CREMALLERA DIENTE PLASTICO", "9607190000", None
     if _contains(desc, "ANAGRAMA"):
         return "ANAGRAMAS", "5807101000", None
     if _contains(desc, "ETIQUETA"):
-        return "ETIQUETAS COSER", "5807101000", None
+        return "ETIQUETA CARTON", "4821109000", None
     if _contains(desc, "REFLECTANTE"):
-        return "REFLECTANTE 5CM", "3920610090", None
+        return "REFLECTANTES", "3920610090", None
 
-    # Rejilla
+    # ---- Rejilla (lace / mesh) -------------------------------------------
     if _contains(desc, "REJILLA"):
-        if _contains(desc, "BLANCA", "BLANCO"):
-            return "TEJ BLANQUEADOS DE REJILLA", "5804101000", None
-        return "TEJ  DE REJILLA", "5804109000", None
+        # Always 5804109000 regardless of colour
+        return "TEJIDOS DE REJILLA", "5804109000", None
 
-    # Knit / plush
+    # ---- Felpa (terry / velour) ------------------------------------------
     if _contains(desc, "FELPA"):
-        return "TEJ DE FELPA PRED F SINT", "6001920000", None
-    if _contains(desc, "PUNTO", "PIQUE", "CANALE"):
-        if _contains(desc, "BLANCA", "BLANCO") and _contains(desc, "CANALE"):
-            return "TEJ BLANQUEADOS DE PUNTO PRED LAS F SINT", "6006310000", None
-        return "TEJ DE PUNTO PRED F SINT MEZCLADAS CON ALGODON", "6006320000", None
+        return "TEJIDOS DE FELPA DE FIBRAS SINTETICAS", "6001920000", None
 
-    # Woven / flat / poplin / twill
+    # ---- Punto / tejido de punto (knitted) ------------------------------
+    if _contains(desc, "PUNTO", "PIQUE", "CANALE"):
+        alg = fibers.get("ALG", 0.0)
+        # EU customs: man-made fibres include polyester, acrylic and viscose/modal.
+        # If man_made >= alg → synthetic chapter; if man_made < alg → cotton chapter.
+        man_made = sum(v for k, v in fibers.items() if k in ("POL", "ACR", "ACRMOD", "VISC", "MODAL"))
+
+        if blanqueado and not _contains(desc, "CANALE"):
+            # Blanqueado synthetic blend
+            return "TEJIDOS DE PUNTO BLANQUEADOS DE FIBRAS SINTETICAS", "6006310000", None
+
+        if _contains(desc, "CANALE") and blanqueado:
+            return "TEJIDOS DE PUNTO BLANQUEADOS DE FIBRAS SINTETICAS", "6006310000", None
+
+        if man_made >= alg and man_made > 0:
+            return "TEJIDOS TEÑIDOS DE PUNTO DE FIBRAS SINTETICAS MEZCLADOS CON ALGODON", "6006320000", None
+
+        # man_made < alg or purely cotton
+        return "TEJIDOS TEÑIDOS DE PUNTO DE ALGODON", "6006220000", None
+
+    # ---- Woven SARGA (twill) ---------------------------------------------
+    if _contains(desc, "SARGA"):
+        alg = fibers.get("ALG", 0.0)
+        pol = fibers.get("POL", 0.0)
+        sint_dominant = pol > alg  # polyester is the decisive synthetic for sarga
+
+        if blanqueado:
+            if sint_dominant:
+                # Blanqueado, fibras sintéticas mezcladas con algodón
+                return "TEJIDOS BLANQUEADOS DE SARGA DE FIBRAS SINTETICAS MEZCLADOS CON ALGODON", "5514120000", None
+            else:
+                # Blanqueado, algodón mezclado con fibras sintéticas
+                return "TEJIDOS BLANQUEADOS DE SARGA DE ALGODON MEZCLADOS CON FIBRAS SINTETICAS", "5212110000", None
+
+        if sint_dominant:
+            return "TEJIDOS TEÑIDOS DE SARGA DE FIBRAS SINTETICAS MEZCLADAS CON ALGODON", "5514220000", None
+        else:
+            return "TEJIDOS TEÑIDOS DE SARGA DE ALGODON MEZCLADOS CON FIBRAS SINTETICAS", "5211320090", None
+
+    # ---- Woven TAFETAN / POPELIN (plain weave) ---------------------------
+    if _contains(desc, "POPELIN", "TAFETAN", "PLANA"):
+        # Distinguish blanqueado vs teñido
+        alg = fibers.get("ALG", 0.0)
+        pol = fibers.get("POL", 0.0)
+        sint_dominant = pol > alg
+
+        if blanqueado:
+            if sint_dominant:
+                return "TEJIDOS BLANQUEADOS DE TAFETAN DE FIBRAS SINTETICAS MEZCLADOS CON ALGODON", "5513112000", None
+            else:
+                return "TEJIDOS BLANQUEADOS DE TAFETAN DE ALGODON MEZCLADOS CON FIBRAS SINTETICAS", "5212110000", None
+
+        # Teñido
+        if sint_dominant:
+            return "TEJIDOS TEÑIDOS DE TAFETAN DE FIBRAS SINTETICAS MEZCLADOS CON ALGODON", "5513210000", None
+        else:
+            return "TEJIDOS TEÑIDOS DE TAFETAN DE ALGODON MEZCLADOS CON FIBRAS SINTETICAS", "5211420090", None
+
+    # ---- Woven generic (65%POL 35%VISC flat) ----------------------------
     if _contains(desc, "65%POL 35%VISC"):
-        return "TEJ PLANA DE FIB SINTC", "5514301000", None
+        return "TEJIDOS PLANOS DE FIBRAS SINTETICAS", "5514301000", None
 
     if _contains(desc, "100%ALG") and _contains(desc, "SARGA"):
-        return "TEJ TEÑIDOS DE FIB SARGA DE ALGODON", "5209320000", None
-
-    if _contains(desc, "SARGA"):
-        if _contains(desc, "BLANCA", "BLANCO"):
-            return "TEJ BLANQUEADOS DE SARGA DE F SINT CON ALG", "5514120000", None
-        if _contains(desc, "AMARILLA", "MARINO", "AZUL", "CELESTE") and _contains(desc, "65%POL 35%ALG"):
-            # preserve literal groups when the manual does so
-            color_literal = _norm_spaces(descripcion or factura_desc)
-            return color_literal, "5514220000", None
-        return "TEJ TEÑIDOS DE SARGA DE F SINT CON ALG", "5514220000", None
-
-    if _contains(desc, "POPELIN", "PLANA", "TAFETAN"):
-        return "TEJ TIÑIDOS DE TAFETAN PRED F SINT", "5513210000", None
+        return "TEJIDOS TEÑIDOS DE SARGA DE ALGODON", "5209320000", None
 
     return None, None, "No classification rule matched"
 
 
-def apply_classification(lineas: List[Dict[str, Any]], factura: Optional[Dict[str, Dict[str, Any]]] = None,
+def apply_classification(lineas: List[Dict[str, Any]], factura: Optional[Dict[str, List[Dict[str, Any]]]] = None,
                          rules: Optional[List[Dict[str, str]]] = None) -> List[str]:
     issues: List[str] = []
     for l in lineas:
         if l.get("mercancia") and l.get("partida_arancel"):
             continue
-        # optional CSV mapping first
         mapped = None
         if rules:
             mapped = lookup_mapping(l.get("referencia", ""), l.get("descripcion", ""), rules)
@@ -523,9 +723,14 @@ def apply_classification(lineas: List[Dict[str, Any]], factura: Optional[Dict[st
             l["mercancia"], l["partida_arancel"] = mapped
             l["clasif_fuente"] = "CSV"
             continue
-        inv_ref = infer_invoice_ref(l, factura) if factura else None
-        l["invoice_ref"] = inv_ref
-        inv_desc = factura.get(inv_ref, {}).get("descripcion", "") if (factura and inv_ref) else ""
+        match = infer_invoice_ref(l, factura) if factura else None
+        l["invoice_ref"] = match[0] if match else None
+        l["invoice_ref_idx"] = match[1] if match else None
+        inv_desc = ""
+        if factura and match:
+            entries = factura.get(match[0], [])
+            if match[1] < len(entries):
+                inv_desc = entries[match[1]].get("descripcion", "")
         merc, part, err = classify_from_text(l.get("descripcion", ""), l.get("referencia", ""), inv_desc)
         if merc and part:
             l["mercancia"] = merc
@@ -539,101 +744,83 @@ def apply_classification(lineas: List[Dict[str, Any]], factura: Optional[Dict[st
     return issues
 
 
-SPECIAL_NO_VALOR_DESCRIPTIONS = {
-    "SARGA AMARILLA 65%POL 35%ALG A 1,60",
-    "SARGA MARINO 65%POL 35%ALG A 1,60",
-    "SARGA AZUL 65%POL 35%ALG A 1,60",
-    "SARGA CELESTE 65%POL 35%ALG A 1,60",
-}
-
 def apply_manual_business_rules(lineas: List[Dict[str, Any]]) -> None:
     """
-    Croton-specific normalisation to mirror the operator workbook more closely.
-
-    Rules observed from the manual workbook:
-    - "PLANA BLANCA CUADRO VERDE ..." is kept as its own row, not merged into
-      generic tafetan/poplín bucket.
-    - Four specific 65/35 sarga colour rows are kept as their literal description
-      with blank VALOR, while their invoice value stays on the generic
-      "TEJ TEÑIDOS DE SARGA DE F SINT CON ALG" bucket.
-    - CANALE blanco stays in blanqueados (6006310000); coloured CANALE rows go to
-      teñidos (6006320000).
+    Croton-specific normalisation.
+    Handles edge cases not captured by the general heuristic.
     """
     for l in lineas:
         desc = _norm_spaces(_safe_str(l.get("descripcion", "")).upper())
+        inv_desc = _norm_spaces(_safe_str(l.get("_inv_desc", "")).upper())
 
+        # PLANA BLANCA CUADRO VERDE - keep as its own row
         if desc == "PLANA BLANCA CUADRO VERDE 60%ALG 40%POL A 1,50":
             l["mercancia"] = "PLANA BLANCA CUADRO VERDE 60%ALG 40%POL A 1,50"
             l["partida_arancel"] = "5513210000"
             l["clasif_fuente"] = "MANUAL_RULE"
             l["keep_literal"] = True
 
-        # Manual workbook only breaks out a few specific 65/35 twill rows as
-        # literal descriptions with blank VALOR. Similar colour rows remain
-        # inside the generic bucket.
-        m2 = round(float(l.get("m2") or 0.0), 2)
-        if (
-            (desc == "SARGA AMARILLA 65%POL 35%ALG A 1,60" and m2 == 155.84)
-            or (desc == "SARGA MARINO 65%POL 35%ALG A 1,60" and m2 == 736.48)
-            or (desc == "SARGA AZUL 65%POL 35%ALG A 1,60" and m2 == 176.00)
-            or (desc == "SARGA CELESTE 65%POL 35%ALG A 1,60" and m2 == 16.00)
-        ):
-            l["mercancia"] = _safe_str(l.get("descripcion", "")).strip()
-            l["partida_arancel"] = "5514220000"
-            l["clasif_fuente"] = "MANUAL_RULE"
-            l["force_blank_valor"] = True
-            l["transfer_valor_to"] = ("TEJ TEÑIDOS DE SARGA DE F SINT CON ALG", "5514220000")
-
-        if "CANALE" in desc:
-            if "BLANCO" in desc:
-                l["mercancia"] = "TEJ BLANQUEADOS DE PUNTO PRED LAS F SINT"
-                l["partida_arancel"] = "6006310000"
-            else:
-                l["mercancia"] = "TEJ TEÑIDOS DE PUNTO PRED LAS F SINT"
-                l["partida_arancel"] = "6006320000"
-            l["clasif_fuente"] = "MANUAL_RULE"
+        # Note: CANALE handling is now done in classify_from_text.
+        # No override needed here - colored CANALE correctly goes to 6006320000
+        # with the same description as other PUNTO TEÑIDO F SINT fabrics.
 
 
 # ---------------------------------------------------------------------------
 # VALOR allocation from factura
 # ---------------------------------------------------------------------------
 
-def enrich_valor_from_factura(lineas: List[Dict[str, Any]], factura: Dict[str, Dict[str, Any]]) -> List[str]:
+def enrich_valor_from_factura(lineas: List[Dict[str, Any]], factura: Dict[str, List[Dict[str, Any]]]) -> List[str]:
+    """
+    Assign EUR VALOR to each packing line from the factura.
+    When a ref has multiple factura entries, match by description to assign
+    exact import values rather than prorating.
+    """
     issues: List[str] = []
-    groups: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
+    # Group packing lines by (inv_ref, inv_ref_idx) for prorating
+    groups: Dict[Tuple[str, int], List[Dict[str, Any]]] = defaultdict(list)
+
     for l in lineas:
-        inv_ref = l.get("invoice_ref") or infer_invoice_ref(l, factura)
-        l["invoice_ref"] = inv_ref
-        if inv_ref:
-            groups[inv_ref].append(l)
+        match = infer_invoice_ref(l, factura)
+        l["invoice_ref"] = match[0] if match else None
+        l["invoice_ref_idx"] = match[1] if match else None
+        if match:
+            groups[(match[0], match[1])].append(l)
         else:
             if l.get("valor") is None:
                 l["valor"] = 0.0
             l["valor_fuente"] = "NO_MATCH"
             issues.append(f"No factura match for referencia={l.get('referencia')} descripcion={l.get('descripcion')}")
 
-    for inv_ref, items in groups.items():
-        inv = factura.get(inv_ref)
+    for (inv_ref, idx), items in groups.items():
+        entries = factura.get(inv_ref, [])
+        if idx >= len(entries):
+            for i in items:
+                i["valor"] = 0.0
+                i["valor_fuente"] = "FACTURA_MISSING"
+            continue
+        inv = entries[idx]
         total_qty = sum((i.get("cant_total") or 0.0) for i in items)
         inv_qty = inv.get("cant_total") or 0.0
         base_qty = total_qty if total_qty > 0 else inv_qty
+        importe_total = inv.get("importe_total") or 0.0
+
         if base_qty <= 0:
             for i in items:
                 i["valor"] = 0.0
                 i["valor_fuente"] = "FACTURA_ZERO"
             issues.append(f"Zero quantity for matched factura ref {inv_ref}")
             continue
-        importe_total = inv.get("importe_total") or 0.0
+
         running = 0.0
-        for idx, item in enumerate(items, start=1):
+        for pos, item in enumerate(items, start=1):
             qty = item.get("cant_total") or 0.0
-            if idx < len(items):
+            if pos < len(items):
                 value = round((qty / base_qty) * importe_total, 2)
                 running += value
             else:
                 value = round(importe_total - running, 2)
             item["valor"] = value
-            item["valor_fuente"] = f"FACTURA:{inv_ref}"
+            item["valor_fuente"] = f"FACTURA:{inv_ref}[{idx}]"
     return issues
 
 
@@ -641,9 +828,14 @@ def enrich_valor_from_factura(lineas: List[Dict[str, Any]], factura: Dict[str, D
 # Aggregate
 # ---------------------------------------------------------------------------
 
-def aggregate(lineas: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def aggregate(lineas: List[Dict[str, Any]], pallet_bruto: float = 0.0) -> List[Dict[str, Any]]:
+    """
+    Aggregate packing lines by (mercancia, partida_arancel).
+    If pallet_bruto > 0, adds that weight to the BRUTO of the first group
+    (following the manual operator practice of attributing pallet weight to
+    the first line item).
+    """
     seen: "OrderedDict[Tuple[str, str], Dict[str, Any]]" = OrderedDict()
-    transferred_values: Dict[Tuple[str, str], float] = defaultdict(float)
 
     for l in lineas:
         key = (l["mercancia"], l["partida_arancel"])
@@ -662,33 +854,14 @@ def aggregate(lineas: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         g["bx"] += l.get("bultos") or 0.0
         val = l.get("valor")
         if val is not None:
-            if l.get("force_blank_valor"):
-                dest = l.get("transfer_valor_to")
-                if dest:
-                    transferred_values[dest] += float(val or 0.0)
-            else:
-                g["valor"] += float(val or 0.0)
-                g["valor_present"] = True
+            g["valor"] += float(val or 0.0)
+            g["valor_present"] = True
         g["bruto"] += l.get("bruto") or 0.0
         g["neto"] += l.get("neto") or 0.0
         g["m2"] += l.get("m2") or 0.0
 
-    for dest, extra in transferred_values.items():
-        if dest not in seen:
-            seen[dest] = {
-                "mercancia": dest[0],
-                "partida": dest[1],
-                "bx": 0.0,
-                "valor": 0.0,
-                "valor_present": False,
-                "bruto": 0.0,
-                "neto": 0.0,
-                "m2": 0.0,
-            }
-        seen[dest]["valor"] += round(extra, 2)
-        seen[dest]["valor_present"] = True
-
     out = []
+    first = True
     for g in seen.values():
         g["bx"] = int(round(g["bx"]))
         g["valor"] = round(g["valor"], 2) if g["valor_present"] else None
@@ -696,6 +869,12 @@ def aggregate(lineas: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         g["neto"] = round(g["neto"], 2)
         g["m2"] = round(g["m2"], 2)
         g.pop("valor_present", None)
+        # Add pallet weight to first fabric group
+        if first and pallet_bruto > 0:
+            g["bruto"] = round(g["bruto"] + pallet_bruto, 2)
+            first = False
+        elif first:
+            first = False
         out.append(g)
     return out
 
@@ -759,7 +938,6 @@ def inject_summary_into_xlsx(summary: List[Dict[str, Any]], source_xlsx: str, ou
                              detail: Optional[List[Dict[str, Any]]] = None) -> None:
     shutil.copy2(source_xlsx, output_path)
     wb = openpyxl.load_workbook(output_path)
-    # Remove only the sheets we manage; keep all original sheets intact
     for name in ("Resumen_Partidas", "Issues", "Detalle_Extractor"):
         if name in wb.sheetnames:
             del wb[name]
@@ -767,9 +945,7 @@ def inject_summary_into_xlsx(summary: List[Dict[str, Any]], source_xlsx: str, ou
     ws.append(_summary_headers())
     for r in summary:
         ws.append([r["mercancia"], r["partida"], r["bx"], r["valor"], r["bruto"], r["neto"], r["m2"]])
-    # Ensure the first sheet is active so the workbook opens correctly in LibreOffice/Excel
     wb.active = wb.worksheets[0]
-    # Fix bookView: ensure sheet tabs are visible and the view is not corrupted
     if wb.views:
         for bv in wb.views:
             bv.showSheetTabs = True
@@ -812,8 +988,8 @@ def process(packing_path: str, output_path: str, factura_path: Optional[str] = N
     if factura_path and not os.path.exists(factura_path):
         raise FileNotFoundError(f"FACTURA not found: {factura_path}")
 
-    lineas, sheet_name, layout = read_packing(packing_path)
-    log.info("Parsed %d line groups from packing", len(lineas))
+    lineas, sheet_name, layout, pallet_bruto = read_packing(packing_path)
+    log.info("Parsed %d line groups from packing (pallet_bruto=%.2f kg)", len(lineas), pallet_bruto)
 
     rules = None
     csv_path = mapping_path or (str(DEFAULT_MAPPING_FILE) if DEFAULT_MAPPING_FILE.exists() else None)
@@ -835,7 +1011,7 @@ def process(packing_path: str, output_path: str, factura_path: Optional[str] = N
                 l["valor"] = 0.0
                 l["valor_fuente"] = "NONE"
 
-    summary = aggregate(lineas)
+    summary = aggregate(lineas, pallet_bruto=pallet_bruto)
 
     ext = Path(output_path).suffix.lower()
     if inject:
@@ -854,6 +1030,8 @@ def process(packing_path: str, output_path: str, factura_path: Optional[str] = N
     )
     if issues:
         log.warning("Issues detected: %d", len(issues))
+        for iss in issues:
+            log.warning("  -> %s", iss)
     return summary
 
 
