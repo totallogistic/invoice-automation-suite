@@ -211,7 +211,7 @@
       }
       const head = '<th class="thc">Hecho</th>' + COLS.map(c=>`<th>${c.h}</th>`).join('');
       const body = rows.map(r => {
-        const k  = `${r.archivo}|${r.naviera}|${r.num_bl}`;
+        const k = `${r.archivo}|${r.naviera}|${r.num_bl}|${r.fecha}`;
         const ok = r.hecho;
         const chk = `<td class="tdc"><input type="checkbox" class="check-h" data-k="${encodeURIComponent(k)}" ${ok?'checked':''} onchange="toggleHecho(this)"></td>`;
         const cells = COLS.map(c => {

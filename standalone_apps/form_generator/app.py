@@ -1085,7 +1085,7 @@ def bl_registros(
     estado    = _bl_leer_estado()
  
     for r in registros:
-        clave = f"{r.get('archivo','')}|{r.get('naviera','')}|{r.get('num_bl','')}"
+        clave = f"{r.get('archivo','')}|{r.get('naviera','')}|{r.get('num_bl','')}|{r.get('fecha','')}"
         r["hecho"] = estado.get(clave, False)
  
     if naviera:
