@@ -44,6 +44,7 @@ services:
       - MAIL_TO_CROTON=${MAIL_TO_CROTON:-}
       - MAIL_TO_CAMION=${MAIL_TO_CAMION:-}
       - MAIL_TO_CROTON_IMPORT=${MAIL_TO_CROTON_IMPORT:-}
+      - MAIL_TO_BL=${MAIL_TO_BL:-}
     volumes:
       - ${DATA_ROOT:-/data}:/data
       - ./config:/config:ro

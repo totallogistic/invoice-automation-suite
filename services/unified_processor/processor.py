@@ -172,6 +172,28 @@ class UnifiedProcessor:
             body = self._build_email_body(batch_id, file_count, output_path, artifacts)
             self.email_service.send(recipients, subject, body, artifacts)
         
+        if tool.bl_mode:
+            try:
+                report_script = Path("/apps/bl/extractor/bl_report.py")
+                if report_script.exists():
+                    result_report = subprocess.run(
+                        ["python3", str(report_script)],
+                        capture_output=True, text=True,
+                        env={
+                            **os.environ,
+                            "BL_CSV_DIR": os.getenv("BL_CSV_DIR",
+                                str(Path(os.getenv("BL_DATA_ROOT", "/data/bl")) / "csv")),
+                        }
+                    )
+                    if result_report.returncode == 0:
+                        logger.info(f"[{tool.name}] Reporte BL enviado")
+                    else:
+                        logger.warning(f"[{tool.name}] Reporte BL falló: {result_report.stderr.strip()}")
+                else:
+                    logger.warning(f"[{tool.name}] bl_report.py no encontrado en {report_script}")
+            except Exception as e:
+                logger.warning(f"[{tool.name}] Error en post-proceso BL: {e}")
+       
         # Done — processed_files carries the final count into the DONE state
         status_mgr.update_status(
             batch_id=batch_id,
