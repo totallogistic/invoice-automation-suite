@@ -24,6 +24,8 @@ from email.mime.base import MIMEBase
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from pathlib import Path
+import shutil
+
 
 log = logging.getLogger("bl-report")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -242,9 +244,19 @@ def main():
     html     = generar_html(registros, fecha)
     tag      = fecha.replace("-", "")
     pdf_path = BL_CSV_DIR / f"bl_informe_{tag}.pdf"
+    
 
     if not generar_pdf(html, pdf_path):
         sys.exit(1)
+
+    BL_PRINT_FOLDER = os.getenv("BL_PRINT_FOLDER", "")
+    if BL_PRINT_FOLDER:
+        dest = Path(BL_PRINT_FOLDER)
+        if dest.exists():
+            shutil.copy(pdf_path, dest / pdf_path.name)
+            log.info("PDF enviado a impresora: %s", dest)
+        else:
+            log.warning("Carpeta de impresión no accesible: %s", dest)
 
     enviar_email(pdf_path, registros, fecha)
 

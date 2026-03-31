@@ -45,11 +45,14 @@ services:
       - MAIL_TO_CAMION=${MAIL_TO_CAMION:-}
       - MAIL_TO_CROTON_IMPORT=${MAIL_TO_CROTON_IMPORT:-}
       - MAIL_TO_BL=${MAIL_TO_BL:-}
+      - BL_PRINT_FOLDER=${BL_PRINT_FOLDER:-}
     volumes:
       - ${DATA_ROOT:-/data}:/data
       - ./config:/config:ro
       - ./apps:/apps:ro
       - ./libs/iasuite_common:/usr/local/lib/python3.12/site-packages/iasuite_common:ro
+      - /mnt/canon-hotfolder:/mnt/canon-hotfolder
+
     depends_on:
       - unified_api
 
