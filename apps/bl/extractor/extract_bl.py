@@ -303,15 +303,41 @@ CAMPOS_CSV = [f.name for f in fields(RegistroBL)]
 
 
 def guardar_csv(registros: list, ruta: str) -> None:
+    # Leer claves ya existentes para evitar duplicados
+    claves_existentes: set[tuple] = set()
+    if os.path.isfile(ruta):
+        with open(ruta, newline="", encoding="utf-8") as fh:
+            for row in csv.DictReader(fh):
+                claves_existentes.add((
+                    row.get("archivo", ""),
+                    row.get("naviera", ""),
+                    row.get("num_bl", ""),
+                    row.get("fecha", ""),
+                ))
+
+    nuevos = []
+    for rec in registros:
+        clave = (rec.archivo, rec.naviera, rec.num_bl, rec.fecha)
+        if clave in claves_existentes:
+            log.warning("Duplicado ignorado: %s / %s / %s", rec.naviera, rec.num_bl, rec.fecha)
+        else:
+            nuevos.append(rec)
+            claves_existentes.add(clave)
+
+    if not nuevos:
+        log.info("Nada nuevo que guardar — todos los registros ya existían en %s", ruta)
+        return
+
     existe = os.path.isfile(ruta)
     with open(ruta, "a", newline="", encoding="utf-8") as fh:
         writer = csv.DictWriter(fh, fieldnames=CAMPOS_CSV, quoting=csv.QUOTE_ALL)
         if not existe:
             writer.writeheader()
-        for rec in registros:
+        for rec in nuevos:
             fila = {k: str(v) if v is not None else "" for k, v in asdict(rec).items()}
             writer.writerow(fila)
-    log.info("Guardados %d registro(s) en %s", len(registros), ruta)
+    log.info("Guardados %d registro(s) nuevos en %s (ignorados %d duplicados)",
+             len(nuevos), ruta, len(registros) - len(nuevos))
 
 
 # ── CLI ──────────────────────────────────────────────────────────────────────
