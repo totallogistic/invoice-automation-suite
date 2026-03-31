@@ -319,6 +319,25 @@ def _parse_raw_packing(rows: List[List[Any]]) -> List[Dict[str, Any]]:
         code = _safe_str(row[3])
         if not desc or not code:
             continue
+
+        # Packaging / logistics rows do not carry CANT TOTAL and must not pollute
+        # the rolling textile block totals, but we still keep them so their bruto
+        # can be reassigned later if needed.
+        if _contains(desc, "PALET") or _norm_ref(code) == "PALET":
+            result.append({
+                "referencia": code,
+                "descripcion": desc,
+                "cant_total": 0.0,
+                "m2": None,
+                "neto": 0.0,
+                "bruto": round(_parse_num(row[6]) or 0.0, 2),
+                "bultos": 0.0,
+                "valor": None,
+                "source_layout": "raw_packing",
+                "is_packaging": True,
+            })
+            continue
+
         cur_rows.append(row)
         cur_neto += _parse_num(row[5]) or 0.0
         cur_bruto += _parse_num(row[6]) or 0.0
@@ -460,8 +479,15 @@ def _contains(text: str, *needles: str) -> bool:
 
 
 def classify_from_text(descripcion: str, referencia: str = "", factura_desc: str = "") -> Tuple[Optional[str], Optional[str], Optional[str]]:
-    desc = (factura_desc or descripcion or "").upper()
+    # Use the packing description as primary truth. Invoice descriptions are too
+    # generic and were causing over-normalisation of rows that the operator keeps
+    # separate in the manual workbook.
+    desc = (descripcion or factura_desc or "").upper()
     ref = _norm_ref(referencia)
+
+    # Packaging / logistics
+    if _contains(desc, "PALET") or ref == "PALET":
+        return "PALET", "PALET", None
 
     # Accessories / non-fabric
     if _contains(desc, "CREMALLERA"):
@@ -482,29 +508,31 @@ def classify_from_text(descripcion: str, referencia: str = "", factura_desc: str
     # Knit / plush
     if _contains(desc, "FELPA"):
         return "TEJ DE FELPA PRED F SINT", "6001920000", None
-    if _contains(desc, "PUNTO", "PIQUE", "CANALE"):
-        if _contains(desc, "BLANCA", "BLANCO") and _contains(desc, "CANALE"):
+    if _contains(desc, "CANALE"):
+        if _contains(desc, "BLANCA", "BLANCO"):
             return "TEJ BLANQUEADOS DE PUNTO PRED LAS F SINT", "6006310000", None
+        return "TEJ TEÑIDOS DE PUNTO PRED LAS F SINT", "6006320000", None
+    if _contains(desc, "PUNTO", "PIQUE"):
         return "TEJ DE PUNTO PRED F SINT MEZCLADAS CON ALGODON", "6006320000", None
 
     # Woven / flat / poplin / twill
     if _contains(desc, "65%POL 35%VISC"):
         return "TEJ PLANA DE FIB SINTC", "5514301000", None
 
-    if _contains(desc, "100%ALG") and _contains(desc, "SARGA"):
-        return "TEJ TEÑIDOS DE FIB SARGA DE ALGODON", "5209320000", None
+    # Popelin/plana/tafetan are kept together for these Croton lots. Do not split
+    # out 100%POL rows into 551219 or similar; that was causing false extra rows.
+    if _contains(desc, "POPELIN", "PLANA", "TAFETAN"):
+        return "TEJ TIÑIDOS DE TAFETAN PRED F SINT", "5513210000", None
 
+    # Sarga: only the pure-cotton case goes to 520932. Everything else non-white
+    # that we have observed in the manual goes to the 551422 bucket, with a few
+    # literal rows preserved later by apply_manual_business_rules().
     if _contains(desc, "SARGA"):
         if _contains(desc, "BLANCA", "BLANCO"):
             return "TEJ BLANQUEADOS DE SARGA DE F SINT CON ALG", "5514120000", None
-        if _contains(desc, "AMARILLA", "MARINO", "AZUL", "CELESTE") and _contains(desc, "65%POL 35%ALG"):
-            # preserve literal groups when the manual does so
-            color_literal = _norm_spaces(descripcion or factura_desc)
-            return color_literal, "5514220000", None
+        if _contains(desc, "100%ALG"):
+            return "TEJ TEÑIDOS DE FIB SARGA DE ALGODON", "5209320000", None
         return "TEJ TEÑIDOS DE SARGA DE F SINT CON ALG", "5514220000", None
-
-    if _contains(desc, "POPELIN", "PLANA", "TAFETAN"):
-        return "TEJ TIÑIDOS DE TAFETAN PRED F SINT", "5513210000", None
 
     return None, None, "No classification rule matched"
 
@@ -614,21 +642,33 @@ def enrich_valor_from_factura(lineas: List[Dict[str, Any]], factura: Dict[str, D
 
     for inv_ref, items in groups.items():
         inv = factura.get(inv_ref)
-        total_qty = sum((i.get("cant_total") or 0.0) for i in items)
-        inv_qty = inv.get("cant_total") or 0.0
-        base_qty = total_qty if total_qty > 0 else inv_qty
+
+        # Most refs are valued by quantity/metres, but CANALE is split manually
+        # using physical weight (NETO) instead of metres, otherwise the white and
+        # coloured buckets do not match the operator workbook.
+        use_neto_basis = all("CANALE" in _safe_str(i.get("descripcion", "")).upper() for i in items)
+
+        if use_neto_basis:
+            total_basis = sum((i.get("neto") or 0.0) for i in items)
+            inv_basis = inv.get("neto_total") or 0.0
+        else:
+            total_basis = sum((i.get("cant_total") or 0.0) for i in items)
+            inv_basis = inv.get("cant_total") or 0.0
+
+        base_qty = total_basis if total_basis > 0 else inv_basis
         if base_qty <= 0:
             for i in items:
                 i["valor"] = 0.0
                 i["valor_fuente"] = "FACTURA_ZERO"
             issues.append(f"Zero quantity for matched factura ref {inv_ref}")
             continue
-        importe_total = inv.get("importe_total") or 0.0
+
+        importe_total = round(inv.get("importe_total") or 0.0, 2)
         running = 0.0
         for idx, item in enumerate(items, start=1):
-            qty = item.get("cant_total") or 0.0
+            basis = (item.get("neto") or 0.0) if use_neto_basis else (item.get("cant_total") or 0.0)
             if idx < len(items):
-                value = round((qty / base_qty) * importe_total, 2)
+                value = round((basis / base_qty) * importe_total, 2)
                 running += value
             else:
                 value = round(importe_total - running, 2)
@@ -644,8 +684,13 @@ def enrich_valor_from_factura(lineas: List[Dict[str, Any]], factura: Dict[str, D
 def aggregate(lineas: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     seen: "OrderedDict[Tuple[str, str], Dict[str, Any]]" = OrderedDict()
     transferred_values: Dict[Tuple[str, str], float] = defaultdict(float)
+    packaging_bruto = 0.0
 
     for l in lineas:
+        if l.get("is_packaging") or l.get("partida_arancel") == "PALET":
+            packaging_bruto += float(l.get("bruto") or 0.0)
+            continue
+
         key = (l["mercancia"], l["partida_arancel"])
         if key not in seen:
             seen[key] = {
@@ -671,7 +716,8 @@ def aggregate(lineas: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
                 g["valor_present"] = True
         g["bruto"] += l.get("bruto") or 0.0
         g["neto"] += l.get("neto") or 0.0
-        g["m2"] += l.get("m2") or 0.0
+        if l.get("m2") is not None:
+            g["m2"] += l.get("m2") or 0.0
 
     for dest, extra in transferred_values.items():
         if dest not in seen:
@@ -688,13 +734,30 @@ def aggregate(lineas: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         seen[dest]["valor"] += round(extra, 2)
         seen[dest]["valor_present"] = True
 
+    # Logistics packaging weight is not emitted as its own summary row in the
+    # manual workbook. When present, attach it to the blanqueado sarga bucket if
+    # it exists; otherwise to the first physical fabric row.
+    if packaging_bruto:
+        preferred = ("TEJ BLANQUEADOS DE SARGA DE F SINT CON ALG", "5514120000")
+        if preferred in seen:
+            seen[preferred]["bruto"] += packaging_bruto
+        else:
+            for g in seen.values():
+                if g["partida"] != "PALET":
+                    g["bruto"] += packaging_bruto
+                    break
+
+    accessory_names = {"CREMALLERA DIENTE PLASTICO", "ANAGRAMAS", "REFLECTANTE 5CM", "ETIQUETAS COSER"}
     out = []
     for g in seen.values():
         g["bx"] = int(round(g["bx"]))
         g["valor"] = round(g["valor"], 2) if g["valor_present"] else None
         g["bruto"] = round(g["bruto"], 2)
         g["neto"] = round(g["neto"], 2)
-        g["m2"] = round(g["m2"], 2)
+        if g["mercancia"] in accessory_names:
+            g["m2"] = None
+        else:
+            g["m2"] = round(g["m2"], 2)
         g.pop("valor_present", None)
         out.append(g)
     return out
@@ -816,7 +879,7 @@ def process(packing_path: str, output_path: str, factura_path: Optional[str] = N
     log.info("Parsed %d line groups from packing", len(lineas))
 
     rules = None
-    csv_path = mapping_path or (str(DEFAULT_MAPPING_FILE) if DEFAULT_MAPPING_FILE.exists() else None)
+    csv_path = mapping_path
     if csv_path and os.path.exists(csv_path):
         rules = load_mapping(csv_path)
     else:
@@ -850,7 +913,7 @@ def process(packing_path: str, output_path: str, factura_path: Optional[str] = N
     log.info(
         "Done — %d partidas | BX=%d VALOR=%.2f EUR BRUTO=%.2f NETO=%.2f M2=%.2f",
         len(summary), sum(r["bx"] for r in summary), sum((r["valor"] or 0.0) for r in summary),
-        sum(r["bruto"] for r in summary), sum(r["neto"] for r in summary), sum(r["m2"] for r in summary),
+        sum(r["bruto"] for r in summary), sum(r["neto"] for r in summary), sum((r["m2"] or 0.0) for r in summary),
     )
     if issues:
         log.warning("Issues detected: %d", len(issues))
@@ -885,461 +948,6 @@ def main() -> None:
         f"NETO={sum((r.get('neto') or 0) for r in summary):.2f}kg  "
         f"M2={sum((r.get('m2') or 0) for r in summary):.2f}"
     )
-
-
-
-# ---------------------------------------------------------------------------
-# Rule-based classification v3 (attribute-driven, no lot scope)
-# ---------------------------------------------------------------------------
-
-SCRIPT_VERSION = "2026-03-31.v3"
-RULES_CANDIDATES = [
-    "product_mapping_rules.csv",
-    "product_mapping.csv",
-]
-
-def _contains(text: str, *parts: str) -> bool:
-    up = (text or "").upper()
-    return any(p.upper() in up for p in parts)
-
-def _primary_text(descripcion: str, factura_desc: str = "") -> str:
-    return _norm_spaces(" ".join(x for x in [descripcion, factura_desc] if x)).upper()
-
-def _finish_from_desc(text: str) -> str:
-    up = (text or "").upper()
-    return "BLANQUEADO" if ("BLANCO" in up or "BLANCA" in up or "BLANQUEAD" in up) else "TENIDO"
-
-def _family_from_desc(text: str) -> str:
-    up = (text or "").upper()
-    if "CREMALLERA" in up:
-        return "ACCESORIO_CREMALLERA"
-    if "ANAGRAMA" in up:
-        return "ACCESORIO_ANAGRAMA"
-    if "REFLECTANTE" in up:
-        return "ACCESORIO_REFLECTANTE"
-    if "ETIQUETA CARTON" in up:
-        return "ACCESORIO_ETIQUETA_CARTON"
-    if "ETIQUETA" in up:
-        return "ACCESORIO_ETIQUETA"
-    if "TRANSFER" in up:
-        return "ACCESORIO_TRANSFER"
-    if "REJILLA" in up:
-        return "REJILLA"
-    if "FELPA" in up:
-        return "FELPA"
-    if any(k in up for k in ["PUNTO", "PIQUE", "CANALE"]):
-        return "PUNTO"
-    if any(k in up for k in ["POPELIN", "PLANA", "TAFETAN"]):
-        return "TAFETAN"
-    if "SARGA" in up:
-        return "SARGA"
-    return "OTRO"
-
-
-
-
-
-
-
-def _extract_fiber_pcts(desc: str) -> Dict[str, float]:
-    result: Dict[str, float] = {}
-    for m in re.finditer(r"(\d+(?:[.,]\d+)?)\s*%\s*([A-Z]+(?:\s*MOD)?)", (desc or "").upper()):
-        pct = float(m.group(1).replace(",", "."))
-        fiber = re.sub(r"\s+", "", m.group(2))
-        fiber = {"POLIAM": "PA", "POLAM": "PA", "POLYAM": "PA", "ELASTANO": "ELAST"}.get(fiber, fiber)
-        result[fiber] = result.get(fiber, 0.0) + pct
-    return result
-
-def _extract_width(desc: str) -> float:
-    m = re.search(r"\bA\s+(\d+(?:[.,]\d+)?)\b", (desc or "").upper())
-    if m:
-        val = float(m.group(1).replace(",", "."))
-        return val / 100.0 if val >= 10 else val
-    return 0.0
-
-def _calc_gramaje(neto_kg: float, m2: float, cant_total: float = 0.0, desc: str = "") -> Optional[float]:
-    if m2 and m2 > 0:
-        return neto_kg / m2 * 1000.0
-    if cant_total and cant_total > 0:
-        ancho = _extract_width(desc)
-        if ancho > 0:
-            return neto_kg / (cant_total * ancho) * 1000.0
-    return None
-
-def _extract_attrs(descripcion: str, factura_desc: str = "", gramaje: Optional[float] = None) -> Dict[str, Any]:
-    merged = _primary_text(descripcion, factura_desc)
-    fibers = _extract_fiber_pcts(merged)
-    cotton = fibers.get("ALG", 0.0)
-    poly = fibers.get("POL", 0.0)
-    synth = sum(v for k, v in fibers.items() if k in ("POL", "PA", "ACR", "ACRMOD"))
-    visc = sum(v for k, v in fibers.items() if k in ("VISC", "MODAL", "MOD"))
-    width = _extract_width(merged)
-    return {
-        "merged_desc": merged,
-        "desc_norm": _normalize_desc_for_match(merged),
-        "family": _family_from_desc(merged),
-        "finish": _finish_from_desc(merged),
-        "cotton_pct": cotton,
-        "poly_pct": poly,
-        "synth_pct": synth,
-        "visc_pct": visc,
-        "width": width,
-        "gramaje": gramaje,
-    }
-
-def load_mapping(csv_path: str) -> List[Dict[str, Any]]:
-    """
-    New schema preferred:
-    PRIORITY,FABRIC_FAMILY,FINISH,DESC_CONTAINS,EXCLUDE_DESC_CONTAINS,
-    COTTON_MIN,COTTON_MAX,POLY_MIN,POLY_MAX,SYNTH_MIN,SYNTH_MAX,
-    WIDTH_MIN,WIDTH_MAX,GRAMAJE_MIN,GRAMAJE_MAX,HS_CODE,
-    NORMALIZED_MERCANCIA,KEEP_LITERAL,BLANK_VALOR,TRANSFER_TO_MERCANCIA,
-    TRANSFER_TO_HS_CODE,NOTES,EVIDENCE
-    """
-    with open(csv_path, newline="", encoding="utf-8") as f:
-        reader = csv.DictReader(f)
-        fieldnames = [c.strip().upper() for c in (reader.fieldnames or [])]
-        new_schema = "HS_CODE" in fieldnames or "NORMALIZED_MERCANCIA" in fieldnames
-        rules: List[Dict[str, Any]] = []
-        for row in reader:
-            norm = {str(k).strip().upper(): ("" if v is None else str(v).strip()) for k, v in row.items()}
-            if not any(norm.values()):
-                continue
-            if str(next(iter(norm.values()), "")).startswith("#"):
-                continue
-            if new_schema:
-                hs = norm.get("HS_CODE") or norm.get("PARTIDA")
-                merch = norm.get("NORMALIZED_MERCANCIA") or norm.get("DESC_ADUANERA") or norm.get("MERCANCIA")
-                if not hs or not merch:
-                    continue
-                def fnum(name):
-                    return _parse_num(norm.get(name))
-                rule = {
-                    "priority": int(_parse_num(norm.get("PRIORITY")) or 1000),
-                    "family": (norm.get("FABRIC_FAMILY") or "").upper(),
-                    "finish": (norm.get("FINISH") or "").upper(),
-                    "desc_contains": (norm.get("DESC_CONTAINS") or "").upper(),
-                    "exclude_desc_contains": (norm.get("EXCLUDE_DESC_CONTAINS") or "").upper(),
-                    "cotton_min": fnum("COTTON_MIN"),
-                    "cotton_max": fnum("COTTON_MAX"),
-                    "poly_min": fnum("POLY_MIN"),
-                    "poly_max": fnum("POLY_MAX"),
-                    "synth_min": fnum("SYNTH_MIN"),
-                    "synth_max": fnum("SYNTH_MAX"),
-                    "width_min": fnum("WIDTH_MIN"),
-                    "width_max": fnum("WIDTH_MAX"),
-                    "gramaje_min": fnum("GRAMAJE_MIN"),
-                    "gramaje_max": fnum("GRAMAJE_MAX"),
-                    "hs_code": hs,
-                    "mercancia": merch,
-                    "keep_literal": (norm.get("KEEP_LITERAL") or "").upper() in ("1", "TRUE", "YES", "SI"),
-                    "blank_valor": (norm.get("BLANK_VALOR") or "").upper() in ("1", "TRUE", "YES", "SI"),
-                    "transfer_to_mercancia": norm.get("TRANSFER_TO_MERCANCIA") or "",
-                    "transfer_to_hs": norm.get("TRANSFER_TO_HS_CODE") or "",
-                    "notes": norm.get("NOTES") or norm.get("NOTA") or "",
-                    "evidence": norm.get("EVIDENCE") or norm.get("FUENTE") or "",
-                }
-                rules.append(rule)
-            else:
-                codigo = norm.get("CODIGO", "")
-                if not codigo:
-                    continue
-                merch = norm.get("DESC_ADUANERA") or norm.get("MERCANCIA")
-                hs = norm.get("PARTIDA", "")
-                if not merch or not hs:
-                    continue
-                rules.append({
-                    "priority": 500,
-                    "family": "",
-                    "finish": "",
-                    "desc_contains": (norm.get("DESCRIPCION_CONTAINS") or norm.get("DESCRIPCION") or "").upper(),
-                    "exclude_desc_contains": "",
-                    "cotton_min": None,
-                    "cotton_max": None,
-                    "poly_min": None,
-                    "poly_max": None,
-                    "synth_min": None,
-                    "synth_max": None,
-                    "width_min": None,
-                    "width_max": None,
-                    "gramaje_min": _parse_num(norm.get("GRAMAJE_MIN")),
-                    "gramaje_max": _parse_num(norm.get("GRAMAJE_MAX")),
-                    "hs_code": hs,
-                    "mercancia": merch,
-                    "keep_literal": False,
-                    "blank_valor": False,
-                    "transfer_to_mercancia": "",
-                    "transfer_to_hs": "",
-                    "notes": "legacy",
-                    "evidence": "",
-                    "codigo": _norm_ref(codigo),
-                })
-        rules.sort(key=lambda r: r.get("priority", 1000))
-        log.info("Loaded %d classification rules from %s", len(rules), csv_path)
-        return rules
-
-def _rule_matches(rule: Dict[str, Any], attrs: Dict[str, Any], referencia: str = "") -> bool:
-    merged = attrs["merged_desc"]
-    if rule.get("family") and rule["family"] != attrs["family"]:
-        return False
-    if rule.get("finish") and rule["finish"] != attrs["finish"]:
-        return False
-    if rule.get("desc_contains") and rule["desc_contains"] not in merged:
-        return False
-    if rule.get("exclude_desc_contains") and rule["exclude_desc_contains"] in merged:
-        return False
-    if rule.get("codigo") and _norm_ref(referencia) != rule["codigo"]:
-        return False
-
-    def in_range(val, lo, hi):
-        if lo is not None and (val is None or val < lo):
-            return False
-        if hi is not None and (val is None or val > hi):
-            return False
-        return True
-
-    for pair in [
-        (attrs.get("cotton_pct"), rule.get("cotton_min"), rule.get("cotton_max")),
-        (attrs.get("poly_pct"), rule.get("poly_min"), rule.get("poly_max")),
-        (attrs.get("synth_pct"), rule.get("synth_min"), rule.get("synth_max")),
-        (attrs.get("width"), rule.get("width_min"), rule.get("width_max")),
-        (attrs.get("gramaje"), rule.get("gramaje_min"), rule.get("gramaje_max")),
-    ]:
-        if not in_range(*pair):
-            return False
-    return True
-
-def lookup_mapping(referencia: str, descripcion: str, rules: List[Dict[str, Any]], factura_desc: str = "",
-                   gramaje: Optional[float] = None) -> Optional[Dict[str, Any]]:
-    attrs = _extract_attrs(descripcion, factura_desc, gramaje)
-    for rule in rules:
-        if _rule_matches(rule, attrs, referencia):
-            return rule
-    return None
-
-def classify_from_text(descripcion: str, referencia: str = "", factura_desc: str = "",
-                       gramaje: Optional[float] = None) -> Tuple[Optional[str], Optional[str], Optional[str]]:
-    attrs = _extract_attrs(descripcion, factura_desc, gramaje)
-    desc = attrs["merged_desc"]
-    fam = attrs["family"]
-    cotton = attrs["cotton_pct"]
-    poly = attrs["poly_pct"]
-    synth = attrs["synth_pct"]
-    finish = attrs["finish"]
-
-    if fam == "ACCESORIO_CREMALLERA":
-        return "CREMALLERA DIENTE PLASTICO", "9607190000", None
-    if fam == "ACCESORIO_ANAGRAMA":
-        return "ANAGRAMAS", "5807101000", None
-    if fam == "ACCESORIO_ETIQUETA_CARTON":
-        return "ETIQUETA CARTON", "4821109000", None
-    if fam == "ACCESORIO_ETIQUETA":
-        return "ETIQUETAS COSER", "5807101000", None
-    if fam == "ACCESORIO_REFLECTANTE":
-        return "REFLECTANTE 5CM", "3920610090", None
-    if fam == "ACCESORIO_TRANSFER":
-        return "TRANSFER", "5807909000", None
-
-    if fam == "REJILLA":
-        if poly >= 99:
-            return "TEJ BLANQUEADOS DE REJILLA", "5804101000", None
-        return "TEJ  DE REJILLA", "5804109000", None
-
-    if fam == "FELPA":
-        if cotton >= 50 and synth < 50:
-            return "TEJ DE FELPA PRED ALG", "6001910000", None
-        return "TEJ DE FELPA PRED F SINT", "6001920000", None
-
-    if fam == "PUNTO":
-        if finish == "BLANQUEADO":
-            return "TEJ BLANQUEADOS DE PUNTO PRED LAS F SINT", "6006310000", None
-        if cotton >= 85 or (cotton >= 50 and poly == 0 and synth < 50):
-            return "TEJIDOS TEÑIDOS DE PUNTO DE ALGODON", "6006220000", None
-        return "TEJ DE PUNTO PRED F SINT MEZCLADAS CON ALGODON", "6006320000", None
-
-    if fam == "TAFETAN":
-        if "65%POL 35%VISC" in desc:
-            return "TEJ PLANA DE FIB SINTC", "5514301000", None
-        if finish == "BLANQUEADO" and poly > 0 and cotton > 0:
-            return "TEJ BLANQUEADOS DE TAFETAN PRED F SINT", "5513112000", None
-        if finish == "TENIDO" and cotton == 0 and synth >= 85:
-            return "TEJIDOS TEÑIDOS DE TAFETAN DE FIBRAS SINTETICAS", "5512199000", None
-        return "TEJ TIÑIDOS DE TAFETAN PRED F SINT", "5513210000", None
-
-    if fam == "SARGA":
-        if finish == "BLANQUEADO":
-            if cotton >= 85:
-                return "TEJIDOS BLANQUEADOS DE SARGA DE ALGODON", "5209220000", None
-            return "TEJ BLANQUEADOS DE SARGA DE F SINT CON ALG", "5514120000", None
-        if cotton >= 85:
-            return "TEJ TEÑIDOS DE FIB SARGA DE ALGODON", "5209320000", None
-        if cotton >= 70 and poly >= 15:
-            return "TEJIDOS TEÑIDOS DE SARGA DE ALGODON MEZCLADOS CON FIBRAS SINTETICAS", "5211320090", None
-        return "TEJ TEÑIDOS DE SARGA DE F SINT CON ALG", "5514220000", None
-
-    return None, None, "No classification rule matched"
-
-def _apply_rule_to_line(l: Dict[str, Any], rule: Dict[str, Any]) -> None:
-    desc_clean = _norm_spaces(_safe_str(l.get("descripcion", "")))
-    l["mercancia"] = desc_clean if rule.get("keep_literal") else rule["mercancia"]
-    l["partida_arancel"] = rule["hs_code"]
-    l["clasif_fuente"] = "RULE_CSV"
-    if rule.get("blank_valor"):
-        l["force_blank_valor"] = True
-        if rule.get("transfer_to_mercancia") and rule.get("transfer_to_hs"):
-            l["transfer_valor_to"] = (rule["transfer_to_mercancia"], rule["transfer_to_hs"])
-
-def apply_classification(lineas: List[Dict[str, Any]], factura: Optional[Dict[str, Dict[str, Any]]] = None,
-                         rules: Optional[List[Dict[str, Any]]] = None) -> List[str]:
-    issues: List[str] = []
-    for l in lineas:
-        if l.get("mercancia") and l.get("partida_arancel"):
-            continue
-        inv_ref = infer_invoice_ref(l, factura) if factura else None
-        l["invoice_ref"] = inv_ref
-        inv_desc = factura.get(inv_ref, {}).get("descripcion", "") if (factura and inv_ref) else ""
-        attrs = _extract_attrs(l.get("descripcion", ""), inv_desc, l.get("gramaje"))
-        l.update({
-            "fabric_family": attrs["family"],
-            "finish": attrs["finish"],
-            "cotton_pct": attrs["cotton_pct"],
-            "poly_pct": attrs["poly_pct"],
-            "synth_pct": attrs["synth_pct"],
-            "width_m": attrs["width"],
-            "desc_norm": attrs["desc_norm"],
-        })
-        mapped = None
-        if rules:
-            mapped = lookup_mapping(l.get("referencia", ""), l.get("descripcion", ""), rules, inv_desc, l.get("gramaje"))
-        if mapped:
-            _apply_rule_to_line(l, mapped)
-            continue
-        merc, part, err = classify_from_text(l.get("descripcion", ""), l.get("referencia", ""), inv_desc, l.get("gramaje"))
-        if merc and part:
-            l["mercancia"] = merc
-            l["partida_arancel"] = part
-            l["clasif_fuente"] = "HEURISTIC"
-        else:
-            issues.append(f"Unclassified referencia={l.get('referencia')} descripcion={l.get('descripcion')}")
-            l["mercancia"] = l.get("descripcion") or l.get("referencia")
-            l["partida_arancel"] = "PENDIENTE"
-            l["clasif_fuente"] = "UNCLASSIFIED"
-    return issues
-
-def apply_manual_business_rules(lineas: List[Dict[str, Any]]) -> None:
-    """
-    Non-lot-specific business rules observed across manual workbooks.
-    These are description/business rules, not per-lot overrides.
-    """
-    literal_sargas = {
-        "SARGA AMARILLA 65%POL 35%ALG A 1,60",
-        "SARGA MARINO 65%POL 35%ALG A 1,60",
-        "SARGA AZUL 65%POL 35%ALG A 1,60",
-        "SARGA CELESTE 65%POL 35%ALG A 1,60",
-    }
-    aliases = {
-        "5513210000": "TEJ TIÑIDOS DE TAFETAN PRED F SINT",
-        "5209320000": "TEJ TEÑIDOS DE FIB SARGA DE ALGODON",
-        "5514220000": "TEJ TEÑIDOS DE SARGA DE F SINT CON ALG",
-        "5514120000": "TEJ BLANQUEADOS DE SARGA DE F SINT CON ALG",
-        "6001920000": "TEJ DE FELPA PRED F SINT",
-        "6001910000": "TEJ DE FELPA PRED ALG",
-        "6006320000": "TEJ DE PUNTO PRED F SINT MEZCLADAS CON ALGODON",
-        "6006310000": "TEJ BLANQUEADOS DE PUNTO PRED LAS F SINT",
-        "5804101000": "TEJ BLANQUEADOS DE REJILLA",
-        "5804109000": "TEJ  DE REJILLA",
-        "3920610090": "REFLECTANTE 5CM",
-    }
-    for l in lineas:
-        desc = _norm_spaces(_safe_str(l.get("descripcion", "")).upper())
-        if desc == "PLANA BLANCA CUADRO VERDE 60%ALG 40%POL A 1,50":
-            l["mercancia"] = "PLANA BLANCA CUADRO VERDE 60%ALG 40%POL A 1,50"
-            l["partida_arancel"] = "5513210000"
-            l["keep_literal"] = True
-        if desc in literal_sargas:
-            l["mercancia"] = _norm_spaces(_safe_str(l.get("descripcion", "")))
-            l["partida_arancel"] = "5514220000"
-            l["force_blank_valor"] = True
-            l["transfer_valor_to"] = ("TEJ TEÑIDOS DE SARGA DE F SINT CON ALG", "5514220000")
-        part = str(l.get("partida_arancel") or "")
-        if part in aliases and not l.get("keep_literal") and desc not in literal_sargas:
-            l["mercancia"] = aliases[part]
-
-def process(packing_path: str, output_path: str, factura_path: Optional[str] = None,
-            mapping_path: Optional[str] = None, inject: bool = True) -> List[Dict[str, Any]]:
-    if not os.path.exists(packing_path):
-        raise FileNotFoundError(f"Packing not found: {packing_path}")
-    if factura_path and not os.path.exists(factura_path):
-        raise FileNotFoundError(f"FACTURA not found: {factura_path}")
-
-    packing_ret = read_packing(packing_path)
-    if len(packing_ret) == 4:
-        lineas, sheet_name, layout, pallet_bruto = packing_ret
-    else:
-        lineas, sheet_name, layout = packing_ret
-        pallet_bruto = 0.0
-    log.info("Parsed %d line groups from packing", len(lineas))
-
-    for l in lineas:
-        g = _calc_gramaje(
-            neto_kg=float(l.get("neto") or 0.0),
-            m2=float(l.get("m2") or 0.0),
-            cant_total=float(l.get("cant_total") or 0.0),
-            desc=l.get("descripcion") or "",
-        )
-        l["gramaje"] = round(g, 1) if g is not None else None
-
-    csv_path = mapping_path
-    if not csv_path:
-        for name in RULES_CANDIDATES:
-            p = EXTRACTOR_DIR / name
-            if p.exists():
-                csv_path = str(p)
-                break
-    rules = load_mapping(csv_path) if csv_path and os.path.exists(csv_path) else None
-    if not rules:
-        log.info("No mapping CSV provided/found. Continuing with built-in heuristics.")
-
-    factura = load_factura(factura_path) if factura_path else {}
-    issues: List[str] = []
-    issues.extend(apply_classification(lineas, factura=factura, rules=rules))
-    apply_manual_business_rules(lineas)
-
-    if factura:
-        issues.extend(enrich_valor_from_factura(lineas, factura))
-    else:
-        for l in lineas:
-            if l.get("valor") is None:
-                l["valor"] = 0.0
-                l["valor_fuente"] = "NONE"
-
-    summary = aggregate(lineas)
-
-    if pallet_bruto and summary:
-        # keep logistics adjustment explicit but generic: add pallet gross to the
-        # first textile row, not to accessories
-        for row in summary:
-            if not str(row.get("partida","")).startswith(("58","96","39","48")):
-                row["bruto"] = round((row.get("bruto") or 0.0) + pallet_bruto, 2)
-                break
-
-    if inject:
-        source_ext = Path(packing_path).suffix.lower()
-        if source_ext == ".ods":
-            inject_summary_into_ods(summary, packing_path, output_path)
-        else:
-            inject_summary_into_xlsx(summary, packing_path, output_path, issues=issues, detail=lineas)
-    else:
-        write_output(summary, output_path)
-
-    log.info(
-        "Done — %d partidas | BX=%d VALOR=%.2f EUR BRUTO=%.2f NETO=%.2f M2=%.2f",
-        len(summary), sum(r["bx"] for r in summary), sum((r["valor"] or 0.0) for r in summary),
-        sum(r["bruto"] for r in summary), sum(r["neto"] for r in summary), sum(r["m2"] for r in summary),
-    )
-    if issues:
-        log.warning("Issues detected: %d", len(issues))
-    return summary
 
 
 if __name__ == "__main__":
