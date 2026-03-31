@@ -47,12 +47,14 @@ NAV_STYLES = {
 }
 
 
-def leer_csv(csv_path: Path) -> list[dict]:
+def leer_csv(csv_path: Path, filtrar_fecha: str | None = None) -> list[dict]:
+    """Lee el CSV y filtra opcionalmente por fecha de embarque (campo 'fecha')."""
     registros = []
     try:
         with open(csv_path, newline="", encoding="utf-8") as f:
             for row in csv.DictReader(f):
-                registros.append(row)
+                if filtrar_fecha is None or row.get("fecha", "") == filtrar_fecha:
+                    registros.append(row)
     except Exception as e:
         log.error("Error leyendo CSV %s: %s", csv_path, e)
     registros.sort(key=lambda r: (r.get("fecha", ""), r.get("hora", "")), reverse=True)
@@ -227,7 +229,10 @@ def main():
         log.warning("No hay CSV para la fecha %s — nada que reportar", fecha)
         sys.exit(0)
 
-    registros = leer_csv(csv_path)
+    # Filtrar por fecha de embarque = hoy
+    # El CSV puede contener BLs de días anteriores procesados hoy,
+    # pero el informe solo incluye los que tienen fecha de embarque de hoy.
+    registros = leer_csv(csv_path, filtrar_fecha=fecha)
     if not registros:
         log.warning("CSV vacío — nada que reportar")
         sys.exit(0)
