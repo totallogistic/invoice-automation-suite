@@ -36,6 +36,7 @@ from email.mime.base import MIMEBase
 from email.mime.text import MIMEText
 from email import encoders
 from datetime import datetime
+import uvicorn
 
 # Configuration
 SCHEMAS_DIR = Path(__file__).parent / "schemas"
