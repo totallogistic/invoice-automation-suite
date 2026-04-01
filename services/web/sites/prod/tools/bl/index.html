@@ -153,7 +153,7 @@
       <div class="env-badge" id="env-badge">...</div>
       <img src="/assets/totallogistic-logo.png" alt="totallogistic" class="logo">
       <h1>BL Extractor — Conocimientos de Embarque</h1>
-      <p>Sube los PDFs de BL · Se filtran los de destino ALGECIRAS · El CSV se guarda en el servidor</p>
+      <p>Sube los PDFs de BL · Se procesan todos los destinos · El CSV se guarda en el servidor</p>
     </header>
 
     <main>
@@ -198,7 +198,8 @@
           <li><span class="badge">TRASME</span> Trasmediterránea — tabular detallado</li>
         </ul>
         <p style="margin-top:1rem;font-size:0.8rem;color:#6b7280;">
-          Solo se procesan BLs con <strong>Puerto destino = ALGECIRAS</strong>.
+          Se procesan <strong>todos los destinos</strong>. Los BLs con destino ALGECIRAS se clasifican
+          como <strong>Exportaciones</strong> y el resto como <strong>Importaciones</strong>.
           El CSV se acumula diariamente como <code>bl_YYYYMMDD.csv</code>.
         </p>
       </div>
@@ -353,8 +354,8 @@
             <h3>Proceso completado</h3>
             <div class="result-detail">
               <strong>${total}</strong> PDFs subidos &nbsp;·&nbsp;
-              <strong>${incluidos}</strong> BL incluidos (destino ALGECIRAS) &nbsp;·&nbsp;
-              <strong>${omitidos}</strong> omitidos<br>
+              <strong>${incluidos}</strong> BLs procesados &nbsp;·&nbsp;
+              <strong>${omitidos}</strong> no reconocidos<br>
               CSV actualizado: <strong>bl_${today}.csv</strong>
             </div>
             ${viewerBtn}

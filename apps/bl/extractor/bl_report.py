@@ -49,6 +49,8 @@ NAV_STYLES = {
 }
 
 
+DESTINO_EXPORTACIONES = "ALGECIRAS"
+
 def leer_csv(csv_path: Path, filtrar_fecha: str | None = None) -> list[dict]:
     """Lee el CSV y filtra opcionalmente por fecha de embarque (campo 'fecha')."""
     registros = []
@@ -70,7 +72,7 @@ def csv_del_dia(fecha: str) -> Path | None:
     return path if path.exists() else None
 
 
-def generar_html(registros: list[dict], fecha: str) -> str:
+def generar_html(registros: list[dict], fecha: str, titulo: str = "Conocimientos de Embarque — ALGECIRAS") -> str:
     total    = len(registros)
     navieras: dict[str, int] = {}
     for r in registros:
@@ -124,7 +126,7 @@ def generar_html(registros: list[dict], fecha: str) -> str:
 </head>
 <body>
   <div class="header">
-    <h1>Conocimientos de Embarque — ALGECIRAS</h1>
+    <h1>{titulo}</h1>
     <p>Procesados: {fecha} &nbsp;·&nbsp; Generado: {ts}</p>
   </div>
   <div class="stats">
@@ -160,7 +162,7 @@ def generar_pdf(html: str, output: Path) -> bool:
         return False
 
 
-def enviar_email(pdf_path: Path, registros: list[dict], fecha: str) -> bool:
+def enviar_email(pdfs: list[Path], registros_exp: list[dict], registros_imp: list[dict], fecha: str) -> bool:
     if not SMTP_HOST or not SMTP_USER or not SMTP_PASS:
         log.warning("SMTP no configurado — email no enviado")
         return False
@@ -168,34 +170,41 @@ def enviar_email(pdf_path: Path, registros: list[dict], fecha: str) -> bool:
         log.warning("MAIL_TO_BL no configurado — email no enviado")
         return False
 
-    total = len(registros)
-    navieras = {}
-    for r in registros:
-        nav = r.get("naviera", "—")
-        navieras[nav] = navieras.get(nav, 0) + 1
-    resumen = "  ·  ".join(f"{nav}: {n}" for nav, n in sorted(navieras.items()))
+    total_exp = len(registros_exp)
+    total_imp = len(registros_imp)
+
+    def resumen_nav(registros):
+        navieras = {}
+        for r in registros:
+            nav = r.get("naviera", "—")
+            navieras[nav] = navieras.get(nav, 0) + 1
+        return "  ·  ".join(f"{nav}: {n}" for nav, n in sorted(navieras.items()))
 
     msg = MIMEMultipart()
     msg["From"]    = MAIL_FROM
     msg["To"]      = MAIL_TO_BL
-    msg["Subject"] = f"[BL] {total} Conocimientos de Embarque — {fecha}"
+    msg["Subject"] = f"[BL] {total_exp} Exportaciones · {total_imp} Importaciones — {fecha}"
 
     body = f"""<html><body style="font-family:Arial,sans-serif;color:#1f2937;">
-<p>Se han procesado <strong>{total} Conocimientos de Embarque</strong> con destino ALGECIRAS.</p>
-<p style="color:#6b7280;font-size:13px;">{resumen}</p>
-<p>Adjunto el informe completo en PDF.</p>
+<p><strong>Exportaciones (destino ALGECIRAS): {total_exp} BLs</strong></p>
+<p style="color:#6b7280;font-size:13px;">{resumen_nav(registros_exp) or '—'}</p>
+<p style="margin-top:1rem;"><strong>Importaciones (otros destinos): {total_imp} BLs</strong></p>
+<p style="color:#6b7280;font-size:13px;">{resumen_nav(registros_imp) or '—'}</p>
+<p style="margin-top:1rem;">Adjuntos los informes completos en PDF.</p>
 <hr style="border:none;border-top:1px solid #e5e7eb;margin:16px 0;">
 <p style="font-size:11px;color:#9ca3af;">totallogistic · BL Report · {fecha}</p>
 </body></html>"""
 
     msg.attach(MIMEText(body, "html"))
 
-    with open(pdf_path, "rb") as f:
-        part = MIMEBase("application", "pdf")
-        part.set_payload(f.read())
-        encoders.encode_base64(part)
-        part.add_header("Content-Disposition", f'attachment; filename="{pdf_path.name}"')
-        msg.attach(part)
+    for pdf_path in pdfs:
+        if pdf_path.exists():
+            with open(pdf_path, "rb") as f:
+                part = MIMEBase("application", "pdf")
+                part.set_payload(f.read())
+                encoders.encode_base64(part)
+                part.add_header("Content-Disposition", f'attachment; filename="{pdf_path.name}"')
+                msg.attach(part)
 
     try:
         if SMTP_PORT == 465:
@@ -238,26 +247,48 @@ def main():
         log.warning("CSV vacío — nada que reportar")
         sys.exit(0)
 
-    log.info("Generando reporte para %s (%d registros)…", fecha, len(registros))
+    # Dividir en exportaciones (ALGECIRAS) e importaciones (resto)
+    registros_exp = [r for r in registros if DESTINO_EXPORTACIONES in (r.get("puerto_destino") or "").upper()]
+    registros_imp = [r for r in registros if DESTINO_EXPORTACIONES not in (r.get("puerto_destino") or "").upper()]
 
-    html     = generar_html(registros, fecha)
+    log.info("Exportaciones (ALGECIRAS): %d · Importaciones (otros): %d", len(registros_exp), len(registros_imp))
+
     tag      = fecha.replace("-", "")
-    pdf_path = BL_CSV_DIR / f"bl_informe_{tag}.pdf"
-    
+    pdfs_generados: list[Path] = []
 
-    if not generar_pdf(html, pdf_path):
+    # Reporte Exportaciones
+    if registros_exp:
+        html_exp  = generar_html(registros_exp, fecha, titulo="Exportaciones — ALGECIRAS")
+        pdf_exp   = BL_CSV_DIR / f"bl_exportaciones_{tag}.pdf"
+        if generar_pdf(html_exp, pdf_exp):
+            pdfs_generados.append(pdf_exp)
+    else:
+        log.info("Sin exportaciones — PDF no generado")
+
+    # Reporte Importaciones
+    if registros_imp:
+        html_imp  = generar_html(registros_imp, fecha, titulo="Importaciones — Otros destinos")
+        pdf_imp   = BL_CSV_DIR / f"bl_importaciones_{tag}.pdf"
+        if generar_pdf(html_imp, pdf_imp):
+            pdfs_generados.append(pdf_imp)
+    else:
+        log.info("Sin importaciones — PDF no generado")
+
+    if not pdfs_generados:
         sys.exit(1)
 
+    # Copiar a carpeta de impresión si está configurada
     BL_PRINT_FOLDER = os.getenv("BL_PRINT_FOLDER", "")
     if BL_PRINT_FOLDER:
         dest = Path(BL_PRINT_FOLDER)
         if dest.exists():
-            shutil.copy(pdf_path, dest / pdf_path.name)
-            log.info("PDF enviado a impresora: %s", dest)
+            for pdf in pdfs_generados:
+                shutil.copy(pdf, dest / pdf.name)
+                log.info("PDF enviado a impresora: %s", dest / pdf.name)
         else:
             log.warning("Carpeta de impresión no accesible: %s", dest)
 
-    enviar_email(pdf_path, registros, fecha)
+    enviar_email(pdfs_generados, registros_exp, registros_imp, fecha)
 
 
 if __name__ == "__main__":

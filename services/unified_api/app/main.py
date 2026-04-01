@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import io
 import os
+import csv
+import json
 import zipfile
 import shutil
 from datetime import datetime, timezone
@@ -11,8 +13,8 @@ from typing import List
 import random
 import string
 
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Path as PathParam # pyright: ignore[reportMissingImports]
-from fastapi.responses import JSONResponse, StreamingResponse # pyright: ignore[reportMissingImports]
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Path as PathParam, Query # pyright: ignore[reportMissingImports]
+from fastapi.responses import JSONResponse, StreamingResponse, FileResponse # pyright: ignore[reportMissingImports]
 
 from .tool_registry import ToolRegistry
 from iasuite_common.status import StatusManager # pyright: ignore[reportMissingImports]
@@ -283,3 +285,159 @@ def get_status(
         "processed_files": status.processed_files,
         "message": status.message
     }
+
+
+# ── BL endpoints ──────────────────────────────────────────────────────────────
+
+BL_CSV_DIR   = Path(os.getenv("BL_CSV_DIR",   "/data/bl/csv"))
+BL_DATA_ROOT = Path(os.getenv("BL_DATA_ROOT", "/data/bl"))
+_ALGECIRAS   = "ALGECIRAS"
+_HECHO_FILE  = BL_CSV_DIR / "bl_hecho.json"
+
+
+def _load_hecho() -> set:
+    try:
+        return set(json.loads(_HECHO_FILE.read_text(encoding="utf-8")))
+    except Exception:
+        return set()
+
+
+def _save_hecho(hechos: set) -> None:
+    BL_CSV_DIR.mkdir(parents=True, exist_ok=True)
+    _HECHO_FILE.write_text(json.dumps(sorted(hechos)), encoding="utf-8")
+
+
+def _read_bl_csvs(fecha_desde: str | None, fecha_hasta: str | None) -> list[dict]:
+    """Lee todos los CSVs bl_YYYYMMDD.csv cuya fecha de procesado esté en el rango."""
+    records: list[dict] = []
+    for csv_path in sorted(BL_CSV_DIR.glob("bl_????????.csv")):
+        m = _re.match(r"bl_(\d{4})(\d{2})(\d{2})\.csv$", csv_path.name)
+        if not m:
+            continue
+        file_date_iso = f"{m.group(1)}-{m.group(2)}-{m.group(3)}"
+        if fecha_desde and file_date_iso < fecha_desde:
+            continue
+        if fecha_hasta and file_date_iso > fecha_hasta:
+            continue
+        try:
+            with open(csv_path, newline="", encoding="utf-8") as fh:
+                records.extend(csv.DictReader(fh))
+        except Exception:
+            pass
+    return records
+
+
+def _apply_bl_filters(
+    records: list[dict],
+    naviera: str,
+    q: str,
+    solo_hecho: str,
+    tipo: str,
+    puerto_destino: str,
+    hechos: set,
+) -> list[dict]:
+    result = []
+    q_low = q.strip().lower()
+    pd_low = puerto_destino.strip().upper()
+
+    for r in records:
+        # Naviera
+        if naviera and r.get("naviera", "").upper() != naviera.upper():
+            continue
+        # Tipo: exp = ALGECIRAS, imp = otros
+        dest = (r.get("puerto_destino") or "").upper()
+        if tipo == "exp" and _ALGECIRAS not in dest:
+            continue
+        if tipo == "imp" and _ALGECIRAS in dest:
+            continue
+        # Puerto destino libre
+        if pd_low and pd_low not in dest:
+            continue
+        # Hecho state
+        clave = f"{r.get('archivo','')}|{r.get('naviera','')}|{r.get('num_bl','')}"
+        r["hecho"] = clave in hechos
+        if solo_hecho == "1" and not r["hecho"]:
+            continue
+        if solo_hecho == "0" and r["hecho"]:
+            continue
+        # Búsqueda libre
+        if q_low:
+            haystack = " ".join([
+                r.get("num_bl", ""), r.get("nombre", ""),
+                r.get("matricula", ""), r.get("archivo", ""),
+                r.get("buque", ""), r.get("puerto_destino", ""),
+            ]).lower()
+            if q_low not in haystack:
+                continue
+        result.append(r)
+
+    result.sort(key=lambda r: (r.get("fecha", ""), r.get("hora", "")), reverse=True)
+    return result
+
+
+@app.get("/api/bl/registros")
+def bl_registros(
+    fecha_desde:    str = Query(default=""),
+    fecha_hasta:    str = Query(default=""),
+    naviera:        str = Query(default=""),
+    q:              str = Query(default=""),
+    solo_hecho:     str = Query(default=""),
+    tipo:           str = Query(default=""),   # "exp" | "imp" | ""
+    puerto_destino: str = Query(default=""),
+):
+    """Devuelve registros BL con filtros. Usado por el viewer para stats y tabla."""
+    records  = _read_bl_csvs(fecha_desde or None, fecha_hasta or None)
+    hechos   = _load_hecho()
+    filtered = _apply_bl_filters(records, naviera, q, solo_hecho, tipo, puerto_destino, hechos)
+    return {"total": len(filtered), "registros": filtered}
+
+
+@app.get("/api/bl/stats")
+def bl_stats():
+    """Devuelve info sobre los CSVs disponibles."""
+    csvs = sorted(
+        [p.name for p in BL_CSV_DIR.glob("bl_????????.csv")],
+        reverse=True,
+    )
+    return {"csvs": csvs}
+
+
+@app.get("/api/bl/pdf/{filename}")
+def bl_pdf(filename: str = PathParam(...)):
+    """Sirve un PDF de BL buscándolo en las carpetas de datos."""
+    safe = Path(filename).name  # evitar path traversal
+    search_dirs = [
+        BL_DATA_ROOT / "processed",
+        BL_DATA_ROOT / "inbox",
+        BL_DATA_ROOT / "processing",
+        BL_DATA_ROOT / "error",
+    ]
+    for base in search_dirs:
+        if not base.exists():
+            continue
+        # Buscar recursivamente en subdirectorios de batch
+        for candidate in base.rglob(safe):
+            if candidate.is_file():
+                return FileResponse(
+                    path=str(candidate),
+                    media_type="application/pdf",
+                    filename=safe,
+                )
+    raise HTTPException(404, f"PDF no encontrado: {safe}")
+
+
+@app.post("/api/bl/toggle")
+async def bl_toggle(payload: dict):
+    """Alterna el estado hecho/pendiente de un registro BL."""
+    clave = payload.get("clave", "").strip()
+    if not clave:
+        raise HTTPException(400, "clave requerida")
+    hechos = _load_hecho()
+    if clave in hechos:
+        hechos.discard(clave)
+        nuevo = False
+    else:
+        hechos.add(clave)
+        nuevo = True
+    _save_hecho(hechos)
+    return {"clave": clave, "hecho": nuevo}
