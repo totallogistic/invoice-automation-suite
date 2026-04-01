@@ -25,7 +25,7 @@ from fastapi.responses import FileResponse as _FileResponse
 from jsonschema import Draft202012Validator, ValidationError, validate, Draft7Validator
 from fastapi.responses import FileResponse as _FileResponse
 
-import uvicorn
+import subprocess
 import os
 from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Font, Alignment, PatternFill
@@ -1073,15 +1073,36 @@ async def bl_viewer(request: Request):
     return templates.TemplateResponse("bl-viewer.html", {"request": request})
  
  
+@app.post("/api/bl/sync")
+async def bl_sync():
+    """Fuerza la copia de BLs desde Google Drive al inbox local."""
+    sync_script = Path(os.getenv("BL_SYNC_SCRIPT", "/opt/bl_sync.sh"))
+    if not sync_script.exists():
+        raise HTTPException(404, f"Script de sync no encontrado: {sync_script}")
+    try:
+        result = subprocess.run(
+            ["bash", str(sync_script)],
+            capture_output=True, text=True, timeout=120
+        )
+        if result.returncode == 0:
+            return JSONResponse({"ok": True, "message": "Sync completado correctamente"})
+        else:
+            raise HTTPException(500, f"Error en sync: {result.stderr.strip() or result.stdout.strip()}")
+    except subprocess.TimeoutExpired:
+        raise HTTPException(504, "Sync tardó demasiado (>120s)")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
+
 @app.get("/api/bl/registros")
 def bl_registros(
-    naviera:        str = "",
-    fecha_desde:    str = "",
-    fecha_hasta:    str = "",
-    q:              str = "",
-    solo_hecho:     str = "",
-    tipo:           str = "",   # "exp" = ALGECIRAS, "imp" = otros
-    puerto_destino: str = "",
+    naviera:     str = "",
+    fecha_desde: str = "",
+    fecha_hasta: str = "",
+    q:           str = "",
+    solo_hecho:  str = "",
 ):
     registros = _bl_leer_registros()
     estado    = _bl_leer_estado()
@@ -1096,13 +1117,6 @@ def bl_registros(
         registros = [r for r in registros if r.get("fecha","") >= fecha_desde]
     if fecha_hasta:
         registros = [r for r in registros if r.get("fecha","") <= fecha_hasta]
-    if tipo == "exp":
-        registros = [r for r in registros if "ALGECIRAS" in (r.get("puerto_destino") or "").upper()]
-    elif tipo == "imp":
-        registros = [r for r in registros if "ALGECIRAS" not in (r.get("puerto_destino") or "").upper()]
-    if puerto_destino:
-        pd_up = puerto_destino.strip().upper()
-        registros = [r for r in registros if pd_up in (r.get("puerto_destino") or "").upper()]
     if solo_hecho == "1":
         registros = [r for r in registros if r.get("hecho")]
     elif solo_hecho == "0":

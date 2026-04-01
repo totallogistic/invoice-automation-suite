@@ -187,6 +187,18 @@
         <div id="result-content"></div>
       </div>
 
+      <!-- Sync Drive -->
+      <div class="card" id="sync-card">
+        <h2>Sincronizar desde Google Drive</h2>
+        <p style="font-size:0.875rem;color:#6b7280;margin-bottom:1.25rem;">
+          Fuerza la copia de BLs desde la carpeta compartida de Drive al servidor, sin esperar al cron de las 9:15.
+        </p>
+        <button class="btn-primary" id="sync-btn" style="margin-top:0;" onclick="forzarSync()">
+          ☁️ Forzar sync desde Drive
+        </button>
+        <div id="sync-result" style="margin-top:1rem;display:none;"></div>
+      </div>
+
       <!-- Info -->
       <div class="card">
         <h2>Navieras soportadas</h2>
@@ -384,6 +396,27 @@
         document.getElementById('result-card').classList.remove('visible');
         document.getElementById('result-content').innerHTML = '';
         document.getElementById('file-input').value = '';
+      }
+
+      async function forzarSync() {
+        const btn = document.getElementById('sync-btn');
+        const res = document.getElementById('sync-result');
+        btn.disabled = true;
+        btn.textContent = '⏳ Sincronizando…';
+        res.style.display = 'none';
+        try {
+          const r = await fetch(`${API_BASE}/sync`, { method: 'POST' });
+          const d = await r.json();
+          res.innerHTML = r.ok
+            ? `<div class="result-ok" style="padding:0.875rem 1rem;"><p style="color:#15803d;font-size:0.875rem;">✅ ${d.message || 'Sync completado'}</p></div>`
+            : `<div class="result-error" style="padding:0.875rem 1rem;"><p style="font-size:0.875rem;">❌ ${d.detail || 'Error en el sync'}</p></div>`;
+        } catch(e) {
+          res.innerHTML = `<div class="result-error" style="padding:0.875rem 1rem;"><p style="font-size:0.875rem;">❌ ${e.message}</p></div>`;
+        } finally {
+          res.style.display = 'block';
+          btn.disabled = false;
+          btn.textContent = '☁️ Forzar sync desde Drive';
+        }
       }
     </script>
   </body>
