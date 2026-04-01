@@ -302,22 +302,38 @@ def procesar(path: str) -> Optional[RegistroBL]:
 CAMPOS_CSV = [f.name for f in fields(RegistroBL)]
 
 
+def _clave_bl(naviera: str, num_bl: str, fecha: str,
+              nombre: str, buque: str, matricula: str) -> tuple:
+    """Clave de deduplicación — independiente del nombre de fichero."""
+    return (
+        naviera.strip().upper(),
+        num_bl.strip().upper(),
+        fecha.strip(),
+        nombre.strip().upper(),
+        buque.strip().upper(),
+        matricula.strip().upper(),
+    )
+
+
 def guardar_csv(registros: list, ruta: str) -> None:
     # Leer claves ya existentes para evitar duplicados
     claves_existentes: set[tuple] = set()
     if os.path.isfile(ruta):
         with open(ruta, newline="", encoding="utf-8") as fh:
             for row in csv.DictReader(fh):
-                claves_existentes.add((
-                    row.get("archivo", ""),
-                    row.get("naviera", ""),
-                    row.get("num_bl", ""),
-                    row.get("fecha", ""),
+                claves_existentes.add(_clave_bl(
+                    row.get("naviera",   ""),
+                    row.get("num_bl",    ""),
+                    row.get("fecha",     ""),
+                    row.get("nombre",    ""),
+                    row.get("buque",     ""),
+                    row.get("matricula", ""),
                 ))
 
     nuevos = []
     for rec in registros:
-        clave = (rec.archivo, rec.naviera, rec.num_bl, rec.fecha)
+        clave = _clave_bl(rec.naviera, rec.num_bl, rec.fecha,
+                          rec.nombre, rec.buque, rec.matricula)
         if clave in claves_existentes:
             log.warning("Duplicado ignorado: %s / %s / %s", rec.naviera, rec.num_bl, rec.fecha)
         else:

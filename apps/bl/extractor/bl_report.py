@@ -125,7 +125,7 @@ def generar_html(registros: list[dict], fecha: str) -> str:
 <body>
   <div class="header">
     <h1>Conocimientos de Embarque — ALGECIRAS</h1>
-    <p>Fecha de embarque: {fecha} &nbsp;·&nbsp; Generado: {ts}</p>
+    <p>Procesados: {fecha} &nbsp;·&nbsp; Generado: {ts}</p>
   </div>
   <div class="stats">
     <div class="total">{total}</div>
@@ -231,10 +231,9 @@ def main():
         log.warning("No hay CSV para la fecha %s — nada que reportar", fecha)
         sys.exit(0)
 
-    # Filtrar por fecha de embarque = hoy
-    # El CSV puede contener BLs de días anteriores procesados hoy,
-    # pero el informe solo incluye los que tienen fecha de embarque de hoy.
-    registros = leer_csv(csv_path, filtrar_fecha=fecha)
+    # Sin filtro de fecha de embarque: se reportan todos los BLs
+    # que se procesaron hoy, independientemente de su fecha de embarque.
+    registros = leer_csv(csv_path)
     if not registros:
         log.warning("CSV vacío — nada que reportar")
         sys.exit(0)
