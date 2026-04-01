@@ -14,6 +14,10 @@ services:
       - ./config:/config:ro
       - ./libs/iasuite_common:/usr/local/lib/python3.12/site-packages/iasuite_common:ro
       - ./apps:/app/apps:ro
+      - /opt/bl_sync.sh:/opt/bl_sync.sh:ro
+      - /usr/bin/rclone:/usr/bin/rclone:ro
+      - /home/mpino/.config/rclone:/root/.config/rclone:ro
+
     ports:
       - "${UNIFIED_API_PORT:-8000}:8000"  
     healthcheck:

@@ -23,6 +23,7 @@ mkdir -p "$LOCAL_INBOX"
 
 # Copiar (no move — sin permisos de borrado en Drive)
 OUTPUT=$("$RCLONE" copy "$GDRIVE_PATH" "$LOCAL_INBOX" \
+  --config /root/.config/rclone/rclone.conf \
   --drive-shared-with-me \
   --include "*.pdf" \
   --include "*.PDF" \

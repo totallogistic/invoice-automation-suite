@@ -1,6 +1,7 @@
 """Unified API for all tools."""
 from __future__ import annotations
 
+import subprocess
 import io
 import os
 import csv
@@ -445,3 +446,26 @@ async def bl_toggle(request: Request):
         nuevo = True
     _save_hecho(hechos)
     return {"clave": clave, "hecho": nuevo}
+
+
+@app.post("/api/bl/sync")
+async def bl_sync():
+    """Fuerza la copia de BLs desde Google Drive al inbox local."""
+    sync_script = Path(os.getenv("BL_SYNC_SCRIPT", "/opt/bl_sync.sh"))
+    if not sync_script.exists():
+        raise HTTPException(404, f"Script de sync no encontrado: {sync_script}")
+    try:
+        result = subprocess.run(
+            ["bash", str(sync_script)],
+            capture_output=True, text=True, timeout=120
+        )
+        if result.returncode == 0:
+            return {"ok": True, "message": "Sync completado correctamente"}
+        else:
+            raise HTTPException(500, f"Error en sync: {result.stderr.strip() or result.stdout.strip()}")
+    except subprocess.TimeoutExpired:
+        raise HTTPException(504, "Sync tardó demasiado (>120s)")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(500, str(e))
