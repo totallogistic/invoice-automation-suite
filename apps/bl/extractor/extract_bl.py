@@ -148,7 +148,9 @@ class ParserBalearia:
             tokens = [t for t in tokens if not re.match(r"^[A-Z]?\d{7,}$", t)]
             rec.buque = " ".join(tokens)
 
-        m = re.search(r"con destino al puerto\s+de\s+(\w+)", text, re.IGNORECASE)
+        m = re.search(r"con destino al puerto\s+de\s+(\w+)", text, re.IGNORECASE | re.DOTALL)
+        if not m:
+            m = re.search(r"con destino al\s+puerto de\s+(\w+)", text, re.IGNORECASE | re.DOTALL)
         if m:
             rec.puerto_destino = m.group(1).upper()
 
@@ -251,12 +253,13 @@ class ParserTrasme:
 # ── Detección de naviera ─────────────────────────────────────────────────────
 
 FIRMAS = {
-    "disant contenir":     "AML",
-    "BALEARIA EUROLINEAS": "BALEARIA",
-    "BALEARIA":            "BALEARIA",   # variante sin "EUROLINEAS" (ej. EUROMAROC)
-    "DFDS IBERIA":         "DFDS",
-    "Red Fish Speedlines": "RFS",
-    "TRASMEDITERRANEA":    "TRASME",
+    "disant contenir":              "AML",
+    "BALEARIA EUROLINEAS":          "BALEARIA",
+    "BALEARIA":                     "BALEARIA",
+    "CONOCIMIENTO DE EMBARQUE (HBL)": "BALEARIA",   # logo como imagen, texto HBL presente
+    "DFDS IBERIA":                  "DFDS",
+    "Red Fish Speedlines":          "RFS",
+    "TRASMEDITERRANEA":             "TRASME",
 }
 
 PARSERS = {
@@ -290,11 +293,7 @@ def procesar(path: str) -> Optional[RegistroBL]:
         log.error("  Error al extraer: %s", exc, exc_info=True)
         return None
 
-    if DESTINO_FILTRO not in rec.puerto_destino.upper():
-        log.info("  Puerto destino '%s' != %s — omitido", rec.puerto_destino, DESTINO_FILTRO)
-        return None
-
-    log.info("  Destino: %s — INCLUIDO", rec.puerto_destino)
+    log.info("  Destino: %s — INCLUIDO", rec.puerto_destino or "—")
     return rec
 
 
@@ -427,8 +426,12 @@ def main():
     print(f"\n{'─'*55}")
     print(f"  Version          : {SCRIPT_VERSION}")
     print(f"  PDFs encontrados : {len(pdfs)}")
-    print(f"  Incluidos        : {len(registros)}  (destino = {DESTINO_FILTRO})")
-    print(f"  Omitidos         : {len(omitidos)}")
+    print(f"  Incluidos        : {len(registros)}")
+    exportaciones = sum(1 for r in registros if DESTINO_FILTRO in (r.puerto_destino or "").upper())
+    importaciones = len(registros) - exportaciones
+    print(f"  Exportaciones    : {exportaciones}  (destino = {DESTINO_FILTRO})")
+    print(f"  Importaciones    : {importaciones}  (otros destinos)")
+    print(f"  Omitidos         : {len(omitidos)}  (naviera no reconocida)")
     for f in omitidos:
         print(f"    · {f}")
     if registros:
