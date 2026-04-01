@@ -13,7 +13,7 @@ from typing import List
 import random
 import string
 
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Path as PathParam, Query # pyright: ignore[reportMissingImports]
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Path as PathParam, Query, Request # pyright: ignore[reportMissingImports]
 from fastapi.responses import JSONResponse, StreamingResponse, FileResponse # pyright: ignore[reportMissingImports]
 
 from .tool_registry import ToolRegistry
@@ -427,9 +427,13 @@ def bl_pdf(filename: str = PathParam(...)):
 
 
 @app.post("/api/bl/toggle")
-async def bl_toggle(payload: dict):
+async def bl_toggle(request: Request):
     """Alterna el estado hecho/pendiente de un registro BL."""
-    clave = payload.get("clave", "").strip()
+    try:
+        payload = await request.json()
+    except Exception:
+        raise HTTPException(400, "JSON inválido")
+    clave = (payload.get("clave") or "").strip()
     if not clave:
         raise HTTPException(400, "clave requerida")
     hechos = _load_hecho()
