@@ -1075,11 +1075,13 @@ async def bl_viewer(request: Request):
  
 @app.get("/api/bl/registros")
 def bl_registros(
-    naviera:     str = "",
-    fecha_desde: str = "",
-    fecha_hasta: str = "",
-    q:           str = "",
-    solo_hecho:  str = "",
+    naviera:        str = "",
+    fecha_desde:    str = "",
+    fecha_hasta:    str = "",
+    q:              str = "",
+    solo_hecho:     str = "",
+    tipo:           str = "",   # "exp" = ALGECIRAS, "imp" = otros
+    puerto_destino: str = "",
 ):
     registros = _bl_leer_registros()
     estado    = _bl_leer_estado()
@@ -1094,6 +1096,13 @@ def bl_registros(
         registros = [r for r in registros if r.get("fecha","") >= fecha_desde]
     if fecha_hasta:
         registros = [r for r in registros if r.get("fecha","") <= fecha_hasta]
+    if tipo == "exp":
+        registros = [r for r in registros if "ALGECIRAS" in (r.get("puerto_destino") or "").upper()]
+    elif tipo == "imp":
+        registros = [r for r in registros if "ALGECIRAS" not in (r.get("puerto_destino") or "").upper()]
+    if puerto_destino:
+        pd_up = puerto_destino.strip().upper()
+        registros = [r for r in registros if pd_up in (r.get("puerto_destino") or "").upper()]
     if solo_hecho == "1":
         registros = [r for r in registros if r.get("hecho")]
     elif solo_hecho == "0":
