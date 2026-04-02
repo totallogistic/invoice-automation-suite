@@ -9,6 +9,8 @@ services:
     environment:
       - CONFIG_PATH=/config/tools.yaml
       - DATA_ROOT=${DATA_ROOT:-/data}
+      - BL_INBOX=/data/bl/inbox
+      - BL_SYNC_SCRIPT=/opt/bl_sync.sh
     volumes:
       - ${DATA_ROOT:-/data}:/data
       - ./config:/config:ro
