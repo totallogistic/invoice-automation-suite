@@ -11,6 +11,8 @@ LOCAL_INBOX="${BL_INBOX:-/data/ias_prod/data/bl/inbox}"
 LOGFILE="/var/log/bl_sync.log"
 TIMESTAMP=$(date -u '+%Y-%m-%d %H:%M:%S UTC')
 
+RCLONE_CONF="${RCLONE_CONF:-/home/mpino/.config/rclone/rclone.conf}"
+
 log() {
   echo "[$TIMESTAMP] $*" | tee -a "$LOGFILE"
 }
@@ -23,7 +25,7 @@ mkdir -p "$LOCAL_INBOX"
 
 # Copiar (no move — sin permisos de borrado en Drive)
 OUTPUT=$("$RCLONE" copy "$GDRIVE_PATH" "$LOCAL_INBOX" \
-  --config /root/.config/rclone/rclone.conf \
+  --config "$RCLONE_CONF" \
   --drive-shared-with-me \
   --include "*.pdf" \
   --include "*.PDF" \
