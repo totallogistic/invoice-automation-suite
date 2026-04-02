@@ -50,6 +50,8 @@ services:
       - MAIL_TO_CROTON_IMPORT=${MAIL_TO_CROTON_IMPORT:-}
       - MAIL_TO_BL=${MAIL_TO_BL:-}
       - BL_PRINT_FOLDER=${BL_PRINT_FOLDER:-}
+      - BL_CSV_DIR=/data/bl/csv
+      - BL_DATA_ROOT=/data/bl
     volumes:
       - ${DATA_ROOT:-/data}:/data
       - ./config:/config:ro
