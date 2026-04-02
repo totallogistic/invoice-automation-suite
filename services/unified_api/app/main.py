@@ -457,7 +457,12 @@ async def bl_sync():
     try:
         result = subprocess.run(
             ["bash", str(sync_script)],
-            capture_output=True, text=True, timeout=120
+            capture_output=True, text=True, timeout=120,
+            env={
+                **os.environ,
+                "BL_INBOX":    os.getenv("BL_INBOX",    "/data/bl/inbox"),
+                "RCLONE_CONF": os.getenv("RCLONE_CONF", "/root/.config/rclone/rclone.conf"),
+            }
         )
         if result.returncode == 0:
             return {"ok": True, "message": "Sync completado correctamente"}
