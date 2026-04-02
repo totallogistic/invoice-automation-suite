@@ -9,7 +9,7 @@ PYTHON="$(command -v python3)"
 SCRIPT="$SCRIPT_DIR/bl_inbox_watcher.py"
 INBOX="/data/ias_prod/data/bl/inbox"
 QUIET="15"      # segundos de quietud antes de crear batch
-POLL="3"        # segundos entre comprobaciones
+POLL="15"        # segundos entre comprobaciones
 SERVICE="bl-inbox-watcher"
 SERVICE_FILE="/etc/systemd/system/${SERVICE}.service"
 

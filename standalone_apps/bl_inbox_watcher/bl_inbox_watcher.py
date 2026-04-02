@@ -127,7 +127,7 @@ def main() -> None:
     parser.add_argument(
         "--poll",
         type=float,
-        default=float(os.getenv("BL_POLL_SECONDS", "3")),
+        default=float(os.getenv("BL_POLL_SECONDS", "15")),
         help="Intervalo de comprobación en segundos (default: 3)",
     )
     args = parser.parse_args()

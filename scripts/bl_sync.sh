@@ -24,7 +24,7 @@ log "Iniciando sync BL: $GDRIVE_PATH → $LOCAL_INBOX"
 mkdir -p "$LOCAL_INBOX"
 
 # Copiar (no move — sin permisos de borrado en Drive)
-OUTPUT=$("$RCLONE" copy "$GDRIVE_PATH" "$LOCAL_INBOX" \
+OUTPUT=$("$RCLONE" move "$GDRIVE_PATH" "$LOCAL_INBOX" \
   --config "$RCLONE_CONF" \
   --drive-shared-with-me \
   --include "*.pdf" \
