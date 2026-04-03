@@ -88,14 +88,17 @@ async def save_session(bank_id: str, session_id: str, expires_at: str, accounts:
         """, (session_id, expires_at, now, bank_id))
 
         for acc in accounts:
+            # Enable Banking usa 'uid' como identificador de cuenta
+            acc_id = acc.get("uid") or acc.get("id") or acc.get("resource_id", "")
+            iban = acc.get("account_id", {}).get("iban", "") if isinstance(acc.get("account_id"), dict) else ""
             await db.execute("""
                 INSERT INTO accounts (id, bank_id, iban, name, currency)
                 VALUES (?, ?, ?, ?, ?)
                 ON CONFLICT(id) DO UPDATE SET iban=excluded.iban, name=excluded.name
             """, (
-                acc["id"],
+                acc_id,
                 bank_id,
-                acc.get("account_id", {}).get("iban", ""),
+                iban,
                 acc.get("name", ""),
                 acc.get("currency", "EUR"),
             ))

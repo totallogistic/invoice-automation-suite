@@ -15,7 +15,7 @@ import jwt as pyjwt
 
 logger = logging.getLogger(__name__)
 
-ENABLE_BANKING_BASE = "https://api.tilisy.com"
+ENABLE_BANKING_BASE = "https://api.enablebanking.com"
 
 
 class EnableBankingClient:
@@ -25,16 +25,20 @@ class EnableBankingClient:
 
     # ------------------------------------------------------------------
     # JWT auth token (short-lived, signed with RSA key)
-    # ------------------------------------------------------------------
     def _make_token(self) -> str:
         now = int(time.time())
         payload = {
-            "iss": self.app_id,
+            "iss": "enablebanking.com",       # siempre este valor fijo
+            "aud": "api.enablebanking.com",   # siempre este valor fijo
             "iat": now,
             "exp": now + 3600,
-            "jti": str(uuid.uuid4()),
         }
-        return pyjwt.encode(payload, self.private_key, algorithm="RS256")
+        return pyjwt.encode(
+            payload,
+            self.private_key,
+            algorithm="RS256",
+            headers={"kid": self.app_id},     # el app_id va aquí, en el header
+        )
 
     def _headers(self) -> dict:
         return {
@@ -112,20 +116,23 @@ class EnableBankingClient:
         for account in accounts:
             try:
                 balances = await self.get_account_balances(account["id"], session_id)
-                # Prefer closingBooked, fall back to interimAvailable
+                logger.info("RAW BALANCES: %s", balances)  # ← añade esta línea
                 balance = next(
                     (b for b in balances if b.get("name") == "closingBooked"),
                     next(iter(balances), None),
                 )
                 if balance:
+                    logger.info("SELECTED BALANCE: %s", balance)
+                    # Enable Banking devuelve balance_amount (snake) o balanceAmount (camel)
+                    bal_amt = balance.get("balance_amount") or balance.get("balanceAmount", {})
                     results.append(
                         {
                             "account_id": account["id"],
                             "iban": account.get("account_id", {}).get("iban", ""),
                             "name": account.get("name", ""),
-                            "amount": float(balance["balanceAmount"]["amount"]),
-                            "currency": balance["balanceAmount"]["currency"],
-                            "balance_type": balance.get("name", ""),
+                            "amount": float(bal_amt["amount"]),
+                            "currency": bal_amt["currency"],
+                            "balance_type": balance.get("balance_type") or balance.get("name", ""),
                         }
                     )
             except Exception as exc:

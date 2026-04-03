@@ -1,13 +1,13 @@
 [Unit]
-Description=Banking Dashboard
+Description=Banking Dashboard (uvicorn)
 After=network.target
 
 [Service]
 Type=simple
 User={{USER}}
-WorkingDirectory={{INSTALL_DIR}}/standalone_apps/banking_dashboard
-EnvironmentFile={{INSTALL_DIR}}/standalone_apps/banking_dashboard/.env
-ExecStart={{VENV}}/bin/uvicorn app:app --host 0.0.0.0 --port {{PORT}}
+WorkingDirectory={{APP_DIR}}
+EnvironmentFile={{APP_DIR}}/.env
+ExecStart={{APP_DIR}}/.venv/bin/uvicorn app:app --host 0.0.0.0 --port {{PORT}}
 Restart=always
 RestartSec=10
 
