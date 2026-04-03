@@ -1,8 +1,6 @@
 """
-Daily sync job.
-Runs at 07:00 via APScheduler (started from app.py).
-Fetches balances from all connected banks, stores them,
-and sends a summary email via iasuite_common.email.
+Daily sync job — 07:00 via APScheduler.
+Post-sync: actualiza Excel local, sincroniza Google Sheets, envía email.
 """
 
 import os
@@ -14,25 +12,18 @@ from db import get_all_banks, save_balances
 
 logger = logging.getLogger(__name__)
 
-# ------------------------------------------------------------------
-# Load client once (credentials from env)
-# ------------------------------------------------------------------
+
 def _get_client() -> EnableBankingClient:
-    app_id = os.environ["ENABLE_BANKING_APP_ID"]
-    key_path = os.environ.get("ENABLE_BANKING_KEY_PATH", "keys/private.pem")
-    private_key = open(key_path).read()
-    return EnableBankingClient(app_id, private_key)
+    app_id   = os.environ["ENABLE_BANKING_APP_ID"]
+    key_path = os.environ.get("ENABLE_BANKING_KEY_PATH", "keys/private.key")
+    return EnableBankingClient(app_id, open(key_path).read())
 
 
-# ------------------------------------------------------------------
-# Core sync logic
-# ------------------------------------------------------------------
 async def sync_all_banks() -> dict:
-    client = _get_client()
-    banks = await get_all_banks()
+    client    = _get_client()
+    banks     = await get_all_banks()
     connected = [b for b in banks if b["status"] == "connected" and b["session_id"]]
-
-    results = {"synced": [], "failed": [], "skipped": []}
+    results   = {"synced": [], "failed": [], "skipped": []}
 
     if not connected:
         logger.warning("No connected banks to sync.")
@@ -40,23 +31,18 @@ async def sync_all_banks() -> dict:
 
     for bank in connected:
         try:
-            # Re-fetch accounts for this bank from the session
-            # In real usage you'd store accounts list; here we re-query
-            from db import DB_PATH
             import aiosqlite
-            async with aiosqlite.connect(DB_PATH) as db_conn:
-                db_conn.row_factory = aiosqlite.Row
-                async with db_conn.execute(
-                    "SELECT * FROM accounts WHERE bank_id=?", (bank["id"],)
-                ) as cur:
+            from db import DB_PATH
+            async with aiosqlite.connect(DB_PATH) as conn:
+                conn.row_factory = aiosqlite.Row
+                async with conn.execute("SELECT * FROM accounts WHERE bank_id=?", (bank["id"],)) as cur:
                     accounts = [dict(r) for r in await cur.fetchall()]
 
             if not accounts:
-                logger.warning("Bank %s has no accounts stored, skipping.", bank["name"])
+                logger.warning("Bank %s has no accounts, skipping.", bank["name"])
                 results["skipped"].append(bank["name"])
                 continue
 
-            # Normalise to the shape expected by fetch_all_balances
             accounts_payload = [
                 {"id": a["id"], "account_id": {"iban": a["iban"]}, "name": a["name"]}
                 for a in accounts
@@ -70,39 +56,57 @@ async def sync_all_banks() -> dict:
             logger.error("Sync failed for %s: %s", bank["name"], exc)
             results["failed"].append({"bank": bank["name"], "error": str(exc)})
 
-    # Send daily email summary
-    await _send_summary_email(results)
+    await _post_sync_exports(results)
     return results
 
 
-# ------------------------------------------------------------------
-# Email report via iasuite_common
-# ------------------------------------------------------------------
-async def _send_summary_email(results: dict):
+async def _post_sync_exports(results: dict):
+    from db import get_latest_balances, get_history_per_bank, get_daily_totals
+    latest  = await get_latest_balances()
+    history = await get_history_per_bank(days=90)
+    daily   = await get_daily_totals(days=90)
+
+    if not latest:
+        return
+
+    # 1. Excel local (Samba)
     try:
-        # Try to import iasuite_common from the parent libs directory
+        from excel_export import generate_excel
+        await generate_excel(latest, history, daily)
+        logger.info("Excel actualizado: data/saldos.xlsx")
+    except Exception as exc:
+        logger.warning("Excel export failed: %s", exc)
+
+    # 2. Google Sheets (si configurado en .env)
+    creds_path = os.environ.get("GOOGLE_SHEETS_CREDENTIALS", "")
+    sheet_id   = os.environ.get("GOOGLE_SHEETS_ID", "")
+    if creds_path and sheet_id:
+        try:
+            from sheets_export import sync_to_sheets
+            await sync_to_sheets(creds_path, sheet_id, latest, history, daily)
+            logger.info("Google Sheets sincronizado")
+        except Exception as exc:
+            logger.error("Google Sheets sync failed: %s", exc)
+
+    # 3. Email resumen
+    await _send_summary_email(results, latest)
+
+
+async def _send_summary_email(results: dict, latest: list[dict]):
+    try:
         import sys, pathlib
         sys.path.insert(0, str(pathlib.Path(__file__).parents[3] / "libs"))
         from iasuite_common.email import send_email  # type: ignore
 
-        from db import get_latest_balances, get_daily_totals
-        latest = await get_latest_balances()
-        totals = await get_daily_totals(days=1)
-        total_today = sum(r["total"] for r in totals) if totals else 0
-
-        lines = [f"<h2>Balance summary — {datetime.now().strftime('%d/%m/%Y')}</h2>"]
-        lines.append(f"<p><strong>Total: {total_today:,.2f} EUR</strong></p><hr>")
-        lines.append("<table border='0' cellpadding='6' style='font-family:monospace'>")
+        total = sum(r["amount"] for r in latest)
+        lines = [f"<h2>Saldos {datetime.now().strftime('%d/%m/%Y')}</h2>"]
+        lines.append(f"<p><strong>Total: {total:,.2f} EUR</strong></p><hr>")
+        lines.append("<table cellpadding='6' style='font-family:monospace'>")
         lines.append("<tr><th>Banco</th><th>IBAN</th><th>Saldo</th></tr>")
         for row in latest:
-            iban_short = f"****{row['iban'][-4:]}" if row.get("iban") else "—"
-            lines.append(
-                f"<tr><td>{row['bank_name']}</td>"
-                f"<td>{iban_short}</td>"
-                f"<td align='right'>{row['amount']:,.2f} {row['currency']}</td></tr>"
-            )
+            iban = f"****{row['iban'][-4:]}" if row.get("iban") else "—"
+            lines.append(f"<tr><td>{row['bank_name']}</td><td>{iban}</td><td align='right'>{row['amount']:,.2f} {row['currency']}</td></tr>")
         lines.append("</table>")
-
         if results["failed"]:
             lines.append("<p style='color:red'>⚠️ Errores:</p><ul>")
             for f in results["failed"]:
@@ -113,12 +117,10 @@ async def _send_summary_email(results: dict):
         if recipient:
             send_email(
                 to=recipient,
-                subject=f"💰 Saldos {datetime.now().strftime('%d/%m/%Y')} — {total_today:,.0f} EUR",
+                subject=f"💰 Saldos {datetime.now().strftime('%d/%m/%Y')} — {total:,.0f} EUR",
                 body_html="\n".join(lines),
             )
-            logger.info("Summary email sent to %s", recipient)
-
     except ImportError:
-        logger.warning("iasuite_common not found — skipping email report")
+        logger.warning("iasuite_common no encontrado — sin email")
     except Exception as exc:
-        logger.error("Failed to send summary email: %s", exc)
+        logger.error("Email failed: %s", exc)
