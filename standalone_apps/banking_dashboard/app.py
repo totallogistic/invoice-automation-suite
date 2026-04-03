@@ -19,8 +19,8 @@ import yaml
 from pathlib import Path
 from contextlib import asynccontextmanager
 
+from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse, FileResponse
 from fastapi import FastAPI, Request, HTTPException
-from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
@@ -122,6 +122,7 @@ async def dashboard(request: Request):
         "days": all_days,
         "series": series,
         "daily_totals": [{"day": r["day"], "total": r["total"]} for r in daily],
+        "excel_ready": (BASE_DIR / "data" / "saldos.xlsx").exists(),
     })
 
 
@@ -194,3 +195,20 @@ async def api_data():
         "history": history,
         "total": sum(r["amount"] for r in latest),
     }
+
+@app.get("/export/excel")
+async def export_excel():
+    from excel_export import generate_excel
+    latest  = await db.get_latest_balances()
+    history = await db.get_history_per_bank(days=90)
+    daily   = await db.get_daily_totals(days=90)
+    if not latest:
+        raise HTTPException(404, "No hay datos. Realiza un sync primero.")
+    excel_path = await generate_excel(latest, history, daily)
+    import datetime
+    today = datetime.date.today().strftime("%Y%m%d")
+    return FileResponse(
+        path=str(excel_path),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        filename=f"saldos_bancarios_{today}.xlsx",
+    )
