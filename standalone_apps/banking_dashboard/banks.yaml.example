@@ -1,0 +1,50 @@
+# Banking Dashboard — bank configuration
+# Copy this file to banks.yaml and adjust if any ASPSP name differs.
+# ASPSP names must match exactly what Enable Banking expects.
+# Check: https://enablebanking.com/open-banking-apis?country=ES
+
+banks:
+  - id: santander
+    name: Banco Santander
+    aspsp_name: "Banco Santander"
+    country: ES
+
+  - id: bbva
+    name: BBVA
+    aspsp_name: "BBVA"
+    country: ES
+
+  - id: caixabank
+    name: CaixaBank
+    aspsp_name: "CaixaBank"
+    country: ES
+
+  - id: banca_march
+    name: Banca March
+    aspsp_name: "Banca March"
+    country: ES
+
+  - id: caja_rural_sur
+    name: Caja Rural del Sur
+    aspsp_name: "Caja Rural del Sur"
+    country: ES
+
+  - id: caja_rural_granada
+    name: Caja Rural de Granada
+    aspsp_name: "Caja Rural de Granada"
+    country: ES
+
+  - id: unicaja
+    name: Unicaja Banco
+    aspsp_name: "Unicaja Banco"
+    country: ES
+
+  - id: bankinter
+    name: Bankinter
+    aspsp_name: "Bankinter"
+    country: ES
+
+  - id: deutsche_bank
+    name: Deutsche Bank España
+    aspsp_name: "Deutsche Bank"
+    country: ES
