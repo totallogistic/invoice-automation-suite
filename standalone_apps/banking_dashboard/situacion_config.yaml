@@ -1,0 +1,208 @@
+# ============================================================
+# SITUACIÓN FINANCIERA — Configuración completa
+# ============================================================
+# Fuentes de datos:
+#   Este fichero       → todo excepto Dispuesto
+#   saldos_actuales.yaml → Dispuesto (K) — del sync bancario o mock manual
+#   Template xlsx      → solo fórmulas
+# ============================================================
+
+euribor:
+  "Euribor 3":  0.02079
+  "Euribor 6":  0.02475
+  "Euribor 12": 0.02870
+
+anticipos:
+  - banco: "BANCO SANTANDER"
+    numero: 5056
+  - banco: "BBVA"
+    numero: 5288
+
+disponible_importacion: 450000   # R8
+
+cuentas:
+
+  # ── LÍNEAS (filas 4-9) ─────────────────────────────────
+  - fila: 4
+    banco: "CAJA RURAL SUR"
+    cta_auxiliar: null
+    or: 1
+    tipo: "LINEA"
+    producto: "LINEA FINANCIACION PAGOS"
+    euribor_tipo: "Euribor 3"
+    diferencial: 0.007
+    nd: null
+    importe: 150000
+    reservado: null
+    iban: null
+
+  - fila: 5
+    banco: "SANTANDER"
+    cta_auxiliar: "520.8.000002"
+    or: 2
+    tipo: "LINEA"
+    producto: "LINEA ANTICIPO FACTURAS"
+    euribor_tipo: "Euribor 3"
+    diferencial: 0.0075
+    nd: null
+    importe: 700000
+    reservado: null
+    iban: null
+
+  - fila: 6
+    banco: "CAIXA"
+    cta_auxiliar: "520.1.000026"
+    or: 3
+    tipo: "LINEA"
+    producto: "LINEA FINANCIACION PAGOS"
+    euribor_tipo: "Euribor 3"
+    diferencial: 0.0095
+    nd: null
+    importe: 200000
+    reservado: null
+    iban: null
+
+  - fila: 7
+    banco: "SANTANDER"
+    cta_auxiliar: "520.8.000002"
+    or: 4
+    tipo: "LINEA"
+    producto: "LINEA FINANCIACION PAGOS"
+    euribor_tipo: "Euribor 6"
+    diferencial: 0.0075
+    nd: null
+    importe: 300000
+    reservado: null
+    iban: null
+
+  - fila: 8
+    banco: "CAJA RURAL GR"
+    cta_auxiliar: "520.1.000025"
+    or: 5
+    tipo: "LINEA"
+    producto: "LINEA IMPORTACION 180 DIAS"
+    euribor_tipo: "Euribor 3"
+    diferencial: 0.0105
+    nd: null
+    importe: 100000
+    reservado: null
+    iban: null
+
+  - fila: 9
+    banco: "BANCA MARCH"
+    cta_auxiliar: "572 00008"
+    or: 6
+    tipo: "ANTIC"
+    producto: "ES47 0061 0253 1500 4584 0110"
+    euribor_tipo: "Euribor 3"
+    diferencial: 0.012
+    nd: null
+    importe: 250000
+    reservado: null
+    iban: "ES4700612531500045840110"
+
+  # ── PÓLIZAS (filas 10-16) ──────────────────────────────
+  - fila: 10
+    banco: "CAJA RURAL SUR"
+    cta_auxiliar: "572. 10008"
+    or: 1
+    tipo: "POLIZA"
+    producto: "ES7631870422025905784426"
+    euribor_tipo: "Euribor 3"
+    diferencial: 0.007
+    nd: "0,02 %"
+    importe: 150000
+    reservado: 40000
+    iban: "ES7631870422025905784426"
+
+  - fila: 11
+    banco: "CAJA RURAL GR"
+    cta_auxiliar: "520.1.00022"
+    or: 2
+    tipo: "POLIZA"
+    producto: "ES3730230602436963950206"
+    euribor_tipo: "Euribor 12"
+    diferencial: 0.0075
+    nd: "0,02 %"
+    importe: 300000
+    reservado: 120000
+    iban: "ES3730230602436963950206"
+
+  - fila: 12
+    banco: "BBVA"
+    cta_auxiliar: "520.1.000021"
+    or: 3
+    tipo: "POLIZA"
+    producto: "ES5901824220890101512413"
+    euribor_tipo: "Euribor 3"
+    diferencial: 0.0095
+    nd: "0,15 %"
+    importe: 800000
+    reservado: 100000
+    iban: "ES5901824220890101512413"
+
+  - fila: 13
+    banco: "CAIXA"
+    cta_auxiliar: "520.1.000023"
+    or: 4
+    tipo: "POLIZA"
+    producto: "ES8221008860301300107933"
+    euribor_tipo: "Euribor 3"
+    diferencial: 0.01
+    nd: "0,15 %"
+    importe: 400000
+    reservado: 80000
+    iban: "ES8221008860301300107933"
+
+  - fila: 14
+    banco: "UNICAJA"
+    cta_auxiliar: "520.1.00028"
+    or: 5
+    tipo: "POLIZA"
+    producto: "ES3221034002590550008275"
+    euribor_tipo: "Euribor 12"
+    diferencial: 0.008
+    nd: "0,20 %"
+    importe: 100000
+    reservado: 20000
+    iban: "ES3221034002590550008275"
+
+  - fila: 15
+    banco: "BANKINTER"
+    cta_auxiliar: "520.1.000024"
+    or: 6
+    tipo: "POLIZA"
+    producto: "ES6801287727650500003762"
+    euribor_tipo: "Euribor 12"
+    diferencial: 0.0095
+    nd: "0,05 %"
+    importe: 150000
+    reservado: 40000
+    iban: "ES6801287727650500003762"
+
+  - fila: 16
+    banco: "BANKINTER"
+    cta_auxiliar: "520.1.000019"
+    or: 7
+    tipo: "POLIZA"
+    producto: "ES7901287727600500002257"
+    euribor_tipo: "Euribor 12"
+    diferencial: 0.0125
+    nd: "0,05 %"
+    importe: 300000
+    reservado: 40000
+    iban: "ES7901287727600500002257"
+
+  # ── CUENTA CORRIENTE (fila 17) ─────────────────────────
+  - fila: 17
+    banco: "SANTANDER"
+    cta_auxiliar: "572000003"
+    or: null
+    tipo: "CC"
+    producto: "Cuenta Corriente"
+    euribor_tipo: null
+    diferencial: null
+    nd: null
+    importe: null
+    reservado: null
+    iban: null
