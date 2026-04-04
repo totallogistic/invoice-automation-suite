@@ -44,7 +44,7 @@ def _currency_fmt(cell, value):
     cell.alignment = Alignment(horizontal="right")
 
 
-async def generate_excel(latest: list[dict], history: list[dict], daily_totals: list[dict]) -> Path:
+async def generate_excel(latest: list[dict], history: list[dict], daily_totals: list[dict], filename: str = "saldos.xlsx") -> Path:
     wb = Workbook()
 
     # ------------------------------------------------------------------
@@ -154,7 +154,8 @@ async def generate_excel(latest: list[dict], history: list[dict], daily_totals: 
         total_cell.fill = PatternFill("solid", start_color=COLOR_TOTAL_BG)
         total_cell.alignment = Alignment(horizontal="right")
 
-    EXCEL_PATH.parent.mkdir(parents=True, exist_ok=True)
-    wb.save(EXCEL_PATH)
-    logger.info("Excel saved to %s", EXCEL_PATH)
-    return EXCEL_PATH
+    output = EXCEL_PATH.parent / filename
+    output.parent.mkdir(parents=True, exist_ok=True)
+    wb.save(output)
+    logger.info("Excel saved to %s", output)
+    return output

@@ -69,15 +69,41 @@ async def _post_sync_exports(results: dict):
     if not latest:
         return
 
-    # 1. Excel local (Samba)
+    # 1. saldos_actuales.yaml — nombre fijo, puente para Situación Financiera
+    try:
+        import yaml
+        from pathlib import Path
+        yaml_data = {
+            "fecha": datetime.now().strftime("%Y-%m-%d"),
+            "generado_por": "sync_automatico",
+            "saldos": [
+                {
+                    "iban": b["iban"],
+                    "banco": b["bank_name"],
+                    "cuenta": b.get("account_name", ""),
+                    "dispuesto": round(b["amount"], 2),
+                    "moneda": b.get("currency", "EUR"),
+                }
+                for b in latest if b.get("iban")
+            ]
+        }
+        yaml_path = Path(__file__).parent / "data" / "saldos_actuales.yaml"
+        yaml_path.write_text(yaml.dump(yaml_data, allow_unicode=True, default_flow_style=False))
+        logger.info("saldos_actuales.yaml actualizado (%d cuentas)", len(yaml_data["saldos"]))
+    except Exception as exc:
+        logger.warning("saldos_actuales.yaml failed: %s", exc)
+
+    # 2. Excel diario + histórico
     try:
         from excel_export import generate_excel
-        await generate_excel(latest, history, daily)
-        logger.info("Excel actualizado: data/saldos.xlsx")
+        today_str = datetime.now().strftime("%Y%m%d")
+        await generate_excel(latest, history, daily, filename=f"saldos_{today_str}.xlsx")
+        await generate_excel(latest, history, daily, filename="saldos_historico.xlsx")
+        logger.info("Excel diario y histórico actualizados")
     except Exception as exc:
         logger.warning("Excel export failed: %s", exc)
 
-    # 2. Google Sheets (si configurado en .env)
+    # 3. Google Sheets (si configurado en .env)
     creds_path = os.environ.get("GOOGLE_SHEETS_CREDENTIALS", "")
     sheet_id   = os.environ.get("GOOGLE_SHEETS_ID", "")
     if creds_path and sheet_id:
