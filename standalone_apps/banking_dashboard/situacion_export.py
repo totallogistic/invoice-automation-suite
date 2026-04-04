@@ -1,12 +1,14 @@
 """
 Generador de Situación Financiera.
 
-Lee:
-  situacion_config.yaml  → todos los datos excepto Dispuesto
-  saldos_actuales.yaml   → Dispuesto (K) por IBAN
+Estructura de directorios:
+  config/            → situacion_config.yaml (Samba compartido para edición)
+  data/              → saldos_actuales.yaml + ficheros generados (Samba lectura)
+  templates_excel/   → SITUACION_FINANCIERA_TEMPLATE.xlsx (protegido, sin Samba)
 
-Escribe sobre el template limpio (solo fórmulas) y genera
-data/situacion_financiera.xlsx listo para usar.
+Lógica de Dispuesto (K) por prioridad:
+  1. saldos_actuales.yaml (sync bancario automático) — si IBAN coincide
+  2. campo 'dispuesto' en situacion_config.yaml — para líneas sin API
 """
 
 import logging
@@ -19,9 +21,9 @@ from openpyxl import load_workbook
 logger = logging.getLogger(__name__)
 
 BASE_DIR      = Path(__file__).parent
-TEMPLATE_PATH = BASE_DIR / "data" / "SITUACION_FINANCIERA_TEMPLATE.xlsx"
+TEMPLATE_PATH = BASE_DIR / "templates_excel" / "SITUACION_FINANCIERA_TEMPLATE.xlsx"
 OUTPUT_PATH   = BASE_DIR / "data" / "situacion_financiera.xlsx"
-CONFIG_PATH   = BASE_DIR / "situacion_config.yaml"
+CONFIG_PATH   = BASE_DIR / "config" / "situacion_config.yaml"
 SALDOS_PATH   = BASE_DIR / "data" / "saldos_actuales.yaml"
 
 # Columnas del template
@@ -37,7 +39,7 @@ COL = {
     "importe":     10,  # J
     "dispuesto":   11,  # K
     "reservado":   18,  # R
-    "label_tabla": 19,  # S  (etiqueta en tabla R)
+    "label_tabla": 19,  # S
 }
 
 
@@ -56,16 +58,21 @@ async def generate_situacion() -> Path:
     if not TEMPLATE_PATH.exists():
         raise FileNotFoundError(
             f"Template no encontrado: {TEMPLATE_PATH}\n"
-            "Copia SITUACION_FINANCIERA_TEMPLATE.xlsx a la carpeta data/."
+            "Copia SITUACION_FINANCIERA_TEMPLATE.xlsx a la carpeta templates_excel/."
+        )
+    if not CONFIG_PATH.exists():
+        raise FileNotFoundError(
+            f"Config no encontrado: {CONFIG_PATH}\n"
+            "Asegúrate de que situacion_config.yaml está en la carpeta config/."
         )
 
     config = _load_yaml(CONFIG_PATH)
     saldos = _load_yaml(SALDOS_PATH)
 
     if not config:
-        raise ValueError("situacion_config.yaml vacío o no encontrado.")
+        raise ValueError("situacion_config.yaml vacío.")
 
-    # Índice IBAN → dispuesto desde saldos_actuales.yaml
+    # Índice IBAN → dispuesto desde sync bancario (prioridad 1)
     iban_index: dict[str, float] = {}
     for s in saldos.get("saldos", []):
         iban_key = _iban(s.get("iban", ""))
@@ -84,26 +91,27 @@ async def generate_situacion() -> Path:
     if eur.get("Euribor 6"):  ws["B20"] = eur["Euribor 6"]
     if eur.get("Euribor 12"): ws["B21"] = eur["Euribor 12"]
 
-    # ── 3. R8 (disponible importación) ───────────────────────────────
+    # ── 3. R8 ─────────────────────────────────────────────────────────
     if config.get("disponible_importacion"):
         ws["R8"] = config["disponible_importacion"]
 
-    # ── 4. Anticipos (filas 23-24) ────────────────────────────────────
+    # ── 4. Anticipos ──────────────────────────────────────────────────
     for i, ant in enumerate(config.get("anticipos", []), start=23):
         ws.cell(row=i, column=1).value = ant.get("banco", "")
         ws.cell(row=i, column=2).value = ant.get("numero")
 
     # ── 5. Cuentas ────────────────────────────────────────────────────
     cuentas = config.get("cuentas") or []
-    actualizados = 0
-    sin_saldo = []
+    actualizados_api    = 0
+    actualizados_manual = 0
+    sin_dispuesto       = []
 
     for cfg in cuentas:
         fila = cfg.get("fila")
         if not fila:
             continue
 
-        # Escribe todos los campos del config en su columna
+        # Escribe campos del config
         ws.cell(row=fila, column=COL["banco"]).value    = cfg.get("banco")
         ws.cell(row=fila, column=COL["cta_aux"]).value  = cfg.get("cta_auxiliar")
         ws.cell(row=fila, column=COL["or"]).value       = cfg.get("or")
@@ -112,42 +120,51 @@ async def generate_situacion() -> Path:
 
         if cfg.get("euribor_tipo"):
             ws.cell(row=fila, column=COL["euribor_lbl"]).value = cfg["euribor_tipo"]
-
         if cfg.get("diferencial") is not None:
             ws.cell(row=fila, column=COL["diferencial"]).value = cfg["diferencial"]
-
         if cfg.get("nd"):
             ws.cell(row=fila, column=COL["nd"]).value = cfg["nd"]
-
         if cfg.get("importe") is not None:
             cell = ws.cell(row=fila, column=COL["importe"])
             cell.value        = cfg["importe"]
             cell.number_format = '#,##0'
-
-        # Reservado (R) — solo pólizas
         if cfg.get("reservado") is not None:
             cell = ws.cell(row=fila, column=COL["reservado"])
             cell.value        = cfg["reservado"]
             cell.number_format = '#,##0'
-            # Etiqueta en S (tabla R)
             ws.cell(row=fila, column=COL["label_tabla"]).value = cfg.get("banco")
 
-        # Dispuesto (K) — desde saldos_actuales.yaml por IBAN
+        # ── Dispuesto (K) — prioridad: API > config manual ────────────
+        dispuesto = None
+
+        # Prioridad 1: API (por IBAN)
         iban = _iban(cfg.get("iban"))
         if iban:
-            dispuesto = iban_index.get(iban)
-            if dispuesto is not None:
-                cell = ws.cell(row=fila, column=COL["dispuesto"])
-                cell.value        = round(dispuesto, 2)
-                cell.number_format = '#,##0.00'
-                actualizados += 1
-                logger.info("F%d %s → K=%.2f €", fila, cfg.get("banco", ""), dispuesto)
-            else:
-                sin_saldo.append(f"  F{fila} {cfg.get('banco')} — IBAN {iban[:16]}... sin datos en saldos_actuales.yaml")
+            api_val = iban_index.get(iban)
+            if api_val is not None:
+                dispuesto = api_val
+                actualizados_api += 1
+                logger.info("F%d %s → K=%.2f € [API]", fila, cfg.get("banco", ""), dispuesto)
 
-    if sin_saldo:
-        logger.info("Cuentas sin Dispuesto:\n%s", "\n".join(sin_saldo))
-    logger.info("Dispuesto actualizado: %d cuentas", actualizados)
+        # Prioridad 2: config manual (campo dispuesto)
+        if dispuesto is None and cfg.get("dispuesto") is not None:
+            dispuesto = float(cfg["dispuesto"])
+            actualizados_manual += 1
+            logger.info("F%d %s → K=%.2f € [manual config]", fila, cfg.get("banco", ""), dispuesto)
+
+        if dispuesto is not None:
+            cell = ws.cell(row=fila, column=COL["dispuesto"])
+            cell.value        = round(dispuesto, 2)
+            cell.number_format = '#,##0.00'
+        else:
+            sin_dispuesto.append(f"  F{fila} {cfg.get('banco')} — sin dispuesto")
+
+    logger.info(
+        "Dispuesto: %d via API, %d manual config, %d sin datos",
+        actualizados_api, actualizados_manual, len(sin_dispuesto)
+    )
+    if sin_dispuesto:
+        logger.debug("Sin dispuesto:\n%s", "\n".join(sin_dispuesto))
 
     # ── 6. Guarda ─────────────────────────────────────────────────────
     OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)

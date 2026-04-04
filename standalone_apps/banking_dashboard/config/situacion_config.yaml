@@ -35,6 +35,7 @@ cuentas:
     importe: 150000
     reservado: null
     iban: null
+    dispuesto: 140493.44
 
   - fila: 5
     banco: "SANTANDER"
@@ -48,6 +49,7 @@ cuentas:
     importe: 700000
     reservado: null
     iban: null
+    dispuesto: 238585.91
 
   - fila: 6
     banco: "CAIXA"
@@ -61,6 +63,7 @@ cuentas:
     importe: 200000
     reservado: null
     iban: null
+    dispuesto: 0.00
 
   - fila: 7
     banco: "SANTANDER"
@@ -74,6 +77,8 @@ cuentas:
     importe: 300000
     reservado: null
     iban: null
+    dispuesto: 12828.91
+
 
   - fila: 8
     banco: "CAJA RURAL GR"
@@ -87,6 +92,8 @@ cuentas:
     importe: 100000
     reservado: null
     iban: null
+    dispuesto: 0.00
+
 
   - fila: 9
     banco: "BANCA MARCH"
