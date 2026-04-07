@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>[ALG] Revisión de Motocicletas</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <header>
+        <h1>🏍️ [ALG] Revisión de Motocicletas</h1>
+        <p class="description">Registro de revisiones y mantenimiento - Algeciras</p>
+        <a href="/" class="back-link">← Volver al inicio</a>
+    </header>
+
+    <main>
+        <form id="motocicletasForm" class="form-container">
+            <div class="form-group">
+                <label for="fecha">Fecha *</label>
+                <input type="date" id="fecha" name="fecha" required class="form-input">
+            </div>
+
+            <div class="form-group">
+                <label for="vehiculo">Vehículo *</label>
+                <select id="vehiculo" name="vehiculo" required class="form-select">
+                    <option value="">Seleccionar...</option>
+                    <option value="HONDA PCX 4235 KKW">HONDA PCX 4235 KKW</option>
+                    <option value="HONDA PCX 3024 HFG">HONDA PCX 3024 HFG</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="responsable">Responsable *</label>
+                <select id="responsable" name="responsable" required class="form-select">
+                    <option value="">Seleccionar...</option>
+                    <option value="HICHAM ASRIH EL KADDOURI">HICHAM ASRIH EL KADDOURI</option>
+                    <option value="SAMUEL JESUS DAMAS DOMINGUEZ">SAMUEL JESUS DAMAS DOMINGUEZ</option>
+                    <option value="PABLO CASTELLO RODRIGUEZ">PABLO CASTELLO RODRIGUEZ</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="kilometraje">Kilometraje</label>
+                <input type="number" id="kilometraje" name="kilometraje" class="form-input" min="0">
+            </div>
+
+            <h3>Revisión Técnica</h3>
+
+            <div class="checkbox-group">
+                <label>
+                    <input type="checkbox" name="revisionFrenos" value="true">
+                    <span>Revisión de Frenos</span>
+                </label>
+            </div>
+
+            <div class="checkbox-group">
+                <label>
+                    <input type="checkbox" name="nivelAceite" value="true">
+                    <span>Nivel de Aceite Correcto</span>
+                </label>
+            </div>
+
+            <div class="checkbox-group">
+                <label>
+                    <input type="checkbox" name="presionNeumaticos" value="true">
+                    <span>Presión de Neumáticos Correcta</span>
+                </label>
+            </div>
+
+            <div class="checkbox-group">
+                <label>
+                    <input type="checkbox" name="luces" value="true">
+                    <span>Luces Funcionando</span>
+                </label>
+            </div>
+
+            <div class="form-group">
+                <label for="observaciones">Observaciones</label>
+                <textarea id="observaciones" name="observaciones" rows="4" class="form-textarea"></textarea>
+            </div>
+
+            <button type="submit" class="btn btn-primary">💾 Guardar Revisión</button>
+        </form>
+
+        <div id="message" style="display: none;"></div>
+    </main>
+
+    <script>
+        // Establecer fecha actual por defecto
+        document.getElementById('fecha').valueAsDate = new Date();
+        
+        document.getElementById('motocicletasForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const formData = new FormData(e.target);
+            const data = Object.fromEntries(formData);
+            
+            // Convert checkboxes to boolean
+            const checkboxes = ['revisionFrenos', 'nivelAceite', 'presionNeumaticos', 'luces'];
+            checkboxes.forEach(name => {
+                data[name] = formData.has(name);
+            });
+            
+            // Convert kilometraje to number
+            if (data.kilometraje) {
+                data.kilometraje = parseFloat(data.kilometraje);
+            }
+            
+            try {
+                const response = await fetch('/api/save-to-excel/revision-motocicletas-alg', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(data)
+                });
+                
+                if (response.ok) {
+                    document.getElementById('message').textContent = '✅ Revisión guardada correctamente';
+                    document.getElementById('message').className = 'success';
+                    document.getElementById('message').style.display = 'block';
+                    setTimeout(() => {
+                        e.target.reset();
+                        document.getElementById('fecha').valueAsDate = new Date();
+                        document.getElementById('message').style.display = 'none';
+                    }, 2000);
+                } else {
+                    throw new Error('Error al guardar');
+                }
+            } catch (error) {
+                document.getElementById('message').textContent = '❌ Error al guardar la revisión';
+                document.getElementById('message').className = 'error';
+                document.getElementById('message').style.display = 'block';
+            }
+        });
+    </script>
+</body>
+</html>

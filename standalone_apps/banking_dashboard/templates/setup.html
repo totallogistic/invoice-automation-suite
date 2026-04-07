@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Banking Dashboard — Configuración</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: system-ui, sans-serif; background: #f4f5f7; color: #1a1a2e; }
+  header { background: #1a1a2e; color: #fff; padding: 16px 32px; display: flex; justify-content: space-between; align-items: center; }
+  header h1 { font-size: 18px; font-weight: 500; }
+  header nav a { color: #a0aec0; text-decoration: none; font-size: 14px; margin-left: 24px; }
+  header nav a:hover { color: #fff; }
+  .main { max-width: 800px; margin: 0 auto; padding: 40px 24px; }
+  h2 { font-size: 20px; font-weight: 500; margin-bottom: 8px; }
+  p.hint { font-size: 14px; color: #718096; margin-bottom: 32px; }
+
+  .bank-list { display: flex; flex-direction: column; gap: 12px; }
+  .bank-row { background: #fff; border-radius: 10px; border: 1px solid #e2e8f0;
+               padding: 18px 22px; display: flex; align-items: center; gap: 16px; }
+  .bank-row .info { flex: 1; }
+  .bank-row .name { font-weight: 500; font-size: 15px; }
+  .bank-row .meta { font-size: 12px; color: #a0aec0; margin-top: 3px; }
+
+  .badge { display: inline-block; padding: 2px 10px; border-radius: 99px; font-size: 11px; font-weight: 500; }
+  .badge.connected { background: #c6f6d5; color: #276749; }
+  .badge.pending   { background: #fefcbf; color: #744210; }
+  .badge.error     { background: #fed7d7; color: #822727; }
+
+  .btn { display: inline-block; padding: 8px 18px; border-radius: 6px; font-size: 13px;
+         text-decoration: none; cursor: pointer; border: none; }
+  .btn-connect { background: #2d3748; color: #fff; }
+  .btn-connect:hover { background: #4a5568; }
+  .btn-reconnect { background: transparent; border: 1px solid #cbd5e0; color: #4a5568; }
+  .btn-reconnect:hover { background: #edf2f7; }
+
+  .note { margin-top: 40px; background: #ebf8ff; border-left: 3px solid #4a90d9;
+           padding: 16px 20px; border-radius: 0 8px 8px 0; font-size: 13px; color: #2b6cb0; }
+  .note strong { display: block; margin-bottom: 4px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>💰 Banking Dashboard</h1>
+  <nav>
+    <a href="/">← Dashboard</a>
+    <a href="/setup">Configuración</a>
+  </nav>
+</header>
+
+<div class="main">
+  <h2>Conectar bancos</h2>
+  <p class="hint">Cada banco requiere tu autorización una vez. La conexión es válida ~90 días, tras los cuales el banco pedirá que la renueves.</p>
+
+  <div class="bank-list">
+  {% for bank in banks %}
+  <div class="bank-row">
+    <div class="info">
+      <div class="name">{{ bank.name }}</div>
+      <div class="meta">
+        {% if bank.status == 'connected' %}
+          Conectado el {{ bank.connected_at[:10] if bank.connected_at else '—' }}
+          · Última sync: {{ bank.last_sync_at[:10] if bank.last_sync_at else 'nunca' }}
+          · Expira: {{ bank.session_expires_at[:10] if bank.session_expires_at else '—' }}
+        {% else %}
+          Pendiente de conectar
+        {% endif %}
+      </div>
+    </div>
+    <span class="badge {{ bank.status }}">
+      {% if bank.status == 'connected' %}✓ conectado
+      {% else %}pendiente
+      {% endif %}
+    </span>
+    {% if bank.status == 'connected' %}
+      <a href="/setup/connect/{{ bank.id }}" class="btn btn-reconnect">Reconectar</a>
+    {% else %}
+      <a href="/setup/connect/{{ bank.id }}" class="btn btn-connect">Conectar →</a>
+    {% endif %}
+  </div>
+  {% endfor %}
+  </div>
+
+  <div class="note">
+    <strong>¿Cómo funciona?</strong>
+    Al hacer clic en "Conectar" serás redirigido a la web de tu banco para autorizar el acceso de lectura.
+    Nadie puede hacer pagos ni transferencias — solo lectura de saldos. Proceso regulado por PSD2.
+  </div>
+</div>
+</body>
+</html>

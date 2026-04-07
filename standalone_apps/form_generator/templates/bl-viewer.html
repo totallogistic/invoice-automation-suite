@@ -1,0 +1,403 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>BL Viewer — Conocimientos de Embarque</title>
+  <style>
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif; background:#f5f5f5; min-height:100vh; display:flex; flex-direction:column; }
+    header { background:linear-gradient(135deg,#1a4d7e 0%,#2563a8 100%); color:white; padding:1.5rem 2rem; box-shadow:0 2px 8px rgba(0,0,0,0.15); display:flex; align-items:center; gap:1rem; }
+    header a { color:rgba(255,255,255,0.75); text-decoration:none; font-size:0.875rem; white-space:nowrap; }
+    header a:hover { color:white; }
+    header h1 { font-size:1.25rem; font-weight:500; }
+    header p  { font-size:0.8rem; opacity:0.75; margin-top:0.15rem; }
+    main { flex:1; max-width:1280px; width:100%; margin:1.5rem auto; padding:0 1.5rem; }
+
+    .stats { display:grid; grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); gap:0.875rem; margin-bottom:1.25rem; }
+    .stat { background:white; border-radius:8px; box-shadow:0 1px 3px rgba(0,0,0,0.08); padding:1rem 1.25rem; text-align:center; position:relative; }
+    .stat .val { font-size:1.75rem; font-weight:700; color:#1a4d7e; line-height:1; }
+    .stat .val.p { color:#d97706; }
+    .stat .val.h { color:#059669; }
+    .stat .lbl { font-size:0.7rem; color:#6b7280; margin-top:0.3rem; text-transform:uppercase; letter-spacing:0.4px; }
+    .stat.f::after { content:'filtrado'; position:absolute; top:5px; right:7px; font-size:0.6rem; color:#d1d5db; text-transform:uppercase; }
+
+    .filters { background:white; border-radius:8px; box-shadow:0 1px 3px rgba(0,0,0,0.08); padding:0.875rem 1.25rem; margin-bottom:1.25rem; display:flex; flex-wrap:wrap; gap:0.625rem; align-items:flex-end; }
+    .fg { display:flex; flex-direction:column; gap:0.25rem; }
+    .fg label { font-size:0.7rem; color:#6b7280; font-weight:600; text-transform:uppercase; letter-spacing:0.4px; }
+    .fg input,.fg select { padding:0.4rem 0.625rem; border:1px solid #d1d5db; border-radius:6px; font-size:0.85rem; color:#374151; background:#f9fafb; }
+    .fg input:focus,.fg select:focus { outline:none; border-color:#2563a8; background:white; }
+    .fg input[type=search] { width:200px; }
+    .btn-f { padding:0.45rem 1rem; background:#1a4d7e; color:white; border:none; border-radius:6px; font-size:0.85rem; font-weight:500; cursor:pointer; align-self:flex-end; }
+    .btn-f:hover { background:#1e3a5f; }
+    .btn-c { padding:0.45rem 0.75rem; background:white; color:#6b7280; border:1px solid #d1d5db; border-radius:6px; font-size:0.85rem; cursor:pointer; align-self:flex-end; }
+    .btn-c:hover { background:#f3f4f6; }
+
+    .table-wrap { background:white; border-radius:8px; box-shadow:0 1px 3px rgba(0,0,0,0.08); overflow:hidden; }
+    .table-meta { padding:0.75rem 1.25rem; border-bottom:1px solid #f1f5f9; font-size:0.82rem; color:#6b7280; display:flex; justify-content:space-between; align-items:center; }
+    .table-meta strong { color:#1a4d7e; }
+    table { width:100%; border-collapse:collapse; font-size:0.82rem; }
+    thead th { background:#f8fafc; padding:0.625rem 0.875rem; text-align:left; font-size:0.7rem; font-weight:600; color:#374151; text-transform:uppercase; letter-spacing:0.4px; border-bottom:1px solid #e5e7eb; white-space:nowrap; }
+    thead th.thc { text-align:center; width:56px; }
+    tbody tr { border-bottom:1px solid #f1f5f9; transition:background 0.1s; }
+    tbody tr:last-child { border-bottom:none; }
+    tbody tr:hover { background:#f8fafc; }
+    tbody tr.done { background:#f0fdf4; }
+    tbody tr.done:hover { background:#dcfce7; }
+    tbody tr.done td { color:#6b7280; }
+    tbody td { padding:0.6rem 0.875rem; color:#374151; vertical-align:middle; }
+    td.mono { font-family:'SF Mono','Fira Code',monospace; font-size:0.78rem; }
+    td.tdc { text-align:center; }
+    .pdf-link { color:#1a4d7e; text-decoration:none; font-family:'SF Mono','Fira Code',monospace; font-size:0.78rem; display:inline-flex; align-items:center; gap:0.3rem; }
+    .pdf-link:hover { text-decoration:underline; }
+    .pdf-link::before { content:'↓'; font-size:0.7rem; opacity:0.5; }
+    .check-h { width:18px; height:18px; cursor:pointer; accent-color:#059669; }
+    .check-h:disabled { cursor:wait; opacity:0.5; }
+    .empty { padding:2.5rem; text-align:center; color:#9ca3af; font-size:0.875rem; }
+    #loading { display:none; padding:2rem; text-align:center; color:#6b7280; font-size:0.875rem; }
+    #loading.on { display:block; }
+
+    .nav { display:inline-block; padding:0.2rem 0.55rem; border-radius:10px; font-size:0.7rem; font-weight:700; white-space:nowrap; letter-spacing:0.3px; }
+    .nav-AML      { background:#FFFFFF; color:#f6b000; border:1px solid #f6b000; }
+    .nav-BALEARIA { background:#FFFFFF; color:#288193; border:1px solid #288193; }
+    .nav-DFDS     { background:#FFFFFF; color:#05468c; border:1px solid #05468c; }
+    .nav-RFS      { background:#FFFFFF; color:#CC0000; border:1px solid #CC0000; }
+    .nav-TRASME   { background:#FFFFFF; color:#dd052b; border:1px solid #dd052b; }
+
+    footer { text-align:center; padding:1.25rem; color:#6b7280; font-size:0.8rem; }
+
+    @media print {
+      body { background:white; }
+      header, .filters, .table-meta, footer, .check-h, .thc, .tdc { display:none !important; }
+      main { margin:0; padding:0; max-width:100%; }
+      .stats { display:none !important; }
+      .table-wrap { box-shadow:none; border:none; }
+      table { font-size:10pt; }
+      thead th { background:#1a4d7e !important; color:white !important; -webkit-print-color-adjust:exact; print-color-adjust:exact; padding:6pt 8pt; }
+      tbody td { padding:5pt 8pt; border-bottom:1px solid #e5e7eb !important; }
+      tbody tr.done td { color:#6b7280; background:#f0fdf4 !important; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+      .nav { border:1px solid currentColor !important; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+      #print-header { display:block !important; }
+    }
+    #print-header {
+      display:none;
+      margin-bottom:1rem;
+      border-bottom:2px solid #1a4d7e;
+      padding-bottom:0.5rem;
+    }
+    #print-header h2 { color:#1a4d7e; font-size:14pt; margin-bottom:0.25rem; }
+    #print-header p  { font-size:9pt; color:#6b7280; }
+  </style>
+</head>
+<body>
+  <header>
+    <div><a href="/">← Volver</a></div>
+    <div>
+      <h1>📋 BL Viewer — Conocimientos de Embarque</h1>
+      <p>AML · Balearia · DFDS · RFS · Trasmediterranea</p>
+    </div>
+  </header>
+
+  <main>
+    <div class="stats">
+      <div class="stat f"><div class="val" id="s-total">—</div><div class="lbl">Total</div></div>
+      <div class="stat f"><div class="val p" id="s-pend">—</div><div class="lbl">Pendientes</div></div>
+      <div class="stat f"><div class="val h" id="s-hecho">—</div><div class="lbl">Hechos</div></div>
+      <div class="stat f"><div class="val" id="s-aml">—</div><div class="lbl">AML</div></div>
+      <div class="stat f"><div class="val" id="s-balearia">—</div><div class="lbl">Balearia</div></div>
+      <div class="stat f"><div class="val" id="s-dfds">—</div><div class="lbl">DFDS</div></div>
+      <div class="stat f"><div class="val" id="s-rfs">—</div><div class="lbl">RFS</div></div>
+      <div class="stat f"><div class="val" id="s-trasme">—</div><div class="lbl">Trasme</div></div>
+      <div class="stat"><div class="val" id="s-fmax">—</div><div class="lbl">Último BL</div></div>
+    </div>
+
+    <div class="filters">
+      <div class="fg">
+        <label>Naviera</label>
+        <select id="f-nav">
+          <option value="">Todas</option>
+          <option>AML</option><option>BALEARIA</option><option>DFDS</option><option>RFS</option><option>TRASME</option>
+        </select>
+      </div>
+      <div class="fg">
+        <label>Tipo</label>
+        <select id="f-tipo">
+          <option value="">Todos</option>
+          <option value="exp">Exportaciones (ALGECIRAS)</option>
+          <option value="imp">Importaciones (otros)</option>
+        </select>
+      </div>
+      <div class="fg">
+        <label>Puerto destino</label>
+        <input type="search" id="f-puerto" placeholder="Ej: ALGECIRAS, CEUTA…" style="width:160px;"/>
+      </div>
+      <div class="fg">
+        <label>Estado</label>
+        <select id="f-est">
+          <option value="">Todos</option>
+          <option value="0" selected>Pendientes</option>
+          <option value="1">Hechos</option>
+        </select>
+      </div>
+      <div class="fg"><label>Desde</label><input type="date" id="f-desde"/></div>
+      <div class="fg"><label>Hasta</label><input type="date" id="f-hasta"/></div>
+      <div class="fg"><label>Buscar</label><input type="search" id="f-q" placeholder="Matrícula, nombre, BL…"/></div>
+      <button class="btn-f" onclick="cargar()">Filtrar</button>
+      <button class="btn-c" onclick="limpiar()">Limpiar</button>
+      <button class="btn-c" onclick="exportarPDF()" style="margin-left:auto;">⬇ Exportar PDF</button>
+    </div>
+
+    <div id="print-header">
+      <h2>📋 Conocimientos de Embarque</h2>
+      <p id="print-meta"></p>
+    </div>
+
+    <div class="table-wrap">
+      <div class="table-meta">
+        <div>Mostrando <strong id="count">0</strong> registros</div>
+        <div id="csv-info" style="font-size:0.75rem;color:#9ca3af;"></div>
+      </div>
+      <div id="loading" class="on">Cargando…</div>
+      <div id="tbl"></div>
+    </div>
+  </main>
+
+  <footer>© 2026 totallogistic · BL Viewer</footer>
+
+  <script>
+    const COLS = [
+      {k:'fecha',          h:'Fecha'},
+      {k:'hora',           h:'Hora'},
+      {k:'naviera',        h:'Naviera',        badge:true},
+      {k:'num_bl',         h:'Nº BL'},
+      {k:'nombre',         h:'Embarcador'},
+      {k:'buque',          h:'Buque'},
+      {k:'puerto_destino', h:'Destino'},
+      {k:'matricula',      h:'Matrícula',      mono:true},
+      {k:'archivo',        h:'Fichero',        pdf:true},
+    ];
+
+    // Columnas para el PDF exportado — sin FICHERO
+    const COLS_PRINT = COLS.filter(c => !c.pdf);
+
+    const TODAY = new Date().toISOString().split('T')[0];
+
+    function initFiltros() {
+      document.getElementById('f-desde').value = TODAY;
+      document.getElementById('f-hasta').value = TODAY;
+      document.getElementById('f-est').value   = '0';
+    }
+
+    function actualizarStats(rows) {
+      const nav = {AML:0,BALEARIA:0,DFDS:0,RFS:0,TRASME:0};
+      let hechos = 0, fmax = '';
+      rows.forEach(r => {
+        if (nav[r.naviera] !== undefined) nav[r.naviera]++;
+        if (r.hecho) hechos++;
+        if ((r.fecha||'') > fmax) fmax = r.fecha;
+      });
+      document.getElementById('s-total').textContent    = rows.length;
+      document.getElementById('s-pend').textContent     = rows.length - hechos;
+      document.getElementById('s-hecho').textContent    = hechos;
+      document.getElementById('s-aml').textContent      = nav.AML;
+      document.getElementById('s-balearia').textContent = nav.BALEARIA;
+      document.getElementById('s-dfds').textContent     = nav.DFDS;
+      document.getElementById('s-rfs').textContent      = nav.RFS;
+      document.getElementById('s-trasme').textContent   = nav.TRASME;
+      document.getElementById('s-fmax').textContent     = fmax || '—';
+    }
+
+    async function cargarCsvInfo() {
+      try {
+        const d = await fetch('/api/bl/stats').then(r=>r.json());
+        if (d.csvs?.length)
+          document.getElementById('csv-info').textContent = `${d.csvs.length} CSV(s) · ${d.csvs[0]}`;
+      } catch(e){}
+    }
+
+    async function cargar() {
+      document.getElementById('loading').classList.add('on');
+      document.getElementById('tbl').innerHTML = '';
+
+      // Stats: solo filtra por fecha para mostrar el estado real del día
+      const pStats = new URLSearchParams({
+        fecha_desde: document.getElementById('f-desde').value,
+        fecha_hasta: document.getElementById('f-hasta').value,
+      });
+      // Tabla: todos los filtros
+      const pTabla = new URLSearchParams({
+        naviera:        document.getElementById('f-nav').value,
+        fecha_desde:    document.getElementById('f-desde').value,
+        fecha_hasta:    document.getElementById('f-hasta').value,
+        q:              document.getElementById('f-q').value,
+        solo_hecho:     document.getElementById('f-est').value,
+        tipo:           document.getElementById('f-tipo').value,
+        puerto_destino: document.getElementById('f-puerto').value,
+      });
+
+      try {
+        const [dStats, dTabla] = await Promise.all([
+          fetch(`/api/bl/registros?${pStats}`).then(r=>r.json()),
+          fetch(`/api/bl/registros?${pTabla}`).then(r=>r.json()),
+        ]);
+        actualizarStats(dStats.registros);
+        document.getElementById('count').textContent = dTabla.total;
+        renderTabla(dTabla.registros);
+      } catch(e) {
+        document.getElementById('tbl').innerHTML = `<div class="empty">Error: ${e.message}</div>`;
+      } finally {
+        document.getElementById('loading').classList.remove('on');
+      }
+    }
+
+    function renderTabla(rows) {
+      if (!rows.length) {
+        document.getElementById('tbl').innerHTML = '<div class="empty">Sin registros para los filtros seleccionados</div>';
+        return;
+      }
+      const head = '<th class="thc">Hecho</th>' + COLS.map(c=>`<th>${c.h}</th>`).join('');
+      const body = rows.map(r => {
+        const k  = `${r.archivo}|${r.naviera}|${r.num_bl}`;
+        const ok = r.hecho;
+        const chk = `<td class="tdc"><input type="checkbox" class="check-h" data-k="${encodeURIComponent(k)}" ${ok?'checked':''} onchange="toggleHecho(this)"></td>`;
+        const cells = COLS.map(c => {
+          const v = r[c.k] || '—';
+          if (c.badge) return `<td><span class="nav nav-${v}">${v}</span></td>`;
+          if (c.pdf && v!=='—') return `<td><a class="pdf-link" href="/api/bl/pdf/${encodeURIComponent(v)}" target="_blank">${v}</a></td>`;
+          if (c.mono) return `<td class="mono">${v}</td>`;
+          return `<td>${v}</td>`;
+        }).join('');
+        return `<tr class="${ok?'done':''}" data-k="${encodeURIComponent(k)}">${chk}${cells}</tr>`;
+      }).join('');
+      document.getElementById('tbl').innerHTML = `<table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`;
+    }
+
+    async function toggleHecho(cb) {
+      const k = decodeURIComponent(cb.getAttribute('data-k'));
+      cb.disabled = true;
+      const prevChecked = cb.checked;
+      try {
+        const res = await fetch('/api/bl/toggle', {
+          method:  'POST',
+          headers: {'Content-Type':'application/json'},
+          body:    JSON.stringify({clave: k}),
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const d = await res.json();
+        cb.checked = d.hecho;
+        const tr = cb.closest('tr');
+        if (tr) tr.className = d.hecho ? 'done' : '';
+        // Refrescar tabla y stats sin perder posición
+        await cargar();
+      } catch(e) {
+        cb.checked = !prevChecked;
+        console.error('toggle error', e);
+      } finally {
+        cb.disabled = false;
+      }
+    }
+
+    function limpiar() {
+      document.getElementById('f-nav').value    = '';
+      document.getElementById('f-tipo').value   = '';
+      document.getElementById('f-puerto').value = '';
+      document.getElementById('f-est').value    = '0';
+      document.getElementById('f-desde').value  = TODAY;
+      document.getElementById('f-hasta').value  = TODAY;
+      document.getElementById('f-q').value      = '';
+      cargar();
+    }
+
+    function exportarPDF() {
+      const desde  = document.getElementById('f-desde').value;
+      const hasta  = document.getElementById('f-hasta').value;
+      const nav    = document.getElementById('f-nav').value;
+      const tipo   = document.getElementById('f-tipo').value;
+      const puerto = document.getElementById('f-puerto').value;
+      const estado = document.getElementById('f-est').value;
+      const count  = document.getElementById('count').textContent;
+
+      // Construir cabecera de impresión
+      const partes = [];
+      if (desde || hasta) partes.push(`Período: ${desde || '—'} → ${hasta || '—'}`);
+      if (nav)            partes.push(`Naviera: ${nav}`);
+      if (tipo === 'exp') partes.push('Exportaciones (ALGECIRAS)');
+      if (tipo === 'imp') partes.push('Importaciones (otros destinos)');
+      if (puerto)         partes.push(`Destino: ${puerto}`);
+      if (estado === '0') partes.push('Estado: Pendientes');
+      if (estado === '1') partes.push('Estado: Hechos');
+      partes.push(`${count} registros`);
+      partes.push(`Exportado: ${new Date().toLocaleString('es-ES')}`);
+      document.getElementById('print-meta').textContent = partes.join('  ·  ');
+
+      // Reconstruir tabla solo con columnas de impresión
+      const rows = [...document.querySelectorAll('#tbl tbody tr')];
+      const head = COLS_PRINT.map(c => `<th>${c.h}</th>`).join('');
+
+      const body = rows.map(tr => {
+        const tds = [...tr.querySelectorAll('td')];
+        // tds[0] = checkbox (oculto en print), tds[1..] = datos en orden COLS
+        const cells = COLS_PRINT.map((c, i) => {
+          const td = tds[i + 1]; // +1 por el checkbox
+          if (!td) return '<td>—</td>';
+          // Para naviera conservar el badge con sus colores
+          if (c.badge) return `<td>${td.innerHTML}</td>`;
+          return `<td>${td.textContent.trim()}</td>`;
+        }).join('');
+        const done = tr.classList.contains('done') ? ' class="done"' : '';
+        return `<tr${done}>${cells}</tr>`;
+      }).join('');
+
+      const win = window.open('', '_blank');
+      const tituloExport = tipo === 'exp' ? 'Exportaciones — ALGECIRAS'
+                         : tipo === 'imp' ? 'Importaciones — Otros destinos'
+                         : 'Conocimientos de Embarque';
+      win.document.write(`<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>BL Export ${desde}–${hasta}</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif; padding:1.5cm; font-size:10pt; color:#1f2937; }
+  .hdr { border-bottom:2px solid #1a4d7e; padding-bottom:0.5rem; margin-bottom:1rem; }
+  .hdr h1 { color:#1a4d7e; font-size:14pt; margin-bottom:0.3rem; }
+  .hdr p  { font-size:8.5pt; color:#6b7280; }
+  table { width:100%; border-collapse:collapse; }
+  thead th { background:#1a4d7e; color:white; padding:6pt 8pt; text-align:left; font-size:8.5pt; text-transform:uppercase; letter-spacing:0.3pt; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+  tbody td { padding:5pt 8pt; border-bottom:1px solid #e5e7eb; font-size:9.5pt; }
+  tbody tr.done td { background:#f0fdf4; color:#6b7280; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+  tbody tr.done td:first-child::before { content:'✓ '; color:#059669; font-weight:700; }
+  .nav { display:inline-block; padding:2pt 5pt; border-radius:8pt; font-size:8pt; font-weight:700; border:1pt solid currentColor; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+  .nav-AML      { color:#C8102E; background:#fde8ea; }
+  .nav-BALEARIA { color:#0A2240; background:#e6eaf3; }
+  .nav-DFDS     { color:#002B5C; background:#fff8e1; border-color:#F0AB00; }
+  .nav-RFS      { color:#CC0000; background:#fde8e8; }
+  .nav-TRASME   { color:#C04000; background:#fef0e6; }
+  .footer { margin-top:1rem; font-size:8pt; color:#9ca3af; text-align:right; }
+  @media print { @page { margin:1.5cm; size:A4 landscape; } }
+</style>
+</head>
+<body>
+<div class="hdr">
+  <h1>${tituloExport}</h1>
+  <p>${partes.join('  ·  ')}</p>
+</div>
+<table>
+  <thead><tr>${head}</tr></thead>
+  <tbody>${body}</tbody>
+</table>
+<div class="footer">totallogistic · BL Viewer · ${new Date().toLocaleString('es-ES')}</div>
+<script>setTimeout(()=>window.print(),400);<\/script>
+</body></html>`);
+      win.document.close();
+    }
+
+    document.getElementById('f-q').addEventListener('keydown', e => { if(e.key==='Enter') cargar(); });
+
+    initFiltros();
+    cargarCsvInfo();
+    cargar();
+  </script>
+</body>
+</html>

@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ schema.title or schema_name }}</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <header>
+        <h1>{{ schema.title or schema_name }}</h1>
+        <p class="description">{{ schema.description or "" }}</p>
+    </header>
+
+    <main>
+        <div id="form-container">
+            <!-- El formulario se genera dinámicamente con JavaScript -->
+        </div>
+
+        <div class="actions">
+            <button id="btn-save" class="primary">💾 Guardar y Descargar (Ctrl+S)</button>
+            <button id="btn-validate" class="secondary">✓ Validar</button>
+            <button id="btn-reset" class="secondary">🔄 Reset</button>
+            <a href="/" class="back-link">← Volver</a>
+        </div>
+
+        <div id="validation-errors" class="errors" style="display:none;"></div>
+        <div id="success-message" class="success" style="display:none;"></div>
+    </main>
+
+    <div id="keyboard-help" class="help-panel">
+        <h3>⌨️ Atajos de Teclado</h3>
+        <table>
+            <tr><td>Enter</td><td>Siguiente campo</td></tr>
+            <tr><td>Tab / Shift+Tab</td><td>Navegar campos</td></tr>
+            <tr><td>Ctrl+Enter</td><td>Nueva fila (en arrays)</td></tr>
+            <tr><td>Ctrl+D</td><td>Duplicar fila</td></tr>
+            <tr><td>Ctrl+Backspace</td><td>Eliminar fila</td></tr>
+            <tr><td>Ctrl+S</td><td>Guardar</td></tr>
+            <tr><td>Esc</td><td>Cerrar help</td></tr>
+        </table>
+    </div>
+
+    <button id="btn-help" class="help-button" title="Ver atajos de teclado (?)">?</button>
+
+    <script>
+        // Pasar schema al JavaScript
+        const SCHEMA = {{ schema_json|safe }};
+        const SCHEMA_NAME = "{{ schema_name }}";
+    </script>
+    <script src="/static/app.js?v=3"></script>
+  </body>
+</html>

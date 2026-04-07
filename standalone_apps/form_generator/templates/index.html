@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Registros y Revisiones - Totallogistic</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #2563a8 0%, #1a4d7e 100%);
+            min-height: 100vh;
+            padding: 2rem 1rem;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        
+        .header {
+            background: white;
+            border-radius: 16px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+        
+        .header h1 {
+            color: #1a4d7e;
+            font-size: 2rem;
+            margin-bottom: 0.5rem;
+        }
+        
+        .header p {
+            color: #666;
+            font-size: 1.1rem;
+        }
+        
+        .category {
+            background: white;
+            border-radius: 16px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+        
+        .category-header {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            margin-bottom: 1.5rem;
+            padding-bottom: 1rem;
+            border-bottom: 2px solid #e5e7eb;
+        }
+        
+        .category-header h2 {
+            color: #1a4d7e;
+            font-size: 1.5rem;
+            font-weight: 600;
+        }
+        
+        .category-description {
+            color: #666;
+            margin-bottom: 1.5rem;
+        }
+        
+        .forms-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+            gap: 1.5rem;
+        }
+        
+        .form-card {
+            background: #f8f9fa;
+            border: 2px solid #e5e7eb;
+            border-radius: 12px;
+            padding: 1.5rem;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            text-decoration: none;
+            color: inherit;
+            display: block;
+            position: relative;
+        }
+        
+        .form-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 8px 20px rgba(37, 99, 168, 0.15);
+            border-color: #2563a8;
+        }
+        
+        .form-card-badge {
+            position: absolute;
+            top: 1rem;
+            right: 1rem;
+            background: #2563a8;
+            color: white;
+            padding: 0.25rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+        
+        .form-card-badge.en-proceso {
+            background: #3b82f6;
+        }
+        
+        .form-card-badge.operativo {
+            background: #10b981;
+        }
+        
+        .form-card h3 {
+            color: #1a4d7e;
+            font-size: 1.25rem;
+            margin-bottom: 0.75rem;
+            padding-right: 100px; /* Space for badge */
+        }
+        
+        .form-card p {
+            color: #666;
+            font-size: 0.95rem;
+            line-height: 1.5;
+            margin-bottom: 1rem;
+        }
+        
+        .form-card-footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-top: 1rem;
+            border-top: 1px solid #e5e7eb;
+        }
+        
+        .form-card-schema {
+            font-family: 'Courier New', monospace;
+            font-size: 0.85rem;
+            color: #888;
+        }
+        
+        .form-card-arrow {
+            color: #2563a8;
+            font-weight: bold;
+            font-size: 1.5rem;
+        }
+        
+        @media (max-width: 768px) {
+            .forms-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .header h1 {
+                font-size: 1.5rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📊 Registros y Revisiones</h1>
+            <p>Formularios que registran información en archivos Excel compartidos</p>
+        </div>
+        
+        <!-- Categories will be populated by JavaScript -->
+        <div id="categories-container"></div>
+    </div>
+    
+    <script>
+        // Group schemas by category
+        const schemas = {{ schemas | tojson }};
+        
+        // Organize by category
+        const categories = {};
+        schemas.forEach(schema => {
+            const category = schema.category || '📋 Sin Categoría';
+            if (!categories[category]) {
+                categories[category] = [];
+            }
+            categories[category].push(schema);
+        });
+        
+        // Render categories
+        const container = document.getElementById('categories-container');
+        
+        Object.keys(categories).sort().forEach(categoryName => {
+            const categorySchemas = categories[categoryName];
+            
+            // Determine category description
+            let categoryDesc = '';
+            if (categoryName.includes('Algeciras')) {
+                categoryDesc = 'Formularios para la delegación de Algeciras';
+            } else if (categoryName.includes('Málaga')) {
+                categoryDesc = 'Formularios para la delegación de Málaga';
+            } else {
+                categoryDesc = 'Formularios que registran información en archivos Excel compartidos';
+            }
+            
+            const categoryDiv = document.createElement('div');
+            categoryDiv.className = 'category';
+            
+            categoryDiv.innerHTML = `
+                <div class="category-header">
+                    <h2>${categoryName}</h2>
+                </div>
+                <p class="category-description">${categoryDesc}</p>
+                <div class="forms-grid">
+                    ${categorySchemas.map(schema => `
+                        <a href="/form/${schema.name}" class="form-card">
+                            <span class="form-card-badge en-proceso">EN PROCESO</span>
+                            <h3>${schema.title}</h3>
+                            <p>${schema.description}</p>
+                            <div class="form-card-footer">
+                                <span class="form-card-schema">${schema.name}</span>
+                                <span class="form-card-arrow">→</span>
+                            </div>
+                        </a>
+                    `).join('')}
+                </div>
+            `;
+            
+            container.appendChild(categoryDiv);
+        });
+        
+        // If no categories, show message
+        if (Object.keys(categories).length === 0) {
+            container.innerHTML = '<div class="category"><p style="text-align: center; color: #666;">No hay formularios disponibles</p></div>';
+        }
+    </script>
+</body>
+</html>

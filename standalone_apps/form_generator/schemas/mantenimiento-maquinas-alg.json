@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "[ALG] Mantenimiento de Maquinaria de Almacén",
+  "description": "Registro mensual de mantenimiento de máquinas - Delegación Algeciras",
+  "category": "📊 Sede Algeciras",
+  "custom_template": "mantenimiento-maquinas.html",
+  "type": "object",
+  "properties": {
+    "fecha": {"type": "string", "format": "date", "title": "Fecha"},
+    "responsable": {"type": "string", "title": "Responsable"},
+    "maquina": {"type": "string", "title": "Máquina"},
+    "horasUso": {"type": "number", "title": "Horas de Uso"},
+    "revisionGeneral": {"type": "boolean", "title": "Revisión General"},
+    "nivelAceite": {"type": "boolean", "title": "Nivel de Aceite"},
+    "nivelCombustible": {"type": "boolean", "title": "Nivel de Combustible"},
+    "presionNeumaticos": {"type": "boolean", "title": "Presión de Neumáticos"},
+    "observaciones": {"type": "string", "title": "Observaciones"}
+  },
+  "required": ["fecha", "responsable", "maquina"]
+}

@@ -1,10 +1,6 @@
 */credentials*.json
 .env
 *.db
-services/sftp/lear_cable/config/logs/
-services/sftp/lear_cable/config/openssh/
-services/sftp/lear_cable/config/ssh_host_keys/*_key
-services/sftp/lear_cable/config/ssh_host_keys/*_key.pub
 .venv/
 services/processor/__pycache__/
 __pycache__/
@@ -14,3 +10,54 @@ __pycache__/
 *.bak
 *.old
 *.log
+*bkp*
+*copy*
+.DS_Store
+
+# Integrity generated runs / diffs
+integrity/runs/
+integrity/compare_out/
+out_compare/
+csv_diff_out/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+
+# Data
+/data/
+/tmp/
+
+# Archived old code
+/archive/
+
+# Python build artifacts
+*.egg-info/
+__pycache__/
+*.pyc
+*.pyo
+
+# Environment
+.env
+.env.dev
+.env.prod
+
+# Data
+/data/
+/tmp/
+
+# Archive (old code)
+/archive/
+
+# Temp files
+current_services.txt
+*.tmp
+.DS_Store
+._*
+standalone_apps/form_generator/output/
+standalone_apps/form_generator/excel_storage/
+standalone_apps/form_generator/backups/
+
+

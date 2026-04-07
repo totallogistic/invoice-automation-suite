@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "[MLG] Mantenimiento de Maquinaria de Almacén",
+  "description": "Registro mensual de mantenimiento de máquinas - Delegación Málaga",
+  "category": "📊 Sede Málaga",
+  "custom_template": "mantenimiento-maquinas-mlg.html",
+  "type": "object",
+  "properties": {
+    "mes": {"type": "string", "title": "Mes"},
+    "año": {"type": "integer", "title": "Año"},
+    "fecha_revision": {"type": "string", "format": "date", "title": "Fecha de Revisión"},
+    "responsable": {"type": "string", "title": "Responsable"},
+    
+    "traspaleta1_baterias": {"type": "string", "title": "Traspaleta 1 - Baterías"},
+    "traspaleta1_baterias_obs": {"type": "string", "title": "Traspaleta 1 - Baterías Obs"},
+    "traspaleta1_engrase": {"type": "string", "title": "Traspaleta 1 - Engrase"},
+    "traspaleta1_engrase_obs": {"type": "string", "title": "Traspaleta 1 - Engrase Obs"},
+    
+    "traspaleta2_baterias": {"type": "string", "title": "Traspaleta 2 - Baterías"},
+    "traspaleta2_baterias_obs": {"type": "string", "title": "Traspaleta 2 - Baterías Obs"},
+    "traspaleta2_engrase": {"type": "string", "title": "Traspaleta 2 - Engrase"},
+    "traspaleta2_engrase_obs": {"type": "string", "title": "Traspaleta 2 - Engrase Obs"},
+    
+    "carretilla_baterias": {"type": "string", "title": "Carretilla - Baterías"},
+    "carretilla_baterias_obs": {"type": "string", "title": "Carretilla - Baterías Obs"},
+    "carretilla_engrase": {"type": "string", "title": "Carretilla - Engrase"},
+    "carretilla_engrase_obs": {"type": "string", "title": "Carretilla - Engrase Obs"},
+    
+    "apiladora_baterias": {"type": "string", "title": "Apiladora - Baterías"},
+    "apiladora_baterias_obs": {"type": "string", "title": "Apiladora - Baterías Obs"},
+    "apiladora_engrase": {"type": "string", "title": "Apiladora - Engrase"},
+    "apiladora_engrase_obs": {"type": "string", "title": "Apiladora - Engrase Obs"},
+    
+    "furgon_engrase": {"type": "string", "title": "Furgón - Engrase"},
+    "furgon_engrase_obs": {"type": "string", "title": "Furgón - Engrase Obs"}
+  },
+  "required": [
+    "mes",
+    "año",
+    "fecha_revision",
+    "responsable",
+    "traspaleta1_baterias",
+    "traspaleta1_engrase",
+    "traspaleta2_baterias",
+    "traspaleta2_engrase",
+    "carretilla_baterias",
+    "carretilla_engrase",
+    "apiladora_baterias",
+    "apiladora_engrase",
+    "furgon_engrase"
+  ]
+}

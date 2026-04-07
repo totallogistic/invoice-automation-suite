@@ -1,0 +1,596 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Totallogistic Tools — Camion Export</title>
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      body { 
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+        background: #f5f5f5;
+        min-height: 100vh;
+      }
+      header {
+        background: linear-gradient(135deg, #1a4d7e 0%, #2563a8 100%);
+        color: white;
+        padding: 1.5rem;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        position: relative;
+      }
+      header h1 {
+        font-size: 1.5rem;
+        font-weight: 600;
+        letter-spacing: -0.5px;
+      }
+      .version-badge {
+        display: inline-block;
+        background: rgba(255,255,255,0.18);
+        color: rgba(255,255,255,0.85);
+        padding: 0.25rem 0.6rem;
+        border-radius: 4px;
+        font-size: 0.75rem;
+        font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+        margin-left: 0.75rem;
+        vertical-align: middle;
+        letter-spacing: 0.3px;
+        cursor: pointer;
+        transition: background 0.2s;
+      }
+      .version-badge:hover {
+        background: rgba(255,255,255,0.30);
+        color: white;
+      }
+      /* ── Changelog modal ── */
+      .modal-overlay {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,0.55);
+        z-index: 1000;
+        align-items: center;
+        justify-content: center;
+      }
+      .modal-overlay.open { display: flex; }
+      .modal {
+        background: white;
+        border-radius: 8px;
+        width: min(680px, 92vw);
+        max-height: 82vh;
+        display: flex;
+        flex-direction: column;
+        box-shadow: 0 8px 32px rgba(0,0,0,0.35);
+      }
+      .modal-header {
+        background: linear-gradient(135deg, #1a4d7e 0%, #2563a8 100%);
+        color: white;
+        padding: 1rem 1.25rem;
+        border-radius: 8px 8px 0 0;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+      .modal-header h2 { font-size: 1rem; font-weight: 600; }
+      .modal-close {
+        background: none;
+        border: none;
+        color: rgba(255,255,255,0.7);
+        font-size: 1.2rem;
+        cursor: pointer;
+        padding: 0.2rem 0.4rem;
+        border-radius: 4px;
+        transition: color 0.15s;
+      }
+      .modal-close:hover { color: white; background: none; }
+      .modal-body {
+        padding: 1.25rem 1.5rem;
+        overflow-y: auto;
+        flex: 1;
+        font-size: 0.88rem;
+        line-height: 1.55;
+        color: #333;
+      }
+      .modal-body h3 {
+        font-size: 0.85rem;
+        text-transform: uppercase;
+        letter-spacing: 0.6px;
+        color: #1a4d7e;
+        margin: 1.1rem 0 0.4rem;
+        border-bottom: 1px solid #e5e9ef;
+        padding-bottom: 0.25rem;
+      }
+      .modal-body h3:first-child { margin-top: 0; }
+      .modal-body ul {
+        list-style: disc;
+        margin-left: 1.25rem;
+      }
+      .modal-body li { margin: 0.2rem 0; }
+      .modal-body code {
+        background: #f0f4f8;
+        padding: 0.1em 0.35em;
+        border-radius: 3px;
+        font-family: ui-monospace, Menlo, Consolas, monospace;
+        font-size: 0.93em;
+      }
+      .modal-body p { margin: 0.4rem 0; }
+      .env-badge {
+        position: absolute;
+        top: 1rem;
+        right: 1.5rem;
+        background: rgba(16, 185, 129, 0.95);
+        color: white;
+        padding: 0.375rem 0.75rem;
+        border-radius: 4px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        letter-spacing: 0.5px;
+      }
+      main {
+        max-width: 960px;
+        margin: 0 auto;
+        padding: 32px 24px;
+      }
+      p {
+        margin: 8px 0;
+      }
+      .card { 
+        background: white;
+        border: 1px solid #e5e7eb;
+        border-radius: 8px;
+        padding: 24px;
+        margin: 24px 0;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+      }
+      .file-row {
+        display: flex;
+        gap: 16px;
+        flex-direction: column;
+        margin-bottom: 16px;
+      }
+      .file-field label {
+        display: block;
+        font-size: 0.85rem;
+        font-weight: 600;
+        color: #374151;
+        margin-bottom: 6px;
+      }
+      .file-field span.hint {
+        display: block;
+        font-size: 0.8rem;
+        color: #6b7280;
+        margin-top: 4px;
+      }
+      .row { 
+        display: flex;
+        gap: 12px;
+        align-items: center;
+        flex-wrap: wrap;
+      }
+      input[type="file"] { 
+        padding: 10px 12px;
+        border: 1px solid #d1d5db;
+        border-radius: 6px;
+        background: white;
+        font-size: 0.95rem;
+        cursor: pointer;
+        transition: border-color 0.2s ease;
+        width: 100%;
+        max-width: 420px;
+      }
+      input[type="file"]:focus {
+        outline: none;
+        border-color: #2563a8;
+        box-shadow: 0 0 0 3px rgba(37, 99, 168, 0.1);
+      }
+      button { 
+        padding: 10px 20px;
+        cursor: pointer;
+        background: #2563a8;
+        color: white;
+        border: none;
+        border-radius: 6px;
+        font-weight: 500;
+        transition: background 0.2s;
+      }
+      button:hover { background: #1a4d7e; }
+      button:disabled { background: #9ca3af; cursor: not-allowed; }
+      .muted { 
+        color: #6b7280;
+        font-size: 0.95rem;
+      }
+      .mono { 
+        font-family: ui-monospace, 'SF Mono', 'Cascadia Code', 'Source Code Pro', Menlo, Consolas, monospace;
+        background: #f3f4f6;
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-size: 0.9rem;
+        border: 1px solid #e5e7eb;
+      }
+      progress { 
+        width: 100%;
+        height: 24px;
+        border-radius: 12px;
+        overflow: hidden;
+        background: #e5e7eb;
+        border: none;
+      }
+      progress::-webkit-progress-bar {
+        background: #e5e7eb;
+        border-radius: 12px;
+      }
+      progress::-webkit-progress-value {
+        background: linear-gradient(90deg, #2563a8 0%, #3b82f6 100%);
+        border-radius: 12px;
+        transition: width 0.3s ease;
+      }
+      progress::-moz-progress-bar {
+        background: linear-gradient(90deg, #2563a8 0%, #3b82f6 100%);
+        border-radius: 12px;
+      }
+      .kv { 
+        display: grid;
+        grid-template-columns: 180px 1fr;
+        gap: 10px 16px;
+        margin: 16px 0;
+      }
+      .badge { 
+        display: inline-block;
+        padding: 4px 12px;
+        border-radius: 999px;
+        background: #f3f4f6;
+        font-size: 0.85rem;
+        font-weight: 500;
+        border: 1px solid #e5e7eb;
+      }
+      .error { 
+        color: #dc2626;
+        font-weight: 500;
+      }
+      .ok { 
+        color: #16a34a;
+        font-weight: 500;
+      }
+      .back-link { 
+        display: inline-block;
+        margin-top: 1rem;
+        color: #2563a8;
+        text-decoration: none;
+        font-weight: 500;
+      }
+      .back-link:hover { text-decoration: underline; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>🚛 Camion Export Processor <span class="version-badge" id="scriptVersion">…</span></h1>
+    </header>
+    <main>
+      <p class="muted">
+        Sube el packing list (<strong>.xlsx</strong>), opcionalmente el documento DOC
+        (<strong>.pdf</strong>, nombre debe contener <strong>DOC</strong>) si quieres validar el XLSX antes de procesar.
+        La herramienta genera un XLSX enriquecido con las hojas <strong>T1_RESULT</strong> y/o <strong>DAE_RESULT</strong>.
+      </p>
+
+    <div class="card">
+      <div class="file-row">
+        <div class="file-field">
+          <label>📋 Packing list <span style="color:#dc2626">*</span></label>
+          <input
+            id="xlsxInput"
+            type="file"
+            accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+          />
+          <span class="hint">Formato permitido: XLSX</span>
+        </div>
+
+        <div class="file-field">
+          <label>📄 Documento DOC <span style="color:#dc2626"></span></label>
+          <input
+            id="docInput"
+            type="file"
+            accept=".pdf,application/pdf"
+          />
+          <span class="hint">Un PDF — el nombre debe contener <strong>DOC</strong> (ej. 20260310_DOC.pdf)</span>
+        </div>
+      </div>
+      <div class="file-field">
+        <label>
+          <input id="skipValidationInput" type="checkbox" />
+          Omitir validación XLSX vs DOC
+        </label>
+        <span class="hint">
+          Úsalo solo si el XLSX ya fue revisado/corregido manualmente y quieres reprocesar sin regenerar PDF_VALIDADO.
+        </span>
+      </div>
+
+      <div class="file-field" style="margin-top:0.75rem">
+        <label style="font-weight:600;margin-bottom:0.35rem;display:block">Subprocesos a ejecutar</label>
+        <label style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.3rem">
+          <input id="runT1Input" type="checkbox" checked />
+          <span><strong>T1_RESULT</strong> — tránsito aduanero (T1/EX, pesos del PDF)</span>
+        </label>
+        <label style="display:flex;align-items:center;gap:0.5rem">
+          <input id="runDaeInput" type="checkbox" checked />
+          <span><strong>DAE_RESULT</strong> — declaraciones de exportación (round half-up)</span>
+        </label>
+        <span class="hint" id="subprocesosHint" style="display:none;color:#dc2626">
+          Selecciona al menos un subproceso.
+        </span>
+      </div>
+      <div class="row">
+        <button id="btnUpload">Procesar</button>
+        <span id="uploadMsg" class="muted"></span>
+      </div>
+      <p class="muted" style="margin:10px 0 0">
+        Endpoint: <span class="mono">POST /api/camion/batches</span>
+      </p>
+    </div>
+
+    <div id="statusCard" class="card" style="display:none">
+      <div class="row" style="justify-content:space-between">
+        <div>
+          <div class="muted">Batch</div>
+          <div class="mono" id="batchId">—</div>
+        </div>
+        <div>
+          <span class="badge" id="state">—</span>
+          <span class="badge" id="stage">—</span>
+        </div>
+      </div>
+
+      <div style="margin:12px 0">
+        <progress id="bar" value="0" max="100"></progress>
+        <div class="muted" id="pct" style="margin-top:6px">0%</div>
+      </div>
+
+      <div class="kv">
+        <div class="muted">Mensaje</div> <div id="message">—</div>
+        <div class="muted">Archivos</div> <div><span id="processed">0</span> / <span id="total">0</span></div>
+        <div class="muted">Updated</div> <div class="mono" id="updated">—</div>
+        <div class="muted">Recipients</div> <div id="recipients">—</div>
+      </div>
+
+      <div id="finalNote" style="margin-top:12px"></div>
+    </div>
+
+    <p><a href="/" class="back-link">← Volver</a></p>
+    </main>
+    <!-- Changelog modal -->
+    <div class="modal-overlay" id="changelogOverlay">
+      <div class="modal">
+        <div class="modal-header">
+          <h2>Changelog — <span id="modalVersion">…</span></h2>
+          <button class="modal-close" id="modalClose" title="Cerrar">✕</button>
+        </div>
+        <div class="modal-body" id="modalBody">Cargando…</div>
+      </div>
+    </div>
+
+    <script>
+      const $ = (id) => document.getElementById(id);
+
+      let pollTimer = null;
+
+      function setUploadMsg(text, isErr=false) {
+        $("uploadMsg").textContent = text || "";
+        $("uploadMsg").className = isErr ? "error" : "muted";
+      }
+
+      function showStatusCard(batchId) {
+        $("statusCard").style.display = "block";
+        $("batchId").textContent = batchId;
+      }
+
+      function stopPolling() {
+        if (pollTimer) clearInterval(pollTimer);
+        pollTimer = null;
+      }
+
+      function computePercent(st) {
+        const total = Number(st.total_files || 0);
+        const done = Number(st.processed_files || 0);
+        if (total > 0) return Math.min(100, Math.round((done / total) * 100));
+
+        const stage = (st.stage || "").toUpperCase();
+        if (stage === "WAITING") return 5;
+        if (stage === "RUNNING_EXTRACTOR") return 55;
+        if (stage === "SENDING_EMAIL") return 85;
+        if (stage === "DONE") return 100;
+        if (stage === "ERROR") return 100;
+        return 10;
+      }
+
+      async function fetchStatus(batchId) {
+        const r = await fetch(`/api/camion/batches/${batchId}/status`, { cache: "no-store" });
+        if (!r.ok) throw new Error(`Status HTTP ${r.status}`);
+        return await r.json();
+      }
+
+      function renderStatus(st) {
+        $("state").textContent = st.state || "—";
+        $("stage").textContent = st.stage || "—";
+        $("message").textContent = st.message || "—";
+        $("total").textContent = st.total_files ?? 0;
+        $("processed").textContent = st.processed_files ?? 0;
+        $("updated").textContent = st.updated_at || "—";
+
+        const rec = Array.isArray(st.recipients) ? st.recipients : [];
+        $("recipients").textContent = rec.length ? rec.join(", ") : "—";
+
+        const pct = computePercent(st);
+        $("bar").value = pct;
+        $("pct").textContent = `${pct}%`;
+
+        const stage = (st.stage || "").toUpperCase();
+        const state = (st.state || "").toUpperCase();
+
+        let html = "";
+        if (stage === "DONE" || state === "DONE") {
+          html = `<div class="ok">✓ Lote finalizado. Packing list procesado enviado a: <span class="mono">${rec.join(", ") || "—"}</span></div>`;
+          stopPolling();
+        } else if (stage === "ERROR" || state === "ERROR") {
+          html = `<div class="error">✗ Error en procesamiento. Revisa logs: docker compose logs unified_processor</div>`;
+          stopPolling();
+        } else {
+          html = `<div class="muted">⏳ Procesando… (polling cada 2s)</div>`;
+        }
+        $("finalNote").innerHTML = html;
+      }
+
+      async function startPolling(batchId) {
+        stopPolling();
+        const tick = async () => {
+          try {
+            const st = await fetchStatus(batchId);
+            renderStatus(st);
+          } catch (e) {
+            $("finalNote").innerHTML = `<div class="error">No puedo leer status: ${e.message}</div>`;
+          }
+        };
+        await tick();
+        pollTimer = setInterval(tick, 2000);
+      }
+
+      // ── Changelog modal ──────────────────────────────────────────────
+      let changelogCache = null;
+
+      function renderChangelog(md) {
+        const lines = md.split("\n");
+        let html = "";
+        let inList = false;
+        for (const raw of lines) {
+          const line = raw.trimEnd();
+          if (line.startsWith("### ")) {
+            if (inList) { html += "</ul>"; inList = false; }
+            html += `<h3>${esc(line.slice(4))}</h3>`;
+          } else if (line.startsWith("## ")) {
+            if (inList) { html += "</ul>"; inList = false; }
+            html += `<h3>${esc(line.slice(3))}</h3>`;
+          } else if (/^[-*] /.test(line)) {
+            if (!inList) { html += "<ul>"; inList = true; }
+            html += `<li>${fmt(line.slice(2))}</li>`;
+          } else if (line.trim() === "") {
+            if (inList) { html += "</ul>"; inList = false; }
+          } else {
+            if (inList) { html += "</ul>"; inList = false; }
+            html += `<p>${fmt(line)}</p>`;
+          }
+        }
+        if (inList) html += "</ul>";
+        return html;
+      }
+      function esc(s) { return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+      function fmt(s) {
+        return esc(s).replace(/`([^`]+)`/g, "<code>$1</code>");
+      }
+
+      function openChangelog(version) {
+        $("modalVersion").textContent = version;
+        $("changelogOverlay").classList.add("open");
+        if (changelogCache !== null) {
+          $("modalBody").innerHTML = changelogCache
+            ? renderChangelog(changelogCache)
+            : "<p>No hay descripción disponible.</p>";
+          return;
+        }
+        $("modalBody").textContent = "Cargando…";
+        fetch("/api/camion/version", { cache: "no-store" })
+          .then(r => r.ok ? r.json() : Promise.reject())
+          .then(d => {
+            changelogCache = d.changelog || "";
+            $("modalBody").innerHTML = changelogCache
+              ? renderChangelog(changelogCache)
+              : "<p>No hay descripción disponible.</p>";
+          })
+          .catch(() => {
+            changelogCache = "";
+            $("modalBody").innerHTML = "<p>No hay descripción disponible.</p>";
+          });
+      }
+
+      $("modalClose").addEventListener("click", () => {
+        $("changelogOverlay").classList.remove("open");
+      });
+      $("changelogOverlay").addEventListener("click", (e) => {
+        if (e.target === $("changelogOverlay")) $("changelogOverlay").classList.remove("open");
+      });
+      document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape") $("changelogOverlay").classList.remove("open");
+      });
+
+      // ── Fetch script version on load ──────────────────────────────────
+      fetch("/api/camion/version", { cache: "no-store" })
+        .then(r => r.ok ? r.json() : Promise.reject())
+        .then(d => {
+          const v = d.version || "?";
+          $("scriptVersion").textContent = v;
+          $("scriptVersion").title = "Ver descripción";
+          $("scriptVersion").addEventListener("click", () => openChangelog(v));
+        })
+        .catch(() => { $("scriptVersion").textContent = "?"; });
+
+      $("btnUpload").addEventListener("click", async () => {
+        const xlsxFile = $("xlsxInput").files[0];
+                const docFile = $("docInput").files[0];
+        const skipValidation = $("skipValidationInput").checked;
+        const runT1  = $("runT1Input").checked;
+        const runDae = $("runDaeInput").checked;
+
+        if (!runT1 && !runDae) {
+          $("subprocesosHint").style.display = "block";
+          return setUploadMsg("Selecciona al menos un subproceso (T1_RESULT y/o DAE_RESULT).", true);
+        }
+        $("subprocesosHint").style.display = "none";
+
+        if (!xlsxFile) {
+          return setUploadMsg("Selecciona el packing list (.xlsx).", true);
+        }
+        if (!/\.xlsx$/i.test(xlsxFile.name)) {
+          return setUploadMsg(`Packing list no válido: ${xlsxFile.name}. Debe ser .xlsx`, true);
+        }
+
+        if (!skipValidation) {
+          if (!docFile) {
+            return setUploadMsg("Selecciona el documento DOC (.pdf) o marca 'Omitir validación XLSX vs DOC'.", true);
+          }
+          if (!/\.pdf$/i.test(docFile.name)) {
+            return setUploadMsg(`Documento DOC no válido: ${docFile.name}. Debe ser .pdf`, true);
+          }
+          if (!/doc/i.test(docFile.name)) {
+            return setUploadMsg(`El nombre del DOC debe contener "DOC": ${docFile.name}`, true);
+          }
+        }
+
+        setUploadMsg("Subiendo…");
+        $("statusCard").style.display = "none";
+        $("finalNote").innerHTML = "";
+        stopPolling();
+
+        try {
+          const fd = new FormData();
+          fd.append("files", xlsxFile, xlsxFile.name);
+
+          if (docFile) {
+            fd.append("files", docFile, docFile.name);
+          }
+          fd.append("skip_validation", skipValidation ? "1" : "0");
+          fd.append("run_t1",  runT1  ? "1" : "0");
+          fd.append("run_dae", runDae ? "1" : "0");
+
+          const r = await fetch("/api/camion/batches", { method: "POST", body: fd });
+          if (!r.ok) {
+            const t = await r.text();
+            throw new Error(`Upload HTTP ${r.status}: ${t}`);
+          }
+          const data = await r.json();
+          const batchId = data.batch_id;
+          showStatusCard(batchId);
+          setUploadMsg(`✓ Batch creado: ${batchId} (${data.files_uploaded} archivo(s))`);
+          await startPolling(batchId);
+        } catch (e) {
+          setUploadMsg(e.message, true);
+        }
+      });
+    </script>
+  </body>
+</html>
