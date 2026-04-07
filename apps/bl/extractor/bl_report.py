@@ -247,6 +247,28 @@ def main():
         log.warning("CSV vacío — nada que reportar")
         sys.exit(0)
 
+    # Filtrar por fecha/hora de embarque: solo BLs desde las 20:00 del día anterior
+    # Esto evita ruido de BLs muy viejos llegados en emails reenviados
+    from datetime import timedelta
+    ayer_20h = (datetime.now(timezone.utc) - timedelta(days=1)).strftime("%Y-%m-%d")
+    hora_corte = "20:00"
+
+    def embarque_reciente(r: dict) -> bool:
+        fecha_bl = r.get("fecha", "")
+        hora_bl  = r.get("hora", "00:00")
+        if fecha_bl > ayer_20h:
+            return True
+        if fecha_bl == ayer_20h and hora_bl >= hora_corte:
+            return True
+        return False
+
+    registros = [r for r in registros if embarque_reciente(r)]
+    log.info("BLs con embarque desde %s %s: %d", ayer_20h, hora_corte, len(registros))
+
+    if not registros:
+        log.warning("Sin BLs recientes que reportar — nada que enviar")
+        sys.exit(0)
+
     # Dividir en exportaciones (ALGECIRAS) e importaciones (resto)
     registros_exp = [r for r in registros if DESTINO_EXPORTACIONES in (r.get("puerto_destino") or "").upper()]
     registros_imp = [r for r in registros if DESTINO_EXPORTACIONES not in (r.get("puerto_destino") or "").upper()]

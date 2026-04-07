@@ -47,7 +47,8 @@ WINDOW_END_MIN     = int(os.getenv("BL_MAIL_WINDOW_END_MIN",    "59"))
 
 # ── Filtros de nombre de fichero ──────────────────────────────────────────────
 PALABRAS_SI = ["bl", "bill", "lading", "conocimiento", "embarque", "con_emb"]
-PALABRAS_NO = ["peticion", "request", "booking", "nota", "instrucciones", "draft"]
+PALABRAS_NO = ["peticion", "request", "booking", "nota", "instrucciones", "draft",
+               "bl_exportaciones", "bl_importaciones"]
 
 
 def ventana_tiempo(since_hours: int | None = None) -> tuple[datetime, datetime]:
@@ -124,7 +125,7 @@ def descargar_adjuntos(dry_run: bool = False, since_hours: int | None = None) ->
         sys.exit(1)
 
     # Buscar emails por fecha (IMAP usa fecha sin hora, filtramos por hora en código)
-    fecha_desde_str = (desde - timedelta(days=1)).strftime("%d-%b-%Y")
+    fecha_desde_str = desde.strftime("%d-%b-%Y")
     fecha_hasta_str = (hasta + timedelta(days=1)).strftime("%d-%b-%Y")
     search_criteria = f'(SINCE "{fecha_desde_str}" BEFORE "{fecha_hasta_str}")'
 
@@ -188,15 +189,19 @@ def descargar_adjuntos(dry_run: bool = False, since_hours: int | None = None) ->
                 ignorados += 1
                 continue
 
-            # Verificar duplicado en inbox
+            # Resolver nombre de destino — si ya existe añadir sufijo _1, _2...
             destino = BL_INBOX / nombre
             if destino.exists():
-                log.info("  IGNORADO (ya existe): %s", nombre)
-                ignorados += 1
-                continue
+                stem    = Path(nombre).stem
+                suffix  = Path(nombre).suffix
+                contador = 1
+                while destino.exists():
+                    destino = BL_INBOX / f"{stem}_{contador}{suffix}"
+                    contador += 1
+                log.info("  Renombrado a: %s", destino.name)
 
             if dry_run:
-                log.info("  [DRY-RUN] Descargaría: %s", nombre)
+                log.info("  [DRY-RUN] Descargaría: %s", destino.name)
                 descargados += 1
                 continue
 
