@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "[ALG] Revisión Vehículos",
+  "title": "Revisión Vehículos",
   "description": "Formulario de revisión de los vehículos propiedad de la empresa - Algeciras",
   "category": "📊 Sede Algeciras",
   "custom_template": "revision-vehiculos-alg.html",

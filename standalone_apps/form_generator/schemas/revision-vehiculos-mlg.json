@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "[MLG] Revisión Vehículos",
+  "title": "Revisión Vehículos",
   "description": "Formulario de revisión de los vehículos propiedad de la empresa - Málaga",
   "category": "📊 Sede Málaga",
   "custom_template": "revision-vehiculos-mlg.html",

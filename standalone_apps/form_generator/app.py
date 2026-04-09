@@ -38,6 +38,12 @@ from email import encoders
 from datetime import datetime
 import uvicorn
 
+from docx import Document as _DocxDocument
+from docx.shared import Pt as _Pt, Cm as _Cm, RGBColor as _RGBColor
+from docx.oxml.ns import qn as _qn
+from docx.oxml import OxmlElement as _OxmlElement
+from docx.enum.text import WD_ALIGN_PARAGRAPH as _WD_ALIGN
+
 # Configuration
 SCHEMAS_DIR = Path(__file__).parent / "schemas"
 OUTPUT_DIR = Path(__file__).parent / "output"
@@ -1196,6 +1202,286 @@ def bl_pdf_download(filename: str):
         if matches:
             return _FileResponse(str(matches[0]), media_type="application/pdf", filename=safe)
     raise HTTPException(404, f"PDF no encontrado: {safe}")
+
+
+def _docx_set_cell(cell, text, bold=False, size=11, align=None):
+    """Clear a table cell and write formatted text."""
+    from docx.shared import Pt
+    # Remove all existing paragraphs except the first
+    while len(cell.paragraphs) > 1:
+        p = cell.paragraphs[-1]._p
+        p.getparent().remove(p)
+    para = cell.paragraphs[0]
+    # Clear existing runs / SDTs from the paragraph
+    for child in list(para._p):
+        tag = child.tag.split('}')[-1] if '}' in child.tag else child.tag
+        if tag in ('r', 'sdt', 'hyperlink', 'ins', 'del', 'bookmarkStart', 'bookmarkEnd'):
+            para._p.remove(child)
+    run = para.add_run(str(text) if text is not None else '')
+    run.font.name = 'Calibri'
+    run.font.size = Pt(size)
+    run.font.bold = bold
+    if align:
+        from docx.enum.text import WD_ALIGN_PARAGRAPH
+        para.alignment = align
+ 
+ 
+def _docx_shade_cell(cell, hex_color="1a4d7e"):
+    """Apply background fill to a table cell."""
+    tc = cell._tc
+    tcPr = tc.get_or_add_tcPr()
+    shd = _OxmlElement('w:shd')
+    shd.set(_qn('w:val'), 'clear')
+    shd.set(_qn('w:color'), 'auto')
+    shd.set(_qn('w:fill'), hex_color)
+    tcPr.append(shd)
+ 
+ 
+def _generate_liquidacion_docx(data: dict):
+    """
+    Generate a Liquidación de Gastos de Viaje DOCX from data dict.
+    Returns (Path, filename) tuple.
+    """
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
+    from docx.shared import Pt, Cm
+ 
+    doc = _DocxDocument()
+ 
+    # --- Page margins ---
+    for section in doc.sections:
+        section.top_margin = Cm(2)
+        section.bottom_margin = Cm(2)
+        section.left_margin = Cm(2.5)
+        section.right_margin = Cm(2.5)
+ 
+    def section_header(text):
+        p = doc.add_paragraph()
+        p.paragraph_format.space_before = Pt(10)
+        p.paragraph_format.space_after = Pt(3)
+        run = p.add_run(text)
+        run.font.name = 'Calibri'
+        run.font.size = Pt(11)
+        run.font.bold = True
+        return p
+ 
+    def two_col_table(rows_data):
+        """rows_data: list of (label, value)"""
+        t = doc.add_table(rows=len(rows_data), cols=2)
+        t.style = 'Table Grid'
+        for i, (label, value) in enumerate(rows_data):
+            t.rows[i].cells[0].width = Cm(5)
+            t.rows[i].cells[1].width = Cm(11)
+            _docx_set_cell(t.rows[i].cells[0], label, bold=True)
+            _docx_set_cell(t.rows[i].cells[1], value)
+        return t
+ 
+    # ── TITLE ──────────────────────────────────────────────
+    title_p = doc.add_paragraph()
+    title_p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    title_run = title_p.add_run('LIQUIDACIÓN DE GASTOS DE VIAJE')
+    title_run.font.name = 'Calibri'
+    title_run.font.size = Pt(14)
+    title_run.font.bold = True
+ 
+    doc.add_paragraph()  # spacing
+ 
+    # ── DATOS DEL EMPLEADO ─────────────────────────────────
+    section_header('DATOS DEL EMPLEADO')
+    two_col_table([
+        ('Nombre y apellidos', data.get('empleado', '')),
+        ('DNI',                data.get('dni', '')),
+    ])
+ 
+    # ── INFORMACIÓN DEL VIAJE ──────────────────────────────
+    section_header('INFORMACIÓN DEL VIAJE')
+    two_col_table([
+        ('Día de salida',  data.get('dia_salida', '')),
+        ('Día de regreso', data.get('dia_regreso', '')),
+    ])
+ 
+    # ── MOTIVO ─────────────────────────────────────────────
+    section_header('MOTIVO DEL DESPLAZAMIENTO')
+    t_motivo = doc.add_table(rows=1, cols=1)
+    t_motivo.style = 'Table Grid'
+    t_motivo.rows[0].cells[0].width = Cm(16)
+    t_motivo.rows[0].height = Cm(1.2)
+    _docx_set_cell(t_motivo.rows[0].cells[0], data.get('motivo', ''))
+ 
+    # ── GASTOS ─────────────────────────────────────────────
+    section_header('GASTOS DEL VIAJE')
+ 
+    gastos = data.get('gastos', [])
+ 
+    # Rows: 1 header + N data + 1 total
+    n_rows = 1 + len(gastos) + 1
+    t = doc.add_table(rows=n_rows, cols=5)
+    t.style = 'Table Grid'
+ 
+    # Column widths (total ~17 cm usable)
+    col_widths = [Cm(2.2), Cm(4.0), Cm(5.5), Cm(3.0), Cm(2.3)]
+    for row in t.rows:
+        for i, cell in enumerate(row.cells):
+            cell.width = col_widths[i]
+ 
+    # Header row
+    headers = ['FECHA', 'Nº FRA/TICKET', 'PROVEEDOR', 'CONCEPTO', 'IMPORTE']
+    for j, h in enumerate(headers):
+        _docx_set_cell(t.rows[0].cells[j], h, bold=True)
+        _docx_shade_cell(t.rows[0].cells[j], 'd9e1f2')  # light blue
+ 
+    # Data rows
+    total = 0.0
+    for i, gasto in enumerate(gastos):
+        row_idx = i + 1
+        try:
+            importe_val = float(str(gasto.get('importe', 0)).replace(',', '.'))
+        except (ValueError, TypeError):
+            importe_val = 0.0
+        total += importe_val
+ 
+        _docx_set_cell(t.rows[row_idx].cells[0], gasto.get('fecha', ''))
+        _docx_set_cell(t.rows[row_idx].cells[1], str(gasto.get('num_fra', '')))
+        _docx_set_cell(t.rows[row_idx].cells[2], gasto.get('proveedor', ''))
+        _docx_set_cell(t.rows[row_idx].cells[3], gasto.get('concepto', ''))
+        _docx_set_cell(t.rows[row_idx].cells[4], f"{importe_val:.2f}")
+ 
+    # Total row — merge first 3 cells (cols 0-2), label in col 3, value in col 4
+    # After merge, cells[0]=cells[1]=cells[2]=merged master; cells[3]=col3; cells[4]=col4
+    total_row_idx = n_rows - 1
+    t.cell(total_row_idx, 0).merge(t.cell(total_row_idx, 2))
+    _docx_set_cell(t.rows[total_row_idx].cells[0], '')                        # merged: empty
+    _docx_set_cell(t.rows[total_row_idx].cells[3], 'TOTAL', bold=True)        # concepto col
+    _docx_set_cell(t.rows[total_row_idx].cells[4], f"{total:.2f} €", bold=True)  # importe col
+    _docx_shade_cell(t.rows[total_row_idx].cells[3], 'f2f2f2')
+    _docx_shade_cell(t.rows[total_row_idx].cells[4], 'f2f2f2')
+ 
+    # ── FIRMA ──────────────────────────────────────────────
+    doc.add_paragraph()
+    firma_p = doc.add_paragraph()
+    firma_run = firma_p.add_run('Firma empleado')
+    firma_run.font.name = 'Calibri'
+    firma_run.font.size = Pt(10)
+ 
+    # ── SAVE ───────────────────────────────────────────────
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    empleado_slug = data.get('empleado', 'empleado').replace(' ', '_').upper()
+    filename = f"liquidacion_{empleado_slug}_{timestamp}.docx"
+    filepath = OUTPUT_DIR / filename
+    doc.save(str(filepath))
+ 
+    return filepath, filename
+ 
+ 
+@app.post("/api/save-liquidacion")
+async def save_liquidacion(request: Request, generate_docx: bool = False):
+    """
+    Guarda una liquidación de gastos:
+    1. Añade todas las líneas al Excel mensual
+    2. Si generate_docx=true, genera el .docx y devuelve URL de descarga
+ 
+    Body JSON esperado:
+    {
+      "empleado": "NOMBRE APELLIDOS",
+      "dni": "12345678A",
+      "dia_salida": "2026-04-01",
+      "dia_regreso": "2026-04-03",
+      "motivo": "Viaje a Madrid por reunión con cliente",
+      "gastos": [
+        {"fecha": "2026-04-01", "num_fra": "129", "proveedor": "RADIO TAXI", "concepto": "TAXI", "importe": 16.50},
+        ...
+      ]
+    }
+    """
+    data = await request.json()
+ 
+    empleado = data.get('empleado', '').strip()
+    gastos   = data.get('gastos', [])
+ 
+    if not empleado:
+        raise HTTPException(400, "El campo 'empleado' es obligatorio")
+    if not gastos:
+        raise HTTPException(400, "Debe incluir al menos un gasto")
+ 
+    # ── 1. Guardar en Excel ────────────────────────────────
+    excel_file = EXCEL_STORAGE_DIR / "liquidaciones-gastos.xlsx"
+ 
+    if excel_file.exists():
+        wb = load_workbook(excel_file)
+        ws = wb.active
+    else:
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Liquidaciones"
+        cols = [
+            "Fecha Registro", "Empleado", "DNI",
+            "Día Salida", "Día Regreso", "Motivo",
+            "Fecha Gasto", "Nº Fra/Ticket", "Proveedor", "Concepto", "Importe (€)"
+        ]
+        ws.append(cols)
+        hdr_fill = PatternFill(start_color="1a4d7e", end_color="1a4d7e", fill_type="solid")
+        hdr_font = Font(bold=True, color="FFFFFF")
+        for cell in ws[1]:
+            cell.fill = hdr_fill
+            cell.font = hdr_font
+            cell.alignment = Alignment(horizontal="center")
+ 
+    now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    for gasto in gastos:
+        try:
+            importe = float(str(gasto.get('importe', 0)).replace(',', '.'))
+        except (ValueError, TypeError):
+            importe = 0.0
+        ws.append([
+            now_str,
+            empleado,
+            data.get('dni', ''),
+            data.get('dia_salida', ''),
+            data.get('dia_regreso', ''),
+            data.get('motivo', ''),
+            gasto.get('fecha', ''),
+            str(gasto.get('num_fra', '')),
+            gasto.get('proveedor', ''),
+            gasto.get('concepto', ''),
+            importe,
+        ])
+ 
+    # Auto-width columns
+    for col in ws.columns:
+        max_len = max((len(str(c.value or '')) for c in col), default=0)
+        ws.column_dimensions[col[0].column_letter].width = min(max_len + 2, 50)
+ 
+    wb.save(excel_file)
+ 
+    response = {
+        "success": True,
+        "message": f"Liquidación guardada: {len(gastos)} gasto(s)",
+        "excel_file": excel_file.name,
+    }
+ 
+    # ── 2. Generar DOCX (opcional) ─────────────────────────
+    if generate_docx:
+        try:
+            _, docx_filename = _generate_liquidacion_docx(data)
+            response["docx_filename"] = docx_filename
+            response["download_url"]  = f"/download/{docx_filename}"
+        except Exception as e:
+            print(f"[liquidacion] Error generando DOCX: {e}")
+            response["docx_error"] = str(e)
+ 
+    # ── 3. Email (si está configurado) ────────────────────
+    email_to = os.getenv("MAIL_TO_LIQUIDACIONES", "").strip() or os.getenv("MAIL_TO", "")
+    if email_to and SMTP_HOST and generate_docx and response.get("download_url"):
+        docx_path = OUTPUT_DIR / response["docx_filename"]
+        subject = f"Liquidación gastos: {empleado} ({data.get('dia_salida','')} – {data.get('dia_regreso','')})"
+        send_email_with_json(
+            to_email=email_to,
+            subject=subject,
+            schema_name="liquidacion-gastos",
+            data=data,
+            json_path=str(docx_path),
+        )
+ 
+    return JSONResponse(response)
 
 if __name__ == "__main__":
     print("=" * 60)

@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "[MLG] Mantenimiento de Maquinaria de Almacén",
+  "title": "Mantenimiento de Maquinaria de Almacén",
   "description": "Registro mensual de mantenimiento de máquinas - Delegación Málaga",
   "category": "📊 Sede Málaga",
   "custom_template": "mantenimiento-maquinas-mlg.html",
