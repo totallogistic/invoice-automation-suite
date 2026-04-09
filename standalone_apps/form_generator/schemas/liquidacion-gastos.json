@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Liquidación de Gastos de Viaje",
+  "description": "Registro de gastos de desplazamiento por empleado",
+  "category": "📋 RRHH",
+  "custom_template": "liquidacion-gastos.html",
+  "type": "object",
+  "properties": {
+    "empleado":   { "type": "string", "title": "Empleado" },
+    "dni":        { "type": "string", "title": "DNI/NIE" },
+    "dia_salida": { "type": "string", "format": "date", "title": "Día de Salida" },
+    "dia_regreso":{ "type": "string", "format": "date", "title": "Día de Regreso" },
+    "motivo":     { "type": "string", "title": "Motivo del Desplazamiento" },
+    "gastos": {
+      "type": "array",
+      "title": "Gastos",
+      "items": {
+        "type": "object",
+        "properties": {
+          "fecha":     { "type": "string", "format": "date", "title": "Fecha" },
+          "num_fra":   { "type": "string", "title": "Nº Fra/Ticket" },
+          "proveedor": { "type": "string", "title": "Proveedor" },
+          "concepto":  { "type": "string", "title": "Concepto" },
+          "importe":   { "type": "number", "minimum": 0, "title": "Importe (€)" }
+        },
+        "required": ["fecha", "proveedor", "concepto", "importe"]
+      },
+      "minItems": 1
+    }
+  },
+  "required": ["empleado", "dia_salida", "dia_regreso", "motivo", "gastos"]
+}

@@ -38,6 +38,12 @@ from email import encoders
 from datetime import datetime
 import uvicorn
 
+from docx import Document as _DocxDocument
+from docx.shared import Pt as _Pt, Cm as _Cm, RGBColor as _RGBColor
+from docx.oxml.ns import qn as _qn
+from docx.oxml import OxmlElement as _OxmlElement
+from docx.enum.text import WD_ALIGN_PARAGRAPH as _WD_ALIGN
+
 # Configuration
 SCHEMAS_DIR = Path(__file__).parent / "schemas"
 OUTPUT_DIR = Path(__file__).parent / "output"
@@ -1196,6 +1202,787 @@ def bl_pdf_download(filename: str):
         if matches:
             return _FileResponse(str(matches[0]), media_type="application/pdf", filename=safe)
     raise HTTPException(404, f"PDF no encontrado: {safe}")
+
+
+def _docx_set_cell(cell, text, bold=False, size=11, align=None):
+    """Clear a table cell and write formatted text."""
+    from docx.shared import Pt
+    # Remove all existing paragraphs except the first
+    while len(cell.paragraphs) > 1:
+        p = cell.paragraphs[-1]._p
+        p.getparent().remove(p)
+    para = cell.paragraphs[0]
+    # Clear existing runs / SDTs from the paragraph
+    for child in list(para._p):
+        tag = child.tag.split('}')[-1] if '}' in child.tag else child.tag
+        if tag in ('r', 'sdt', 'hyperlink', 'ins', 'del', 'bookmarkStart', 'bookmarkEnd'):
+            para._p.remove(child)
+    run = para.add_run(str(text) if text is not None else '')
+    run.font.name = 'Calibri'
+    run.font.size = Pt(size)
+    run.font.bold = bold
+    if align:
+        from docx.enum.text import WD_ALIGN_PARAGRAPH
+        para.alignment = align
+ 
+ 
+def _docx_shade_cell(cell, hex_color="1a4d7e"):
+    """Apply background fill to a table cell."""
+    tc = cell._tc
+    tcPr = tc.get_or_add_tcPr()
+    shd = _OxmlElement('w:shd')
+    shd.set(_qn('w:val'), 'clear')
+    shd.set(_qn('w:color'), 'auto')
+    shd.set(_qn('w:fill'), hex_color)
+    tcPr.append(shd)
+ 
+ 
+def _generate_liquidacion_docx(data: dict):
+    """
+    Generate a Liquidación de Gastos de Viaje DOCX from data dict.
+    Returns (Path, filename) tuple.
+    """
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
+    from docx.shared import Pt, Cm
+ 
+    doc = _DocxDocument()
+ 
+    # --- Page margins ---
+    for section in doc.sections:
+        section.top_margin = Cm(2)
+        section.bottom_margin = Cm(2)
+        section.left_margin = Cm(2.5)
+        section.right_margin = Cm(2.5)
+ 
+    def section_header(text):
+        p = doc.add_paragraph()
+        p.paragraph_format.space_before = Pt(10)
+        p.paragraph_format.space_after = Pt(3)
+        run = p.add_run(text)
+        run.font.name = 'Calibri'
+        run.font.size = Pt(11)
+        run.font.bold = True
+        return p
+ 
+    def two_col_table(rows_data):
+        """rows_data: list of (label, value)"""
+        t = doc.add_table(rows=len(rows_data), cols=2)
+        t.style = 'Table Grid'
+        for i, (label, value) in enumerate(rows_data):
+            t.rows[i].cells[0].width = Cm(5)
+            t.rows[i].cells[1].width = Cm(11)
+            _docx_set_cell(t.rows[i].cells[0], label, bold=True)
+            _docx_set_cell(t.rows[i].cells[1], value)
+        return t
+ 
+    # ── TITLE ──────────────────────────────────────────────
+    title_p = doc.add_paragraph()
+    title_p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    title_run = title_p.add_run('LIQUIDACIÓN DE GASTOS DE VIAJE')
+    title_run.font.name = 'Calibri'
+    title_run.font.size = Pt(14)
+    title_run.font.bold = True
+ 
+    doc.add_paragraph()  # spacing
+ 
+    # ── DATOS DEL EMPLEADO ─────────────────────────────────
+    section_header('DATOS DEL EMPLEADO')
+    two_col_table([
+        ('Nombre y apellidos', data.get('empleado', '')),
+        ('DNI',                data.get('dni', '')),
+    ])
+ 
+    # ── INFORMACIÓN DEL VIAJE ──────────────────────────────
+    section_header('INFORMACIÓN DEL VIAJE')
+    two_col_table([
+        ('Día de salida',  data.get('dia_salida', '')),
+        ('Día de regreso', data.get('dia_regreso', '')),
+    ])
+ 
+    # ── MOTIVO ─────────────────────────────────────────────
+    section_header('MOTIVO DEL DESPLAZAMIENTO')
+    t_motivo = doc.add_table(rows=1, cols=1)
+    t_motivo.style = 'Table Grid'
+    t_motivo.rows[0].cells[0].width = Cm(16)
+    t_motivo.rows[0].height = Cm(1.2)
+    _docx_set_cell(t_motivo.rows[0].cells[0], data.get('motivo', ''))
+ 
+    # ── GASTOS ─────────────────────────────────────────────
+    section_header('GASTOS DEL VIAJE')
+ 
+    gastos = data.get('gastos', [])
+ 
+    # Rows: 1 header + N data + 1 total
+    n_rows = 1 + len(gastos) + 1
+    t = doc.add_table(rows=n_rows, cols=5)
+    t.style = 'Table Grid'
+ 
+    # Column widths (total ~17 cm usable)
+    col_widths = [Cm(2.2), Cm(4.0), Cm(5.5), Cm(3.0), Cm(2.3)]
+    for row in t.rows:
+        for i, cell in enumerate(row.cells):
+            cell.width = col_widths[i]
+ 
+    # Header row
+    headers = ['FECHA', 'Nº FRA/TICKET', 'PROVEEDOR', 'CONCEPTO', 'IMPORTE']
+    for j, h in enumerate(headers):
+        _docx_set_cell(t.rows[0].cells[j], h, bold=True)
+        _docx_shade_cell(t.rows[0].cells[j], 'd9e1f2')  # light blue
+ 
+    # Data rows
+    total = 0.0
+    for i, gasto in enumerate(gastos):
+        row_idx = i + 1
+        try:
+            importe_val = float(str(gasto.get('importe', 0)).replace(',', '.'))
+        except (ValueError, TypeError):
+            importe_val = 0.0
+        total += importe_val
+ 
+        _docx_set_cell(t.rows[row_idx].cells[0], gasto.get('fecha', ''))
+        _docx_set_cell(t.rows[row_idx].cells[1], str(gasto.get('num_fra', '')))
+        _docx_set_cell(t.rows[row_idx].cells[2], gasto.get('proveedor', ''))
+        _docx_set_cell(t.rows[row_idx].cells[3], gasto.get('concepto', ''))
+        _docx_set_cell(t.rows[row_idx].cells[4], f"{importe_val:.2f}")
+ 
+    # Total row — merge first 3 cells (cols 0-2), label in col 3, value in col 4
+    # After merge, cells[0]=cells[1]=cells[2]=merged master; cells[3]=col3; cells[4]=col4
+    total_row_idx = n_rows - 1
+    t.cell(total_row_idx, 0).merge(t.cell(total_row_idx, 2))
+    _docx_set_cell(t.rows[total_row_idx].cells[0], '')                        # merged: empty
+    _docx_set_cell(t.rows[total_row_idx].cells[3], 'TOTAL', bold=True)        # concepto col
+    _docx_set_cell(t.rows[total_row_idx].cells[4], f"{total:.2f} €", bold=True)  # importe col
+    _docx_shade_cell(t.rows[total_row_idx].cells[3], 'f2f2f2')
+    _docx_shade_cell(t.rows[total_row_idx].cells[4], 'f2f2f2')
+ 
+    # ── FIRMA ──────────────────────────────────────────────
+    doc.add_paragraph()
+    firma_p = doc.add_paragraph()
+    firma_run = firma_p.add_run('Firma empleado')
+    firma_run.font.name = 'Calibri'
+    firma_run.font.size = Pt(10)
+ 
+    # ── SAVE ───────────────────────────────────────────────
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    empleado_slug = data.get('empleado', 'empleado').replace(' ', '_').upper()
+    filename = f"liquidacion_{empleado_slug}_{timestamp}.docx"
+    filepath = OUTPUT_DIR / filename
+    doc.save(str(filepath))
+ 
+    return filepath, filename
+ 
+ 
+@app.post("/api/save-liquidacion")
+async def save_liquidacion(request: Request, generate_docx: bool = False):
+    """
+    Guarda una liquidación de gastos:
+    1. Añade todas las líneas al Excel mensual
+    2. Si generate_docx=true, genera el .docx y devuelve URL de descarga
+ 
+    Body JSON esperado:
+    {
+      "empleado": "NOMBRE APELLIDOS",
+      "dni": "12345678A",
+      "dia_salida": "2026-04-01",
+      "dia_regreso": "2026-04-03",
+      "motivo": "Viaje a Madrid por reunión con cliente",
+      "gastos": [
+        {"fecha": "2026-04-01", "num_fra": "129", "proveedor": "RADIO TAXI", "concepto": "TAXI", "importe": 16.50},
+        ...
+      ]
+    }
+    """
+    data = await request.json()
+ 
+    empleado = data.get('empleado', '').strip()
+    gastos   = data.get('gastos', [])
+ 
+    if not empleado:
+        raise HTTPException(400, "El campo 'empleado' es obligatorio")
+    if not gastos:
+        raise HTTPException(400, "Debe incluir al menos un gasto")
+ 
+    # ── 1. Guardar en Excel ────────────────────────────────
+    excel_file = EXCEL_STORAGE_DIR / "liquidaciones-gastos.xlsx"
+ 
+    if excel_file.exists():
+        wb = load_workbook(excel_file)
+        ws = wb.active
+    else:
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Liquidaciones"
+        cols = [
+            "Fecha Registro", "Empleado", "DNI",
+            "Día Salida", "Día Regreso", "Motivo",
+            "Fecha Gasto", "Nº Fra/Ticket", "Proveedor", "Concepto", "Importe (€)"
+        ]
+        ws.append(cols)
+        hdr_fill = PatternFill(start_color="1a4d7e", end_color="1a4d7e", fill_type="solid")
+        hdr_font = Font(bold=True, color="FFFFFF")
+        for cell in ws[1]:
+            cell.fill = hdr_fill
+            cell.font = hdr_font
+            cell.alignment = Alignment(horizontal="center")
+ 
+    now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    for gasto in gastos:
+        try:
+            importe = float(str(gasto.get('importe', 0)).replace(',', '.'))
+        except (ValueError, TypeError):
+            importe = 0.0
+        ws.append([
+            now_str,
+            empleado,
+            data.get('dni', ''),
+            data.get('dia_salida', ''),
+            data.get('dia_regreso', ''),
+            data.get('motivo', ''),
+            gasto.get('fecha', ''),
+            str(gasto.get('num_fra', '')),
+            gasto.get('proveedor', ''),
+            gasto.get('concepto', ''),
+            importe,
+        ])
+ 
+    # Auto-width columns
+    for col in ws.columns:
+        max_len = max((len(str(c.value or '')) for c in col), default=0)
+        ws.column_dimensions[col[0].column_letter].width = min(max_len + 2, 50)
+ 
+    wb.save(excel_file)
+ 
+    response = {
+        "success": True,
+        "message": f"Liquidación guardada: {len(gastos)} gasto(s)",
+        "excel_file": excel_file.name,
+    }
+ 
+    # ── 2. Generar DOCX (opcional) ─────────────────────────
+    if generate_docx:
+        try:
+            _, docx_filename = _generate_liquidacion_docx(data)
+            response["docx_filename"] = docx_filename
+            response["download_url"]  = f"/download/{docx_filename}"
+        except Exception as e:
+            print(f"[liquidacion] Error generando DOCX: {e}")
+            response["docx_error"] = str(e)
+ 
+    # ── 3. Email (si está configurado) ────────────────────
+    email_to = os.getenv("MAIL_TO_LIQUIDACIONES", "").strip() or os.getenv("MAIL_TO", "")
+    if email_to and SMTP_HOST and generate_docx and response.get("download_url"):
+        docx_path = OUTPUT_DIR / response["docx_filename"]
+        subject = f"Liquidación gastos: {empleado} ({data.get('dia_salida','')} – {data.get('dia_regreso','')})"
+        send_email_with_json(
+            to_email=email_to,
+            subject=subject,
+            schema_name="liquidacion-gastos",
+            data=data,
+            json_path=str(docx_path),
+        )
+ 
+    return JSONResponse(response)
+
+# ============================================================
+# CONTROL DE PRECINTOS
+# Añadir este bloque a app.py (antes del if __name__ == "__main__")
+# Añadir al .env:  PRECINTOS_PIN=TUPIN
+# ============================================================
+
+import threading as _threading
+_precintos_lock = _threading.Lock()
+
+PRECINTOS_FILE = EXCEL_STORAGE_DIR / "control-precintos.xlsx"
+
+PRECINTOS_HEADERS = [
+    "Nº Precinto", "Matrícula", "Expediente",
+    "Estado", "Fecha Creación", "Fecha Modificación", "Notas"
+]
+
+PRECINTOS_COL_WIDTHS = [14, 16, 20, 14, 20, 20, 30]
+
+
+# ── Helpers ───────────────────────────────────────────────────
+
+def _precintos_check_pin(pin) -> bool:
+    expected = os.getenv("PRECINTOS_PIN", "").strip()
+    if not expected:
+        raise HTTPException(500, "PRECINTOS_PIN no configurado en el fichero .env")
+    return str(pin).strip() == expected
+
+
+def _precintos_ensure_file():
+    """Create the Excel file with headers if it doesn't exist."""
+    if PRECINTOS_FILE.exists():
+        return
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Precintos"
+    ws.append(PRECINTOS_HEADERS)
+    hdr_fill = PatternFill(start_color="1a4d7e", end_color="1a4d7e", fill_type="solid")
+    hdr_font = Font(bold=True, color="FFFFFF")
+    for i, cell in enumerate(ws[1]):
+        cell.fill = hdr_fill
+        cell.font = hdr_font
+        cell.alignment = Alignment(horizontal="center")
+        ws.column_dimensions[cell.column_letter].width = PRECINTOS_COL_WIDTHS[i]
+    wb.save(PRECINTOS_FILE)
+
+
+def _precintos_load():
+    """Load workbook. Always call _precintos_ensure_file() first."""
+    _precintos_ensure_file()
+    return load_workbook(PRECINTOS_FILE)
+
+
+def _precintos_get_records(ws) -> list:
+    records = []
+    for row in ws.iter_rows(min_row=2, values_only=True):
+        if row[0] is None:
+            continue
+        def _fmt_dt(v):
+            if v is None:
+                return ""
+            if hasattr(v, 'strftime'):
+                return v.strftime("%d/%m/%Y %H:%M")
+            return str(v)[:16]
+        records.append({
+            "num":               int(row[0]),
+            "matricula":         row[1] or "",
+            "expediente":        row[2] or "",
+            "estado":            row[3] or "ACTIVO",
+            "fecha_creacion":    _fmt_dt(row[4]),
+            "fecha_modificacion":_fmt_dt(row[5]),
+            "notas":             row[6] or "",
+        })
+    return records
+
+
+def _precintos_next_num(records: list) -> int:
+    """Next number = max of all non-CANCELADO + 1 (CANCELADO frees the slot conceptually
+    but we keep it simple: max of ALL + 1, unless there are no records yet)."""
+    active = [r["num"] for r in records if r["estado"] != "CANCELADO"]
+    if not active:
+        # Check if there are any records at all
+        all_nums = [r["num"] for r in records]
+        return (max(all_nums) + 1) if all_nums else 1
+    return max(active) + 1
+
+
+def _precintos_find_row_index(ws, num: int):
+    """Return 1-based row index for a given precinto number, or None."""
+    for idx, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
+        if row[0] is not None and int(row[0]) == num:
+            return idx
+    return None
+
+
+def _precintos_save_autowidth(wb, ws):
+    for i, col in enumerate(ws.columns):
+        max_len = max((len(str(c.value or "")) for c in col), default=8)
+        ws.column_dimensions[col[0].column_letter].width = min(max_len + 2, 40)
+    wb.save(PRECINTOS_FILE)
+
+
+# ── Endpoints ─────────────────────────────────────────────────
+
+@app.get("/precintos", response_class=HTMLResponse)
+async def precintos_page(request: Request):
+    return templates.TemplateResponse("precintos.html", {"request": request})
+
+
+@app.get("/api/precintos/list")
+def precintos_list():
+    with _precintos_lock:
+        wb = _precintos_load()
+        ws = wb.active
+        records = _precintos_get_records(ws)
+
+    records_sorted = sorted(records, key=lambda r: r["num"], reverse=True)
+    stats = {
+        "total":     len(records),
+        "activos":   sum(1 for r in records if r["estado"] == "ACTIVO"),
+        "reservados":sum(1 for r in records if r["estado"] == "RESERVADO"),
+        "anulados":  sum(1 for r in records if r["estado"] == "ANULADO"),
+        "cancelados":sum(1 for r in records if r["estado"] == "CANCELADO"),
+    }
+    return JSONResponse({
+        "records":  records_sorted,
+        "next_num": _precintos_next_num(records),
+        "stats":    stats,
+    })
+
+
+@app.post("/api/precintos/nuevo")
+async def precintos_nuevo(request: Request):
+    """Register a new precinto (ACTIVO) or reserve one (RESERVADO)."""
+    data = await request.json()
+    if not _precintos_check_pin(data.get("pin", "")):
+        raise HTTPException(401, "PIN incorrecto")
+
+    matricula  = data.get("matricula",  "").strip()
+    expediente = data.get("expediente", "").strip()
+    notas      = data.get("notas",      "").strip()
+    estado     = "ACTIVO" if (matricula and expediente) else "RESERVADO"
+    now        = datetime.now()
+
+    with _precintos_lock:
+        wb = _precintos_load()
+        ws = wb.active
+        records  = _precintos_get_records(ws)
+        next_num = _precintos_next_num(records)
+        ws.append([next_num, matricula, expediente, estado, now, now, notas])
+        _precintos_save_autowidth(wb, ws)
+
+    return JSONResponse({
+        "success": True,
+        "num":     next_num,
+        "estado":  estado,
+        "msg":     f"Precinto {next_num} {'registrado' if estado == 'ACTIVO' else 'reservado'} correctamente",
+    })
+
+
+@app.post("/api/precintos/editar")
+async def precintos_editar(request: Request):
+    """Edit matrícula, expediente or notas for an existing precinto."""
+    data = await request.json()
+    if not _precintos_check_pin(data.get("pin", "")):
+        raise HTTPException(401, "PIN incorrecto")
+
+    num        = int(data.get("num", 0))
+    matricula  = data.get("matricula",  "").strip()
+    expediente = data.get("expediente", "").strip()
+    notas      = data.get("notas",      "").strip()
+
+    with _precintos_lock:
+        wb  = _precintos_load()
+        ws  = wb.active
+        row = _precintos_find_row_index(ws, num)
+        if row is None:
+            raise HTTPException(404, f"Precinto {num} no encontrado")
+
+        current_estado = ws.cell(row=row, column=4).value
+        if current_estado in ("ANULADO",):
+            raise HTTPException(400, f"No se puede editar un precinto {current_estado}")
+
+        ws.cell(row=row, column=2).value = matricula
+        ws.cell(row=row, column=3).value = expediente
+        # If both fields are now filled and it was RESERVADO → promote to ACTIVO
+        if current_estado == "RESERVADO" and matricula and expediente:
+            ws.cell(row=row, column=4).value = "ACTIVO"
+        ws.cell(row=row, column=6).value = datetime.now()
+        ws.cell(row=row, column=7).value = notas
+        _precintos_save_autowidth(wb, ws)
+
+    nuevo_estado = "ACTIVO" if (current_estado == "RESERVADO" and matricula and expediente) else current_estado
+    return JSONResponse({"success": True, "estado": nuevo_estado, "msg": f"Precinto {num} actualizado"})
+
+
+@app.post("/api/precintos/anular")
+async def precintos_anular(request: Request):
+    """Mark a precinto as ANULADO (bad/damaged). Number is permanently consumed."""
+    data = await request.json()
+    if not _precintos_check_pin(data.get("pin", "")):
+        raise HTTPException(401, "PIN incorrecto")
+
+    num   = int(data.get("num", 0))
+    notas = data.get("notas", "").strip() or "Anulado por mal estado"
+
+    with _precintos_lock:
+        wb  = _precintos_load()
+        ws  = wb.active
+        row = _precintos_find_row_index(ws, num)
+        if row is None:
+            raise HTTPException(404, f"Precinto {num} no encontrado")
+        ws.cell(row=row, column=4).value = "ANULADO"
+        ws.cell(row=row, column=6).value = datetime.now()
+        ws.cell(row=row, column=7).value = notas
+        _precintos_save_autowidth(wb, ws)
+
+    return JSONResponse({"success": True, "msg": f"Precinto {num} marcado como ANULADO"})
+
+
+@app.post("/api/precintos/cancelar-reserva")
+async def precintos_cancelar_reserva(request: Request):
+    """Cancel a RESERVADO precinto, freeing it (marked CANCELADO)."""
+    data = await request.json()
+    if not _precintos_check_pin(data.get("pin", "")):
+        raise HTTPException(401, "PIN incorrecto")
+
+    num = int(data.get("num", 0))
+
+    with _precintos_lock:
+        wb  = _precintos_load()
+        ws  = wb.active
+        row = _precintos_find_row_index(ws, num)
+        if row is None:
+            raise HTTPException(404, f"Precinto {num} no encontrado")
+        if ws.cell(row=row, column=4).value != "RESERVADO":
+            raise HTTPException(400, "Solo se pueden cancelar precintos en estado RESERVADO")
+        ws.cell(row=row, column=4).value  = "CANCELADO"
+        ws.cell(row=row, column=6).value  = datetime.now()
+        ws.cell(row=row, column=7).value  = "Reserva cancelada"
+        _precintos_save_autowidth(wb, ws)
+
+    return JSONResponse({"success": True, "msg": f"Reserva del precinto {num} cancelada"})
+
+# ============================================================
+# ENTREGA DE EPIs (FR-58)
+# Añadir este bloque a app.py (antes del if __name__ == "__main__")
+# ============================================================
+
+RESPONSABLE_PREVENCION = "Juan Antonio Martínez Lázaro"
+
+TEXTO_LEGAL_EPIS = (
+    "De acuerdo con el art. 29.2 de la Ley 31/1995 de 8 de Noviembre, de Prevención de Riesgos "
+    "Laborales, así como del sistema de gestión de la prevención de riesgos, el trabajador:\n\n"
+    "a) Se compromete a utilizar correctamente los medios y equipos de protección facilitados.\n"
+    "b) Se responsabiliza de su mantenimiento y conservación.\n"
+    "c) Entiende que el equipo se le asigna de manera personal.\n"
+    "d) Devuelve el EPI usado o deteriorado antes de recibir otro nuevo, quedando prohibida la "
+    "utilización de equipos deteriorados o caducos.\n"
+    "e) Colabora con la gestión documentada para la entrega de los equipos.\n"
+    "f) Comunicará al responsable del grupo o trabajador-enlace la pérdida, merma, deterioro o "
+    "caducidad que pudiera sufrir el equipo de protección individual."
+)
+
+
+def _generate_epis_docx(data: dict):
+    """Generate FR-58 EPI delivery DOCX. Returns (Path, filename)."""
+    from docx import Document
+    from docx.shared import Pt, Cm
+    from docx.oxml import OxmlElement
+    from docx.oxml.ns import qn
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
+
+    doc = Document()
+    for section in doc.sections:
+        section.top_margin    = Cm(2)
+        section.bottom_margin = Cm(2)
+        section.left_margin   = Cm(2.5)
+        section.right_margin  = Cm(2.5)
+
+    def set_run(run, bold=False, size=10):
+        run.font.name = 'Calibri'
+        run.font.size = Pt(size)
+        run.font.bold = bold
+
+    def cell_write(cell, text, bold=False, size=10, center=False):
+        for child in list(cell.paragraphs[0]._p):
+            tag = child.tag.split('}')[-1] if '}' in child.tag else child.tag
+            if tag in ('r', 'sdt', 'hyperlink'):
+                cell.paragraphs[0]._p.remove(child)
+        run = cell.paragraphs[0].add_run(str(text) if text else '')
+        set_run(run, bold=bold, size=size)
+        if center:
+            cell.paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
+
+    def shade_cell(cell, hex_color):
+        tc = cell._tc
+        tcPr = tc.get_or_add_tcPr()
+        shd = OxmlElement('w:shd')
+        shd.set(qn('w:val'), 'clear')
+        shd.set(qn('w:color'), 'auto')
+        shd.set(qn('w:fill'), hex_color)
+        tcPr.append(shd)
+
+    empleado = data.get('empleado', '')
+    puesto   = data.get('puesto', '')
+    fecha    = data.get('fecha', '')
+    epis     = data.get('epis', [])
+
+    # ── HEADER TABLE ──────────────────────────────────────
+    t0 = doc.add_table(rows=3, cols=4)
+    t0.style = 'Table Grid'
+
+    # Row 0: Puesto | value | DATOS EVALUACIÓN | blank
+    cell_write(t0.cell(0, 0), 'Puesto de Trabajo:', bold=True)
+    cell_write(t0.cell(0, 1), puesto.upper())
+    cell_write(t0.cell(0, 2), 'DATOS DE LA EVALUACIÓN DE RIESGOS', bold=True)
+    # Row 1: Trabajador | value | FECHA | date
+    cell_write(t0.cell(1, 0), 'Trabajador:', bold=True)
+    cell_write(t0.cell(1, 1), empleado.upper())
+    cell_write(t0.cell(1, 2), 'FECHA:', bold=True)
+    cell_write(t0.cell(1, 3), fecha)
+    # Row 2: Fecha | mm/yyyy | REALIZACIÓN | COORDINADOR
+    mes_anio = ''
+    if fecha:
+        try:
+            from datetime import datetime as _dt
+            mes_anio = _dt.strptime(fecha, '%Y-%m-%d').strftime('%m/%Y')
+        except Exception:
+            mes_anio = fecha
+    cell_write(t0.cell(2, 0), 'Fecha:', bold=True)
+    cell_write(t0.cell(2, 1), mes_anio)
+    cell_write(t0.cell(2, 2), 'REALIZACIÓN:', bold=True)
+    cell_write(t0.cell(2, 3), 'COORDINADOR')
+
+    doc.add_paragraph()
+
+    # ── EPI TABLE ─────────────────────────────────────────
+    title_p = doc.add_paragraph()
+    r = title_p.add_run("Listado de EPI's")
+    set_run(r, bold=True, size=11)
+
+    # Group by category
+    from itertools import groupby
+    categories = {}
+    for epi in epis:
+        cat = epi.get('categoria', '')
+        categories.setdefault(cat, []).append(epi)
+
+    # Build table: 1 header row + category rows + item rows
+    total_rows = 1 + sum(1 + len(v) for v in categories.values())
+    t1 = doc.add_table(rows=total_rows, cols=4)
+    t1.style = 'Table Grid'
+
+    # Column widths
+    for row in t1.rows:
+        row.cells[0].width = Cm(2.2)   # Normativa
+        row.cells[1].width = Cm(8.5)   # EPI
+        row.cells[2].width = Cm(1.2)   # SÍ
+        row.cells[3].width = Cm(4.1)   # Observaciones
+
+    # Header row
+    cell_write(t1.rows[0].cells[0], 'Normativa', bold=True, center=True)
+    cell_write(t1.rows[0].cells[1], 'Equipo de Protección Individual', bold=True)
+    cell_write(t1.rows[0].cells[2], 'SÍ', bold=True, center=True)
+    cell_write(t1.rows[0].cells[3], 'Observaciones', bold=True)
+    for j in range(4):
+        shade_cell(t1.rows[0].cells[j], 'd9e1f2')
+
+    row_idx = 1
+    for cat_name, items in categories.items():
+        # Category header row
+        t1.cell(row_idx, 0).merge(t1.cell(row_idx, 3))
+        cell_write(t1.rows[row_idx].cells[0], cat_name.upper(), bold=True)
+        shade_cell(t1.rows[row_idx].cells[0], 'f2f2f2')
+        row_idx += 1
+
+        for epi in items:
+            cell_write(t1.rows[row_idx].cells[0], epi.get('normativa', ''), size=9, center=True)
+            cell_write(t1.rows[row_idx].cells[1], epi.get('nombre', ''))
+            cell_write(t1.rows[row_idx].cells[2],
+                       '✓' if epi.get('entregado') else '', center=True, size=12)
+            cell_write(t1.rows[row_idx].cells[3], epi.get('observaciones', ''), size=9)
+            row_idx += 1
+
+    doc.add_paragraph()
+
+    # ── LEGAL TEXT ────────────────────────────────────────
+    for line in TEXTO_LEGAL_EPIS.split('\n'):
+        if not line.strip():
+            continue
+        p = doc.add_paragraph()
+        p.paragraph_format.space_after = Pt(2)
+        run = p.add_run(line)
+        set_run(run, size=9)
+
+    doc.add_paragraph()
+
+    # ── SIGNATURES ────────────────────────────────────────
+    t2 = doc.add_table(rows=2, cols=2)
+    t2.style = 'Table Grid'
+    cell_write(t2.cell(0, 0), 'Fdo: Responsable Prevención', bold=True)
+    cell_write(t2.cell(0, 1), 'Fdo: Trabajador', bold=True)
+    cell_write(t2.cell(1, 0), f'Nombre: {RESPONSABLE_PREVENCION}')
+    cell_write(t2.cell(1, 1), f'Nombre: {empleado.upper()}')
+
+    # ── SAVE ─────────────────────────────────────────────
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    slug = empleado.replace(' ', '_').upper()
+    filename = f"FR58_EPIs_{slug}_{timestamp}.docx"
+    filepath = OUTPUT_DIR / filename
+    doc.save(str(filepath))
+    return filepath, filename
+
+
+@app.post("/api/save-entrega-epis")
+async def save_entrega_epis(request: Request, generate_docx: bool = False):
+    """
+    Guarda una entrega de EPIs:
+    1. Añade los EPIs entregados al Excel histórico (una fila por EPI)
+    2. Si generate_docx=true, genera el FR-58 y devuelve URL de descarga
+
+    Body JSON:
+    {
+      "empleado": "NOMBRE APELLIDOS",
+      "puesto": "MOTERO",
+      "fecha": "2026-04-09",
+      "epis": [
+        {"categoria": "Vestuario laboral", "normativa": "", "nombre": "Pantalón mono",
+         "entregado": true, "observaciones": ""},
+        ...
+      ]
+    }
+    """
+    data     = await request.json()
+    empleado = data.get('empleado', '').strip()
+    puesto   = data.get('puesto',   '').strip()
+    fecha    = data.get('fecha',    '').strip()
+    epis     = data.get('epis',     [])
+
+    if not empleado:
+        raise HTTPException(400, "El campo 'empleado' es obligatorio")
+    if not fecha:
+        raise HTTPException(400, "El campo 'fecha' es obligatorio")
+
+    entregados = [e for e in epis if e.get('entregado')]
+    if not entregados:
+        raise HTTPException(400, "Debe marcarse al menos un EPI como entregado")
+
+    # ── 1. Excel ──────────────────────────────────────────
+    excel_file = EXCEL_STORAGE_DIR / "entrega-epis.xlsx"
+
+    if excel_file.exists():
+        wb = load_workbook(excel_file)
+        ws = wb.active
+    else:
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Entregas EPIs"
+        cols = ["Fecha Registro", "Empleado", "Puesto", "Fecha Entrega",
+                "Categoría", "Normativa", "EPI", "Observaciones"]
+        ws.append(cols)
+        hdr_fill = PatternFill(start_color="1a4d7e", end_color="1a4d7e", fill_type="solid")
+        hdr_font = Font(bold=True, color="FFFFFF")
+        for cell in ws[1]:
+            cell.fill = hdr_fill
+            cell.font = hdr_font
+            cell.alignment = Alignment(horizontal="center")
+
+    now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    for epi in entregados:
+        ws.append([
+            now_str, empleado, puesto, fecha,
+            epi.get('categoria', ''),
+            epi.get('normativa', ''),
+            epi.get('nombre',    ''),
+            epi.get('observaciones', ''),
+        ])
+
+    for col in ws.columns:
+        max_len = max((len(str(c.value or '')) for c in col), default=8)
+        ws.column_dimensions[col[0].column_letter].width = min(max_len + 2, 45)
+    wb.save(excel_file)
+
+    response = {
+        "success": True,
+        "message": f"Entrega registrada: {len(entregados)} EPI(s) para {empleado}",
+        "excel_file": excel_file.name,
+    }
+
+    # ── 2. DOCX ───────────────────────────────────────────
+    if generate_docx:
+        try:
+            _, docx_filename = _generate_epis_docx(data)
+            response["docx_filename"] = docx_filename
+            response["download_url"]  = f"/download/{docx_filename}"
+        except Exception as e:
+            print(f"[epis] Error generando DOCX: {e}")
+            response["docx_error"] = str(e)
+
+    return JSONResponse(response)
 
 if __name__ == "__main__":
     print("=" * 60)

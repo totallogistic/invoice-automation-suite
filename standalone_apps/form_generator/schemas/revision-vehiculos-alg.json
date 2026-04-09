@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "[ALG] Revisión Vehículos",
+  "title": "Revisión Vehículos",
   "description": "Formulario de revisión de los vehículos propiedad de la empresa - Algeciras",
   "category": "📊 Sede Algeciras",
   "custom_template": "revision-vehiculos-alg.html",
@@ -18,12 +18,12 @@
       "title": "Vehículo"
     },
     "kilometraje": {"type": "number", "title": "Kilometraje Actual"},
-    "nivelAceite": {"type": "boolean", "title": "Nivel de Aceite Correcto"},
-    "nivelLiquidoFrenos": {"type": "boolean", "title": "Nivel de Líquido de Frenos"},
-    "nivelRefrigerante": {"type": "boolean", "title": "Nivel de Refrigerante"},
-    "presionNeumaticos": {"type": "boolean", "title": "Presión de Neumáticos"},
-    "lucesExteriores": {"type": "boolean", "title": "Luces Exteriores Funcionando"},
-    "limpiaparabrisas": {"type": "boolean", "title": "Limpiaparabrisas Funcionando"},
+    "nivelAceite": {"type": "string", "enum": ["✓", "X"], "title": "Nivel de Aceite Correcto"},
+    "nivelLiquidoFrenos": {"type": "string", "enum": ["✓", "X"], "title": "Nivel de Líquido de Frenos"},
+    "nivelRefrigerante": {"type": "string", "enum": ["✓", "X"], "title": "Nivel de Refrigerante"},
+    "presionNeumaticos": {"type": "string", "enum": ["✓", "X"], "title": "Presión de Neumáticos"},
+    "lucesExteriores": {"type": "string", "enum": ["✓", "X"], "title": "Luces Exteriores Funcionando"},
+    "limpiaparabrisas": {"type": "string", "enum": ["✓", "X"], "title": "Limpiaparabrisas Funcionando"},
     "estadoCarroceria": {
       "type": "string",
       "enum": ["Excelente", "Bueno", "Regular", "Necesita reparación"],

@@ -1,0 +1,485 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Control de Precintos</title>
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;background:#f5f5f5;min-height:100vh;display:flex;flex-direction:column}
+
+    /* ── Header ── */
+    header{background:linear-gradient(135deg,#1a4d7e 0%,#2563a8 100%);color:white;padding:1.25rem 2rem;display:flex;align-items:center;gap:1rem;box-shadow:0 2px 8px rgba(0,0,0,0.15)}
+    header a{color:rgba(255,255,255,0.75);text-decoration:none;font-size:0.875rem}
+    header a:hover{color:white}
+    header h1{font-size:1.25rem;font-weight:600}
+    header p{font-size:0.8rem;opacity:0.75;margin-top:0.1rem}
+    .next-badge{margin-left:auto;background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.3);border-radius:10px;padding:0.5rem 1.25rem;text-align:center;min-width:130px}
+    .next-badge .label{font-size:0.7rem;opacity:0.8;text-transform:uppercase;letter-spacing:0.5px}
+    .next-badge .num{font-size:1.8rem;font-weight:700;line-height:1.1}
+
+    /* ── Stats ── */
+    .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:0.75rem;padding:1.25rem 2rem 0}
+    .stat{background:white;border-radius:8px;box-shadow:0 1px 3px rgba(0,0,0,0.08);padding:0.875rem 1rem;text-align:center}
+    .stat .val{font-size:1.75rem;font-weight:700;line-height:1;color:#1a4d7e}
+    .stat .val.activo{color:#059669}
+    .stat .val.reservado{color:#d97706}
+    .stat .val.anulado{color:#dc2626}
+    .stat .val.cancelado{color:#9ca3af}
+    .stat .lbl{font-size:0.7rem;color:#6b7280;margin-top:0.25rem;text-transform:uppercase;letter-spacing:0.4px}
+
+    /* ── Main ── */
+    main{flex:1;padding:1.25rem 2rem;max-width:1400px;width:100%;margin:0 auto}
+
+    /* ── New precinto form ── */
+    .new-card{background:white;border-radius:10px;box-shadow:0 1px 3px rgba(0,0,0,0.08);padding:1.5rem;margin-bottom:1.25rem;border-left:4px solid #2563a8}
+    .new-card h2{font-size:0.85rem;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#6b7280;margin-bottom:1rem}
+    .new-form{display:flex;flex-wrap:wrap;gap:0.75rem;align-items:flex-end}
+    .nf-group{display:flex;flex-direction:column;gap:0.3rem;flex:1;min-width:140px}
+    .nf-group label{font-size:0.75rem;font-weight:600;color:#374151}
+    .nf-group input,.nf-group textarea{padding:0.55rem 0.75rem;border:1.5px solid #e0e0e0;border-radius:6px;font-size:0.9rem;font-family:inherit}
+    .nf-group input:focus,.nf-group textarea:focus{outline:none;border-color:#2563a8}
+    .nf-group .hint{font-size:0.7rem;color:#9ca3af;margin-top:0.1rem}
+    .nf-num{font-size:1.5rem;font-weight:700;color:#1a4d7e;padding:0.5rem 0.75rem;background:#f0f7ff;border-radius:6px;border:1.5px solid #bfdbfe;min-width:80px;text-align:center;align-self:flex-end}
+    .btn-nuevo,.btn-reservar{padding:0.6rem 1.25rem;border:none;border-radius:6px;font-weight:600;font-size:0.9rem;cursor:pointer;transition:all 0.15s;font-family:inherit;align-self:flex-end;white-space:nowrap}
+    .btn-nuevo{background:#2563a8;color:white}
+    .btn-nuevo:hover{background:#1a4d7e;transform:translateY(-1px)}
+    .btn-reservar{background:#fef3c7;color:#92400e;border:1.5px solid #fcd34d}
+    .btn-reservar:hover{background:#fde68a}
+
+    /* ── Filters ── */
+    .toolbar{display:flex;flex-wrap:wrap;gap:0.75rem;align-items:center;margin-bottom:1rem}
+    .filter-btns{display:flex;gap:0.4rem}
+    .fbtn{padding:0.4rem 0.9rem;border:1.5px solid #e0e0e0;border-radius:20px;background:white;font-size:0.8rem;font-weight:600;cursor:pointer;transition:all 0.15s;color:#6b7280}
+    .fbtn.active{border-color:#2563a8;background:#eff6ff;color:#2563a8}
+    .fbtn.act{border-color:#059669;background:#ecfdf5;color:#059669}
+    .fbtn.res{border-color:#d97706;background:#fffbeb;color:#d97706}
+    .fbtn.anu{border-color:#dc2626;background:#fef2f2;color:#dc2626}
+    .search-box{padding:0.45rem 0.85rem;border:1.5px solid #e0e0e0;border-radius:6px;font-size:0.85rem;font-family:inherit;min-width:220px}
+    .search-box:focus{outline:none;border-color:#2563a8}
+
+    /* ── Table ── */
+    .table-wrap{background:white;border-radius:10px;box-shadow:0 1px 3px rgba(0,0,0,0.08);overflow:hidden}
+    .table-meta{padding:0.75rem 1.25rem;border-bottom:1px solid #f1f5f9;font-size:0.82rem;color:#6b7280;display:flex;justify-content:space-between}
+    table{width:100%;border-collapse:collapse;font-size:0.83rem}
+    thead th{background:#f8fafc;padding:0.625rem 1rem;text-align:left;font-size:0.72rem;font-weight:700;color:#374151;text-transform:uppercase;letter-spacing:0.4px;border-bottom:1px solid #e5e7eb;white-space:nowrap}
+    tbody tr{border-bottom:1px solid #f1f5f9;transition:background 0.1s}
+    tbody tr:last-child{border-bottom:none}
+    tbody tr:hover{background:#f8faff}
+    tbody td{padding:0.65rem 1rem;vertical-align:middle}
+    .num-cell{font-family:'SF Mono','Fira Code',monospace;font-weight:700;font-size:0.95rem;color:#1a4d7e}
+    .empty-msg{padding:2.5rem;text-align:center;color:#9ca3af;font-style:italic}
+    #loading{padding:2rem;text-align:center;color:#6b7280;font-size:0.875rem}
+
+    /* Estado badges */
+    .badge{display:inline-block;padding:0.25rem 0.7rem;border-radius:20px;font-size:0.72rem;font-weight:700;letter-spacing:0.3px;white-space:nowrap}
+    .badge-ACTIVO{background:#ecfdf5;color:#065f46;border:1px solid #6ee7b7}
+    .badge-RESERVADO{background:#fffbeb;color:#92400e;border:1px solid #fcd34d}
+    .badge-ANULADO{background:#fef2f2;color:#991b1b;border:1px solid #fca5a5}
+    .badge-CANCELADO{background:#f3f4f6;color:#6b7280;border:1px solid #d1d5db}
+
+    /* Action buttons */
+    .actions-cell{display:flex;gap:0.35rem;flex-wrap:wrap}
+    .act-btn{padding:0.3rem 0.65rem;border:none;border-radius:5px;font-size:0.75rem;font-weight:600;cursor:pointer;transition:all 0.15s;font-family:inherit;white-space:nowrap}
+    .act-edit{background:#eff6ff;color:#2563a8;border:1px solid #bfdbfe}
+    .act-edit:hover{background:#dbeafe}
+    .act-anular{background:#fef2f2;color:#dc2626;border:1px solid #fca5a5}
+    .act-anular:hover{background:#fee2e2}
+    .act-cancel-res{background:#fffbeb;color:#92400e;border:1px solid #fcd34d}
+    .act-cancel-res:hover{background:#fde68a}
+
+    /* ── PIN Modal ── */
+    .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:1000;display:none}
+    .modal-overlay.open{display:flex}
+    .modal{background:white;border-radius:14px;padding:2rem;max-width:420px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,0.3)}
+    .modal h3{font-size:1.1rem;color:#1a4d7e;margin-bottom:0.4rem}
+    .modal .modal-desc{font-size:0.875rem;color:#6b7280;margin-bottom:1.5rem;line-height:1.5}
+    .modal label{display:block;font-weight:600;font-size:0.85rem;color:#374151;margin-bottom:0.4rem}
+    .modal input,.modal textarea,.modal select{width:100%;padding:0.65rem 0.85rem;border:1.5px solid #e0e0e0;border-radius:7px;font-size:0.95rem;font-family:inherit;margin-bottom:0.75rem}
+    .modal input:focus,.modal textarea:focus{outline:none;border-color:#2563a8}
+    .pin-input{font-size:1.5rem !important;letter-spacing:0.4rem;text-align:center}
+    .modal-actions{display:flex;gap:0.75rem;justify-content:flex-end;margin-top:0.5rem}
+    .btn-confirm{padding:0.6rem 1.5rem;background:#2563a8;color:white;border:none;border-radius:7px;font-weight:600;font-size:0.95rem;cursor:pointer;font-family:inherit}
+    .btn-confirm:hover{background:#1a4d7e}
+    .btn-cancel-modal{padding:0.6rem 1.25rem;background:white;color:#6b7280;border:1.5px solid #e0e0e0;border-radius:7px;font-weight:600;font-size:0.95rem;cursor:pointer;font-family:inherit}
+    .btn-cancel-modal:hover{background:#f3f4f6}
+    .modal-error{color:#dc2626;font-size:0.82rem;margin-top:-0.4rem;margin-bottom:0.5rem;display:none}
+
+    /* ── Toast ── */
+    .toast{position:fixed;bottom:2rem;right:2rem;padding:0.85rem 1.5rem;border-radius:10px;font-weight:600;font-size:0.9rem;z-index:2000;transform:translateY(100px);opacity:0;transition:all 0.3s;max-width:380px;box-shadow:0 8px 24px rgba(0,0,0,0.15)}
+    .toast.show{transform:translateY(0);opacity:1}
+    .toast.success{background:#d1fae5;color:#065f46;border:1px solid #6ee7b7}
+    .toast.error{background:#fee2e2;color:#991b1b;border:1px solid #fca5a5}
+
+    footer{text-align:center;padding:1.25rem;color:#6b7280;font-size:0.8rem}
+
+    @media(max-width:768px){
+      header{flex-wrap:wrap}.next-badge{margin-left:0;width:100%}
+      main{padding:1rem}
+      .new-form{flex-direction:column}
+      .nf-group{min-width:100%}
+      table{font-size:0.78rem}
+      thead th,tbody td{padding:0.5rem 0.6rem}
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div><a href="/">← Volver</a></div>
+  <div>
+    <h1>🔒 Control de Precintos</h1>
+    <p>Registro y seguimiento de precintos de seguridad</p>
+  </div>
+  <div class="next-badge">
+    <div class="label">Próximo Nº</div>
+    <div class="num" id="next-num">—</div>
+  </div>
+</header>
+
+<!-- Stats -->
+<div class="stats">
+  <div class="stat"><div class="val" id="s-total">—</div><div class="lbl">Total</div></div>
+  <div class="stat"><div class="val activo" id="s-activo">—</div><div class="lbl">Activos</div></div>
+  <div class="stat"><div class="val reservado" id="s-reservado">—</div><div class="lbl">Reservados</div></div>
+  <div class="stat"><div class="val anulado" id="s-anulado">—</div><div class="lbl">Anulados</div></div>
+  <div class="stat"><div class="val cancelado" id="s-cancelado">—</div><div class="lbl">Cancelados</div></div>
+</div>
+
+<main>
+  <!-- New precinto form -->
+  <div class="new-card">
+    <h2>Nuevo registro</h2>
+    <div class="new-form">
+      <div class="nf-num" id="form-next-num">—</div>
+      <div class="nf-group" style="flex:1.5">
+        <label>Matrícula</label>
+        <input type="text" id="f-matricula" placeholder="Matrícula del vehículo">
+      </div>
+      <div class="nf-group" style="flex:2">
+        <label>Expediente</label>
+        <input type="text" id="f-expediente" placeholder="Nº de expediente">
+      </div>
+      <div class="nf-group" style="flex:2">
+        <label>Notas <span style="font-weight:400;color:#9ca3af">(opcional)</span></label>
+        <input type="text" id="f-notas" placeholder="Observaciones...">
+      </div>
+      <button class="btn-nuevo" onclick="openNuevo()">➕ Registrar precinto</button>
+      <button class="btn-reservar" onclick="openReservar()">📌 Reservar número</button>
+    </div>
+    <div style="margin-top:0.6rem;font-size:0.78rem;color:#9ca3af">
+      Si dejas Matrícula o Expediente vacíos, el precinto se registrará como <strong>Reservado</strong>.
+    </div>
+  </div>
+
+  <!-- Toolbar -->
+  <div class="toolbar">
+    <div class="filter-btns">
+      <button class="fbtn active" onclick="setFilter('')" id="f-all">Todos</button>
+      <button class="fbtn act"  onclick="setFilter('ACTIVO')"    id="f-activo">Activos</button>
+      <button class="fbtn res"  onclick="setFilter('RESERVADO')" id="f-reservado">Reservados</button>
+      <button class="fbtn anu"  onclick="setFilter('ANULADO')"   id="f-anulado">Anulados</button>
+    </div>
+    <input class="search-box" type="search" id="search-box" placeholder="Buscar por nº, matrícula, expediente…" oninput="renderTable()">
+  </div>
+
+  <!-- Table -->
+  <div class="table-wrap">
+    <div class="table-meta">
+      <span>Mostrando <strong id="count">0</strong> registros</span>
+    </div>
+    <div id="loading">Cargando…</div>
+    <div id="tbl-container"></div>
+  </div>
+</main>
+
+<footer>© 2026 Totallogistic · Control de Precintos</footer>
+
+<!-- ── PIN / Action Modal ────────────────────────────────── -->
+<div class="modal-overlay" id="modal-overlay">
+  <div class="modal">
+    <h3 id="modal-title">Confirmar acción</h3>
+    <div class="modal-desc" id="modal-desc"></div>
+
+    <!-- Extra fields (edit mode) -->
+    <div id="modal-extra" style="display:none">
+      <label>Matrícula</label>
+      <input type="text" id="modal-matricula" placeholder="Matrícula">
+      <label>Expediente</label>
+      <input type="text" id="modal-expediente" placeholder="Expediente">
+      <label>Notas</label>
+      <textarea id="modal-notas" rows="2" placeholder="Observaciones..."></textarea>
+    </div>
+
+    <!-- Motivo (anular) -->
+    <div id="modal-motivo-wrap" style="display:none">
+      <label>Motivo (opcional)</label>
+      <input type="text" id="modal-motivo" placeholder="Ej: Precinto dañado, ilegible…">
+    </div>
+
+    <label>PIN de acceso</label>
+    <input type="password" class="pin-input" id="modal-pin" placeholder="••••" maxlength="10"
+           onkeydown="if(event.key==='Enter') confirmModal()">
+    <div class="modal-error" id="modal-error">PIN incorrecto. Inténtalo de nuevo.</div>
+
+    <div class="modal-actions">
+      <button class="btn-cancel-modal" onclick="closeModal()">Cancelar</button>
+      <button class="btn-confirm" id="modal-confirm-btn" onclick="confirmModal()">Confirmar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Toast ──────────────────────────────────────────────── -->
+<div class="toast" id="toast"></div>
+
+<script>
+  let allRecords = [];
+  let currentFilter = '';
+  let pendingAction = null; // { type, num?, data? }
+
+  // ── Load data ────────────────────────────────────────────
+  async function load() {
+    try {
+      const res = await fetch('/api/precintos/list');
+      const d = await res.json();
+      allRecords = d.records;
+
+      // Stats
+      document.getElementById('next-num').textContent     = d.next_num;
+      document.getElementById('form-next-num').textContent = d.next_num;
+      document.getElementById('s-total').textContent      = d.stats.total;
+      document.getElementById('s-activo').textContent     = d.stats.activos;
+      document.getElementById('s-reservado').textContent  = d.stats.reservados;
+      document.getElementById('s-anulado').textContent    = d.stats.anulados;
+      document.getElementById('s-cancelado').textContent  = d.stats.cancelados;
+
+      document.getElementById('loading').style.display = 'none';
+      renderTable();
+    } catch(e) {
+      document.getElementById('loading').textContent = 'Error cargando datos.';
+    }
+  }
+
+  // ── Render table ─────────────────────────────────────────
+  function renderTable() {
+    const q = document.getElementById('search-box').value.toLowerCase();
+    const rows = allRecords.filter(r => {
+      const matchFilter = !currentFilter || r.estado === currentFilter;
+      const matchSearch = !q || [r.num, r.matricula, r.expediente, r.notas]
+        .some(v => String(v).toLowerCase().includes(q));
+      return matchFilter && matchSearch;
+    });
+
+    document.getElementById('count').textContent = rows.length;
+
+    if (!rows.length) {
+      document.getElementById('tbl-container').innerHTML =
+        '<div class="empty-msg">No hay registros para los filtros seleccionados</div>';
+      return;
+    }
+
+    const head = `<thead><tr>
+      <th>Nº Precinto</th><th>Matrícula</th><th>Expediente</th>
+      <th>Estado</th><th>Fecha</th><th>Notas</th><th>Acciones</th>
+    </tr></thead>`;
+
+    const body = rows.map(r => {
+      const actions = buildActions(r);
+      return `<tr>
+        <td class="num-cell">${r.num}</td>
+        <td>${r.matricula || '<span style="color:#9ca3af">—</span>'}</td>
+        <td>${r.expediente || '<span style="color:#9ca3af">—</span>'}</td>
+        <td><span class="badge badge-${r.estado}">${r.estado}</span></td>
+        <td style="white-space:nowrap;font-size:0.78rem;color:#6b7280">${r.fecha_creacion}</td>
+        <td style="font-size:0.8rem;color:#6b7280;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${r.notas}">${r.notas || ''}</td>
+        <td><div class="actions-cell">${actions}</div></td>
+      </tr>`;
+    }).join('');
+
+    document.getElementById('tbl-container').innerHTML =
+      `<table><${head}<tbody>${body}</tbody></table>`;
+  }
+
+  function buildActions(r) {
+    if (r.estado === 'ACTIVO') return `
+      <button class="act-btn act-edit" onclick="openEditar(${r.num},'${esc(r.matricula)}','${esc(r.expediente)}','${esc(r.notas)}')">✏️ Editar</button>
+      <button class="act-btn act-anular" onclick="openAnular(${r.num})">🚫 Anular</button>`;
+    if (r.estado === 'RESERVADO') return `
+      <button class="act-btn act-edit" onclick="openEditar(${r.num},'${esc(r.matricula)}','${esc(r.expediente)}','${esc(r.notas)}')">✏️ Completar</button>
+      <button class="act-btn act-cancel-res" onclick="openCancelarReserva(${r.num})">↩️ Cancelar reserva</button>
+      <button class="act-btn act-anular" onclick="openAnular(${r.num})">🚫 Anular</button>`;
+    return ''; // ANULADO / CANCELADO — sin acciones
+  }
+
+  function esc(s) { return (s || '').replace(/'/g, "\\'"); }
+
+  // ── Filter ───────────────────────────────────────────────
+  function setFilter(f) {
+    currentFilter = f;
+    document.querySelectorAll('.fbtn').forEach(b => b.classList.remove('active'));
+    const map = { '': 'f-all', 'ACTIVO': 'f-activo', 'RESERVADO': 'f-reservado', 'ANULADO': 'f-anulado' };
+    if (map[f]) document.getElementById(map[f]).classList.add('active');
+    renderTable();
+  }
+
+  // ── Open modal actions ────────────────────────────────────
+  function openNuevo() {
+    const mat = document.getElementById('f-matricula').value.trim();
+    const exp = document.getElementById('f-expediente').value.trim();
+    const notas = document.getElementById('f-notas').value.trim();
+    const nextNum = document.getElementById('next-num').textContent;
+    const tipo = (!mat || !exp) ? 'RESERVADO' : 'ACTIVO';
+    pendingAction = { type: 'nuevo', data: { matricula: mat, expediente: exp, notas } };
+    showModal(
+      tipo === 'ACTIVO' ? '➕ Registrar precinto' : '📌 Reservar precinto',
+      tipo === 'ACTIVO'
+        ? `Se registrará el precinto <strong>#${nextNum}</strong> para <strong>${mat}</strong> / Exp. <strong>${exp}</strong>.`
+        : `Se reservará el número <strong>#${nextNum}</strong>${mat ? ` (matrícula: ${mat})` : ''}.`,
+      false, false
+    );
+  }
+
+  function openReservar() {
+    const nextNum = document.getElementById('next-num').textContent;
+    pendingAction = { type: 'nuevo', data: { matricula: '', expediente: '', notas: 'Reserva' } };
+    showModal(
+      '📌 Reservar número',
+      `Se reservará el número <strong>#${nextNum}</strong> sin matrícula ni expediente.`,
+      false, false
+    );
+  }
+
+  function openEditar(num, mat, exp, notas) {
+    pendingAction = { type: 'editar', num };
+    showModal(
+      `✏️ Editar precinto #${num}`,
+      `Modifica los datos del precinto. Si completas Matrícula y Expediente en un precinto Reservado, pasará a Activo.`,
+      true, false
+    );
+    document.getElementById('modal-matricula').value  = mat;
+    document.getElementById('modal-expediente').value = exp;
+    document.getElementById('modal-notas').value      = notas;
+  }
+
+  function openAnular(num) {
+    pendingAction = { type: 'anular', num };
+    showModal(
+      `🚫 Anular precinto #${num}`,
+      `El precinto <strong>#${num}</strong> quedará marcado como <strong>ANULADO</strong> (mal estado). El número se pierde permanentemente.`,
+      false, true
+    );
+  }
+
+  function openCancelarReserva(num) {
+    pendingAction = { type: 'cancelar-reserva', num };
+    showModal(
+      `↩️ Cancelar reserva #${num}`,
+      `La reserva del precinto <strong>#${num}</strong> quedará cancelada y el número podrá ser reutilizado.`,
+      false, false
+    );
+  }
+
+  function showModal(title, desc, showExtra, showMotivo) {
+    document.getElementById('modal-title').innerHTML = title;
+    document.getElementById('modal-desc').innerHTML  = desc;
+    document.getElementById('modal-extra').style.display       = showExtra  ? 'block' : 'none';
+    document.getElementById('modal-motivo-wrap').style.display = showMotivo ? 'block' : 'none';
+    document.getElementById('modal-error').style.display = 'none';
+    document.getElementById('modal-pin').value = '';
+    document.getElementById('modal-overlay').classList.add('open');
+    setTimeout(() => document.getElementById('modal-pin').focus(), 150);
+  }
+
+  function closeModal() {
+    document.getElementById('modal-overlay').classList.remove('open');
+    pendingAction = null;
+  }
+
+  // ── Execute action ────────────────────────────────────────
+  async function confirmModal() {
+    const pin = document.getElementById('modal-pin').value.trim();
+    if (!pin) return;
+    const errEl = document.getElementById('modal-error');
+    errEl.style.display = 'none';
+    const btn = document.getElementById('modal-confirm-btn');
+    btn.textContent = 'Enviando…';
+    btn.disabled = true;
+
+    try {
+      let url, body;
+      const { type, num, data } = pendingAction || {};
+
+      if (type === 'nuevo') {
+        url  = '/api/precintos/nuevo';
+        body = { pin, ...data };
+      } else if (type === 'editar') {
+        url  = '/api/precintos/editar';
+        body = {
+          pin, num,
+          matricula:  document.getElementById('modal-matricula').value.trim(),
+          expediente: document.getElementById('modal-expediente').value.trim(),
+          notas:      document.getElementById('modal-notas').value.trim(),
+        };
+      } else if (type === 'anular') {
+        url  = '/api/precintos/anular';
+        body = { pin, num, notas: document.getElementById('modal-motivo').value.trim() };
+      } else if (type === 'cancelar-reserva') {
+        url  = '/api/precintos/cancelar-reserva';
+        body = { pin, num };
+      }
+
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const result = await res.json();
+
+      if (res.status === 401) {
+        errEl.textContent = 'PIN incorrecto. Inténtalo de nuevo.';
+        errEl.style.display = 'block';
+        document.getElementById('modal-pin').value = '';
+        document.getElementById('modal-pin').focus();
+        return;
+      }
+      if (!res.ok) throw new Error(result.detail || 'Error');
+
+      closeModal();
+      showToast(result.msg || '✅ Operación realizada', 'success');
+
+      // Clear form if nuevo
+      if (type === 'nuevo') {
+        document.getElementById('f-matricula').value  = '';
+        document.getElementById('f-expediente').value = '';
+        document.getElementById('f-notas').value      = '';
+      }
+
+      await load();
+    } catch(e) {
+      showToast('❌ ' + e.message, 'error');
+    } finally {
+      btn.textContent = 'Confirmar';
+      btn.disabled = false;
+    }
+  }
+
+  // ── Toast ─────────────────────────────────────────────────
+  let toastTimer;
+  function showToast(msg, type) {
+    const el = document.getElementById('toast');
+    el.textContent = msg;
+    el.className = `toast ${type} show`;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => el.classList.remove('show'), 3500);
+  }
+
+  // Close modal on overlay click
+  document.getElementById('modal-overlay').addEventListener('click', e => {
+    if (e.target === e.currentTarget) closeModal();
+  });
+
+  // ── Init ──────────────────────────────────────────────────
+  load();
+</script>
+</body>
+</html>

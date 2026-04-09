@@ -109,11 +109,45 @@
         }
         .check-item {
             display: flex;
-            align-items: center;
-            gap: 0.5rem;
+            flex-direction: column;
+            gap: 0.4rem;
         }
-        .check-item input {
+        .check-item .check-label {
+            font-weight: 600;
+            font-size: 0.9rem;
+            color: #374151;
+        }
+        .check-item .radio-group {
+            display: flex;
+            gap: 1rem;
+        }
+        .check-item .radio-group label {
+            display: flex;
+            align-items: center;
+            gap: 0.3rem;
+            font-weight: normal;
+            cursor: pointer;
+        }
+        .check-item .radio-group input[type="radio"] {
             width: auto;
+            cursor: pointer;
+        }
+        .zone-obs {
+            margin-top: 1rem;
+        }
+        .zone-obs label {
+            font-size: 0.9rem;
+            color: #555;
+            margin-bottom: 0.3rem;
+            display: block;
+        }
+        .zone-obs textarea {
+            width: 100%;
+            padding: 0.5rem;
+            border: 1px solid #d1d5db;
+            border-radius: 4px;
+            font-size: 0.9rem;
+            resize: vertical;
         }
         .submit-section {
             padding: 2rem;
@@ -206,114 +240,340 @@
                     Marca el checkbox de cada zona para incluirla en la revisión. Luego completa los checks de cada zona marcada.
                 </p>
 
-                <!-- Zona ADT -->
-                <div class="zone-row" data-zone="ADT">
+                                <div class="zone-row" data-zone="ADT">
                     <div class="zone-header">
                         <input type="checkbox" class="zone-checkbox" data-zone="ADT">
                         <span class="zone-name">ADT</span>
                     </div>
                     <div class="checks-grid">
                         <div class="check-item">
-                            <label><input type="checkbox" class="check-colocacion" data-zone="ADT"> Colocación correcta</label>
+                            <span class="check-label">Colocación correcta</span>
+                            <div class="radio-group">
+                                <label><input type="radio" name="colocacion_ADT" value="✓" class="check-colocacion" data-zone="ADT"> ✓ OK</label>
+                                <label><input type="radio" name="colocacion_ADT" value="X" class="check-colocacion-nok" data-zone="ADT"> ✗ NOK</label>
+                            </div>
                         </div>
                         <div class="check-item">
-                            <label><input type="checkbox" class="check-accesibilidad" data-zone="ADT"> Accesibilidad y señalización</label>
+                            <span class="check-label">Accesibilidad y señalización</span>
+                            <div class="radio-group">
+                                <label><input type="radio" name="accesibilidad_ADT" value="✓" class="check-accesibilidad" data-zone="ADT"> ✓ OK</label>
+                                <label><input type="radio" name="accesibilidad_ADT" value="X" class="check-accesibilidad-nok" data-zone="ADT"> ✗ NOK</label>
+                            </div>
                         </div>
                         <div class="check-item">
-                            <label><input type="checkbox" class="check-corrosion" data-zone="ADT"> Sin corrosión en patas</label>
+                            <span class="check-label">Sin corrosión en patas</span>
+                            <div class="radio-group">
+                                <label><input type="radio" name="corrosion_ADT" value="✓" class="check-corrosion" data-zone="ADT"> ✓ OK</label>
+                                <label><input type="radio" name="corrosion_ADT" value="X" class="check-corrosion-nok" data-zone="ADT"> ✗ NOK</label>
+                            </div>
                         </div>
                         <div class="check-item">
-                            <label><input type="checkbox" class="check-anclajes" data-zone="ADT"> Anclajes al suelo correctos</label>
+                            <span class="check-label">Anclajes al suelo correctos</span>
+                            <div class="radio-group">
+                                <label><input type="radio" name="anclajes_ADT" value="✓" class="check-anclajes" data-zone="ADT"> ✓ OK</label>
+                                <label><input type="radio" name="anclajes_ADT" value="X" class="check-anclajes-nok" data-zone="ADT"> ✗ NOK</label>
+                            </div>
                         </div>
                         <div class="check-item">
-                            <label><input type="checkbox" class="check-protecciones" data-zone="ADT"> Protecciones contra golpes</label>
+                            <span class="check-label">Protecciones contra golpes</span>
+                            <div class="radio-group">
+                                <label><input type="radio" name="protecciones_ADT" value="✓" class="check-protecciones" data-zone="ADT"> ✓ OK</label>
+                                <label><input type="radio" name="protecciones_ADT" value="X" class="check-protecciones-nok" data-zone="ADT"> ✗ NOK</label>
+                            </div>
                         </div>
+                    </div>
+                    <div class="zone-obs">
+                        <label>Observaciones</label>
+                        <textarea class="zone-obs-input" data-zone="ADT" rows="2" placeholder="Observaciones para esta zona..."></textarea>
                     </div>
                 </div>
 
                 <!-- Zonas DA-1 a DA-5 -->
-                <div class="zone-row" data-zone="DA-1">
+                                <div class="zone-row" data-zone="DA-1">
                     <div class="zone-header">
                         <input type="checkbox" class="zone-checkbox" data-zone="DA-1">
                         <span class="zone-name">DA-1</span>
                     </div>
                     <div class="checks-grid">
-                        <div class="check-item"><label><input type="checkbox" class="check-colocacion" data-zone="DA-1"> Colocación correcta</label></div>
-                        <div class="check-item"><label><input type="checkbox" class="check-accesibilidad" data-zone="DA-1"> Accesibilidad y señalización</label></div>
-                        <div class="check-item"><label><input type="checkbox" class="check-corrosion" data-zone="DA-1"> Sin corrosión en patas</label></div>
-                        <div class="check-item"><label><input type="checkbox" class="check-anclajes" data-zone="DA-1"> Anclajes al suelo correctos</label></div>
-                        <div class="check-item"><label><input type="checkbox" class="check-protecciones" data-zone="DA-1"> Protecciones contra golpes</label></div>
+                        <div class="check-item">
+                            <span class="check-label">Colocación correcta</span>
+                            <div class="radio-group">
+                                <label><input type="radio" name="colocacion_DA-1" value="✓" class="check-colocacion" data-zone="DA-1"> ✓ OK</label>
+                                <label><input type="radio" name="colocacion_DA-1" value="X" class="check-colocacion-nok" data-zone="DA-1"> ✗ NOK</label>
+                            </div>
+                        </div>
+                        <div class="check-item">
+                            <span class="check-label">Accesibilidad y señalización</span>
+                            <div class="radio-group">
+                                <label><input type="radio" name="accesibilidad_DA-1" value="✓" class="check-accesibilidad" data-zone="DA-1"> ✓ OK</label>
+                                <label><input type="radio" name="accesibilidad_DA-1" value="X" class="check-accesibilidad-nok" data-zone="DA-1"> ✗ NOK</label>
+                            </div>
+                        </div>
+                        <div class="check-item">
+                            <span class="check-label">Sin corrosión en patas</span>
+                            <div class="radio-group">
+                                <label><input type="radio" name="corrosion_DA-1" value="✓" class="check-corrosion" data-zone="DA-1"> ✓ OK</label>
+                                <label><input type="radio" name="corrosion_DA-1" value="X" class="check-corrosion-nok" data-zone="DA-1"> ✗ NOK</label>
+                            </div>
+                        </div>
+                        <div class="check-item">
+                            <span class="check-label">Anclajes al suelo correctos</span>
+                            <div class="radio-group">
+                                <label><input type="radio" name="anclajes_DA-1" value="✓" class="check-anclajes" data-zone="DA-1"> ✓ OK</label>
+                                <label><input type="radio" name="anclajes_DA-1" value="X" class="check-anclajes-nok" data-zone="DA-1"> ✗ NOK</label>
+                            </div>
+                        </div>
+                        <div class="check-item">
+                            <span class="check-label">Protecciones contra golpes</span>
+                            <div class="radio-group">
+                                <label><input type="radio" name="protecciones_DA-1" value="✓" class="check-protecciones" data-zone="DA-1"> ✓ OK</label>
+                                <label><input type="radio" name="protecciones_DA-1" value="X" class="check-protecciones-nok" data-zone="DA-1"> ✗ NOK</label>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="zone-obs">
+                        <label>Observaciones</label>
+                        <textarea class="zone-obs-input" data-zone="DA-1" rows="2" placeholder="Observaciones para esta zona..."></textarea>
                     </div>
                 </div>
 
-                <div class="zone-row" data-zone="DA-2">
+                                <div class="zone-row" data-zone="DA-2">
                     <div class="zone-header">
                         <input type="checkbox" class="zone-checkbox" data-zone="DA-2">
                         <span class="zone-name">DA-2</span>
                     </div>
                     <div class="checks-grid">
-                        <div class="check-item"><label><input type="checkbox" class="check-colocacion" data-zone="DA-2"> Colocación correcta</label></div>
-                        <div class="check-item"><label><input type="checkbox" class="check-accesibilidad" data-zone="DA-2"> Accesibilidad y señalización</label></div>
-                        <div class="check-item"><label><input type="checkbox" class="check-corrosion" data-zone="DA-2"> Sin corrosión en patas</label></div>
-                        <div class="check-item"><label><input type="checkbox" class="check-anclajes" data-zone="DA-2"> Anclajes al suelo correctos</label></div>
-                        <div class="check-item"><label><input type="checkbox" class="check-protecciones" data-zone="DA-2"> Protecciones contra golpes</label></div>
+                        <div class="check-item">
+                            <span class="check-label">Colocación correcta</span>
+                            <div class="radio-group">
+                                <label><input type="radio" name="colocacion_DA-2" value="✓" class="check-colocacion" data-zone="DA-2"> ✓ OK</label>
+                                <label><input type="radio" name="colocacion_DA-2" value="X" class="check-colocacion-nok" data-zone="DA-2"> ✗ NOK</label>
+                            </div>
+                        </div>
+                        <div class="check-item">
+                            <span class="check-label">Accesibilidad y señalización</span>
+                            <div class="radio-group">
+                                <label><input type="radio" name="accesibilidad_DA-2" value="✓" class="check-accesibilidad" data-zone="DA-2"> ✓ OK</label>
+                                <label><input type="radio" name="accesibilidad_DA-2" value="X" class="check-accesibilidad-nok" data-zone="DA-2"> ✗ NOK</label>
+                            </div>
+                        </div>
+                        <div class="check-item">
+                            <span class="check-label">Sin corrosión en patas</span>
+                            <div class="radio-group">
+                                <label><input type="radio" name="corrosion_DA-2" value="✓" class="check-corrosion" data-zone="DA-2"> ✓ OK</label>
+                                <label><input type="radio" name="corrosion_DA-2" value="X" class="check-corrosion-nok" data-zone="DA-2"> ✗ NOK</label>
+                            </div>
+                        </div>
+                        <div class="check-item">
+                            <span class="check-label">Anclajes al suelo correctos</span>
+                            <div class="radio-group">
+                                <label><input type="radio" name="anclajes_DA-2" value="✓" class="check-anclajes" data-zone="DA-2"> ✓ OK</label>
+                                <label><input type="radio" name="anclajes_DA-2" value="X" class="check-anclajes-nok" data-zone="DA-2"> ✗ NOK</label>
+                            </div>
+                        </div>
+                        <div class="check-item">
+                            <span class="check-label">Protecciones contra golpes</span>
+                            <div class="radio-group">
+                                <label><input type="radio" name="protecciones_DA-2" value="✓" class="check-protecciones" data-zone="DA-2"> ✓ OK</label>
+                                <label><input type="radio" name="protecciones_DA-2" value="X" class="check-protecciones-nok" data-zone="DA-2"> ✗ NOK</label>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="zone-obs">
+                        <label>Observaciones</label>
+                        <textarea class="zone-obs-input" data-zone="DA-2" rows="2" placeholder="Observaciones para esta zona..."></textarea>
                     </div>
                 </div>
 
-                <div class="zone-row" data-zone="DA-3">
+                                <div class="zone-row" data-zone="DA-3">
                     <div class="zone-header">
                         <input type="checkbox" class="zone-checkbox" data-zone="DA-3">
                         <span class="zone-name">DA-3</span>
                     </div>
                     <div class="checks-grid">
-                        <div class="check-item"><label><input type="checkbox" class="check-colocacion" data-zone="DA-3"> Colocación correcta</label></div>
-                        <div class="check-item"><label><input type="checkbox" class="check-accesibilidad" data-zone="DA-3"> Accesibilidad y señalización</label></div>
-                        <div class="check-item"><label><input type="checkbox" class="check-corrosion" data-zone="DA-3"> Sin corrosión en patas</label></div>
-                        <div class="check-item"><label><input type="checkbox" class="check-anclajes" data-zone="DA-3"> Anclajes al suelo correctos</label></div>
-                        <div class="check-item"><label><input type="checkbox" class="check-protecciones" data-zone="DA-3"> Protecciones contra golpes</label></div>
+                        <div class="check-item">
+                            <span class="check-label">Colocación correcta</span>
+                            <div class="radio-group">
+                                <label><input type="radio" name="colocacion_DA-3" value="✓" class="check-colocacion" data-zone="DA-3"> ✓ OK</label>
+                                <label><input type="radio" name="colocacion_DA-3" value="X" class="check-colocacion-nok" data-zone="DA-3"> ✗ NOK</label>
+                            </div>
+                        </div>
+                        <div class="check-item">
+                            <span class="check-label">Accesibilidad y señalización</span>
+                            <div class="radio-group">
+                                <label><input type="radio" name="accesibilidad_DA-3" value="✓" class="check-accesibilidad" data-zone="DA-3"> ✓ OK</label>
+                                <label><input type="radio" name="accesibilidad_DA-3" value="X" class="check-accesibilidad-nok" data-zone="DA-3"> ✗ NOK</label>
+                            </div>
+                        </div>
+                        <div class="check-item">
+                            <span class="check-label">Sin corrosión en patas</span>
+                            <div class="radio-group">
+                                <label><input type="radio" name="corrosion_DA-3" value="✓" class="check-corrosion" data-zone="DA-3"> ✓ OK</label>
+                                <label><input type="radio" name="corrosion_DA-3" value="X" class="check-corrosion-nok" data-zone="DA-3"> ✗ NOK</label>
+                            </div>
+                        </div>
+                        <div class="check-item">
+                            <span class="check-label">Anclajes al suelo correctos</span>
+                            <div class="radio-group">
+                                <label><input type="radio" name="anclajes_DA-3" value="✓" class="check-anclajes" data-zone="DA-3"> ✓ OK</label>
+                                <label><input type="radio" name="anclajes_DA-3" value="X" class="check-anclajes-nok" data-zone="DA-3"> ✗ NOK</label>
+                            </div>
+                        </div>
+                        <div class="check-item">
+                            <span class="check-label">Protecciones contra golpes</span>
+                            <div class="radio-group">
+                                <label><input type="radio" name="protecciones_DA-3" value="✓" class="check-protecciones" data-zone="DA-3"> ✓ OK</label>
+                                <label><input type="radio" name="protecciones_DA-3" value="X" class="check-protecciones-nok" data-zone="DA-3"> ✗ NOK</label>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="zone-obs">
+                        <label>Observaciones</label>
+                        <textarea class="zone-obs-input" data-zone="DA-3" rows="2" placeholder="Observaciones para esta zona..."></textarea>
                     </div>
                 </div>
 
-                <div class="zone-row" data-zone="DA-4">
+                                <div class="zone-row" data-zone="DA-4">
                     <div class="zone-header">
                         <input type="checkbox" class="zone-checkbox" data-zone="DA-4">
                         <span class="zone-name">DA-4</span>
                     </div>
                     <div class="checks-grid">
-                        <div class="check-item"><label><input type="checkbox" class="check-colocacion" data-zone="DA-4"> Colocación correcta</label></div>
-                        <div class="check-item"><label><input type="checkbox" class="check-accesibilidad" data-zone="DA-4"> Accesibilidad y señalización</label></div>
-                        <div class="check-item"><label><input type="checkbox" class="check-corrosion" data-zone="DA-4"> Sin corrosión en patas</label></div>
-                        <div class="check-item"><label><input type="checkbox" class="check-anclajes" data-zone="DA-4"> Anclajes al suelo correctos</label></div>
-                        <div class="check-item"><label><input type="checkbox" class="check-protecciones" data-zone="DA-4"> Protecciones contra golpes</label></div>
+                        <div class="check-item">
+                            <span class="check-label">Colocación correcta</span>
+                            <div class="radio-group">
+                                <label><input type="radio" name="colocacion_DA-4" value="✓" class="check-colocacion" data-zone="DA-4"> ✓ OK</label>
+                                <label><input type="radio" name="colocacion_DA-4" value="X" class="check-colocacion-nok" data-zone="DA-4"> ✗ NOK</label>
+                            </div>
+                        </div>
+                        <div class="check-item">
+                            <span class="check-label">Accesibilidad y señalización</span>
+                            <div class="radio-group">
+                                <label><input type="radio" name="accesibilidad_DA-4" value="✓" class="check-accesibilidad" data-zone="DA-4"> ✓ OK</label>
+                                <label><input type="radio" name="accesibilidad_DA-4" value="X" class="check-accesibilidad-nok" data-zone="DA-4"> ✗ NOK</label>
+                            </div>
+                        </div>
+                        <div class="check-item">
+                            <span class="check-label">Sin corrosión en patas</span>
+                            <div class="radio-group">
+                                <label><input type="radio" name="corrosion_DA-4" value="✓" class="check-corrosion" data-zone="DA-4"> ✓ OK</label>
+                                <label><input type="radio" name="corrosion_DA-4" value="X" class="check-corrosion-nok" data-zone="DA-4"> ✗ NOK</label>
+                            </div>
+                        </div>
+                        <div class="check-item">
+                            <span class="check-label">Anclajes al suelo correctos</span>
+                            <div class="radio-group">
+                                <label><input type="radio" name="anclajes_DA-4" value="✓" class="check-anclajes" data-zone="DA-4"> ✓ OK</label>
+                                <label><input type="radio" name="anclajes_DA-4" value="X" class="check-anclajes-nok" data-zone="DA-4"> ✗ NOK</label>
+                            </div>
+                        </div>
+                        <div class="check-item">
+                            <span class="check-label">Protecciones contra golpes</span>
+                            <div class="radio-group">
+                                <label><input type="radio" name="protecciones_DA-4" value="✓" class="check-protecciones" data-zone="DA-4"> ✓ OK</label>
+                                <label><input type="radio" name="protecciones_DA-4" value="X" class="check-protecciones-nok" data-zone="DA-4"> ✗ NOK</label>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="zone-obs">
+                        <label>Observaciones</label>
+                        <textarea class="zone-obs-input" data-zone="DA-4" rows="2" placeholder="Observaciones para esta zona..."></textarea>
                     </div>
                 </div>
 
-                <div class="zone-row" data-zone="DA-5">
+                                <div class="zone-row" data-zone="DA-5">
                     <div class="zone-header">
                         <input type="checkbox" class="zone-checkbox" data-zone="DA-5">
                         <span class="zone-name">DA-5</span>
                     </div>
                     <div class="checks-grid">
-                        <div class="check-item"><label><input type="checkbox" class="check-colocacion" data-zone="DA-5"> Colocación correcta</label></div>
-                        <div class="check-item"><label><input type="checkbox" class="check-accesibilidad" data-zone="DA-5"> Accesibilidad y señalización</label></div>
-                        <div class="check-item"><label><input type="checkbox" class="check-corrosion" data-zone="DA-5"> Sin corrosión en patas</label></div>
-                        <div class="check-item"><label><input type="checkbox" class="check-anclajes" data-zone="DA-5"> Anclajes al suelo correctos</label></div>
-                        <div class="check-item"><label><input type="checkbox" class="check-protecciones" data-zone="DA-5"> Protecciones contra golpes</label></div>
+                        <div class="check-item">
+                            <span class="check-label">Colocación correcta</span>
+                            <div class="radio-group">
+                                <label><input type="radio" name="colocacion_DA-5" value="✓" class="check-colocacion" data-zone="DA-5"> ✓ OK</label>
+                                <label><input type="radio" name="colocacion_DA-5" value="X" class="check-colocacion-nok" data-zone="DA-5"> ✗ NOK</label>
+                            </div>
+                        </div>
+                        <div class="check-item">
+                            <span class="check-label">Accesibilidad y señalización</span>
+                            <div class="radio-group">
+                                <label><input type="radio" name="accesibilidad_DA-5" value="✓" class="check-accesibilidad" data-zone="DA-5"> ✓ OK</label>
+                                <label><input type="radio" name="accesibilidad_DA-5" value="X" class="check-accesibilidad-nok" data-zone="DA-5"> ✗ NOK</label>
+                            </div>
+                        </div>
+                        <div class="check-item">
+                            <span class="check-label">Sin corrosión en patas</span>
+                            <div class="radio-group">
+                                <label><input type="radio" name="corrosion_DA-5" value="✓" class="check-corrosion" data-zone="DA-5"> ✓ OK</label>
+                                <label><input type="radio" name="corrosion_DA-5" value="X" class="check-corrosion-nok" data-zone="DA-5"> ✗ NOK</label>
+                            </div>
+                        </div>
+                        <div class="check-item">
+                            <span class="check-label">Anclajes al suelo correctos</span>
+                            <div class="radio-group">
+                                <label><input type="radio" name="anclajes_DA-5" value="✓" class="check-anclajes" data-zone="DA-5"> ✓ OK</label>
+                                <label><input type="radio" name="anclajes_DA-5" value="X" class="check-anclajes-nok" data-zone="DA-5"> ✗ NOK</label>
+                            </div>
+                        </div>
+                        <div class="check-item">
+                            <span class="check-label">Protecciones contra golpes</span>
+                            <div class="radio-group">
+                                <label><input type="radio" name="protecciones_DA-5" value="✓" class="check-protecciones" data-zone="DA-5"> ✓ OK</label>
+                                <label><input type="radio" name="protecciones_DA-5" value="X" class="check-protecciones-nok" data-zone="DA-5"> ✗ NOK</label>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="zone-obs">
+                        <label>Observaciones</label>
+                        <textarea class="zone-obs-input" data-zone="DA-5" rows="2" placeholder="Observaciones para esta zona..."></textarea>
                     </div>
                 </div>
 
-                <!-- Zona DDA-1 -->
-                <div class="zone-row" data-zone="DDA-1">
+                                <div class="zone-row" data-zone="DDA-1">
                     <div class="zone-header">
                         <input type="checkbox" class="zone-checkbox" data-zone="DDA-1">
                         <span class="zone-name">DDA-1</span>
                     </div>
                     <div class="checks-grid">
-                        <div class="check-item"><label><input type="checkbox" class="check-colocacion" data-zone="DDA-1"> Colocación correcta</label></div>
-                        <div class="check-item"><label><input type="checkbox" class="check-accesibilidad" data-zone="DDA-1"> Accesibilidad y señalización</label></div>
-                        <div class="check-item"><label><input type="checkbox" class="check-corrosion" data-zone="DDA-1"> Sin corrosión en patas</label></div>
-                        <div class="check-item"><label><input type="checkbox" class="check-anclajes" data-zone="DDA-1"> Anclajes al suelo correctos</label></div>
-                        <div class="check-item"><label><input type="checkbox" class="check-protecciones" data-zone="DDA-1"> Protecciones contra golpes</label></div>
+                        <div class="check-item">
+                            <span class="check-label">Colocación correcta</span>
+                            <div class="radio-group">
+                                <label><input type="radio" name="colocacion_DDA-1" value="✓" class="check-colocacion" data-zone="DDA-1"> ✓ OK</label>
+                                <label><input type="radio" name="colocacion_DDA-1" value="X" class="check-colocacion-nok" data-zone="DDA-1"> ✗ NOK</label>
+                            </div>
+                        </div>
+                        <div class="check-item">
+                            <span class="check-label">Accesibilidad y señalización</span>
+                            <div class="radio-group">
+                                <label><input type="radio" name="accesibilidad_DDA-1" value="✓" class="check-accesibilidad" data-zone="DDA-1"> ✓ OK</label>
+                                <label><input type="radio" name="accesibilidad_DDA-1" value="X" class="check-accesibilidad-nok" data-zone="DDA-1"> ✗ NOK</label>
+                            </div>
+                        </div>
+                        <div class="check-item">
+                            <span class="check-label">Sin corrosión en patas</span>
+                            <div class="radio-group">
+                                <label><input type="radio" name="corrosion_DDA-1" value="✓" class="check-corrosion" data-zone="DDA-1"> ✓ OK</label>
+                                <label><input type="radio" name="corrosion_DDA-1" value="X" class="check-corrosion-nok" data-zone="DDA-1"> ✗ NOK</label>
+                            </div>
+                        </div>
+                        <div class="check-item">
+                            <span class="check-label">Anclajes al suelo correctos</span>
+                            <div class="radio-group">
+                                <label><input type="radio" name="anclajes_DDA-1" value="✓" class="check-anclajes" data-zone="DDA-1"> ✓ OK</label>
+                                <label><input type="radio" name="anclajes_DDA-1" value="X" class="check-anclajes-nok" data-zone="DDA-1"> ✗ NOK</label>
+                            </div>
+                        </div>
+                        <div class="check-item">
+                            <span class="check-label">Protecciones contra golpes</span>
+                            <div class="radio-group">
+                                <label><input type="radio" name="protecciones_DDA-1" value="✓" class="check-protecciones" data-zone="DDA-1"> ✓ OK</label>
+                                <label><input type="radio" name="protecciones_DDA-1" value="X" class="check-protecciones-nok" data-zone="DDA-1"> ✗ NOK</label>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="zone-obs">
+                        <label>Observaciones</label>
+                        <textarea class="zone-obs-input" data-zone="DDA-1" rows="2" placeholder="Observaciones para esta zona..."></textarea>
                     </div>
                 </div>
 
@@ -334,7 +594,6 @@
         // Establecer fecha actual
         document.getElementById('fechaRevision').valueAsDate = new Date();
 
-        // Marcar zona automáticamente al hacer check
         document.querySelectorAll('.zone-checkbox').forEach(cb => {
             cb.addEventListener('change', function() {
                 const zoneRow = this.closest('.zone-row');
@@ -342,10 +601,12 @@
                     zoneRow.classList.add('selected');
                 } else {
                     zoneRow.classList.remove('selected');
-                    // Desmarcar todos los checks de esta zona
-                    zoneRow.querySelectorAll('input[type="checkbox"]:not(.zone-checkbox)').forEach(check => {
-                        check.checked = false;
+                    // Desmarcar todos los radios de esta zona
+                    zoneRow.querySelectorAll('input[type="radio"]').forEach(r => {
+                        r.checked = false;
                     });
+                    const obs = zoneRow.querySelector('.zone-obs-input');
+                    if (obs) obs.value = '';
                 }
             });
         });
@@ -366,20 +627,19 @@
             zonas.forEach(zona => {
                 const checkbox = document.querySelector(`.zone-checkbox[data-zone="${zona}"]`);
                 if (checkbox && checkbox.checked) {
-                    const colocacion = document.querySelector(`.check-colocacion[data-zone="${zona}"]`)?.checked ? '√' : 'X';
-                    const accesibilidad = document.querySelector(`.check-accesibilidad[data-zone="${zona}"]`)?.checked ? '√' : 'X';
-                    const corrosion = document.querySelector(`.check-corrosion[data-zone="${zona}"]`)?.checked ? '√' : 'X';
-                    const anclajes = document.querySelector(`.check-anclajes[data-zone="${zona}"]`)?.checked ? '√' : 'X';
-                    const protecciones = document.querySelector(`.check-protecciones[data-zone="${zona}"]`)?.checked ? '√' : 'X';
-
+                    const getRadio = (cls) => {
+                        const checked = document.querySelector(`input[name="${cls}_${zona}"]:checked`);
+                        return checked ? checked.value : '';
+                    };
+                    const obsInput = document.querySelector(`.zone-obs-input[data-zone="${zona}"]`);
                     filas.push({
                         fila: zona,
-                        colocacion,
-                        accesibilidad,
-                        corrosion,
-                        anclajes,
-                        protecciones,
-                        observaciones: ''
+                        colocacion: getRadio('colocacion'),
+                        accesibilidad: getRadio('accesibilidad'),
+                        corrosion: getRadio('corrosion'),
+                        anclajes: getRadio('anclajes'),
+                        protecciones: getRadio('protecciones'),
+                        observaciones: obsInput ? obsInput.value : ''
                     });
                 }
             });

@@ -1,0 +1,9 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Entrega de EPIs (FR-58)",
+  "description": "Registro de entrega de Equipos de Protección Individual",
+  "category": "📋 RRHH",
+  "custom_template": "entrega-epis.html",
+  "type": "object",
+  "properties": {}
+}

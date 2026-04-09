@@ -1,0 +1,9 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Control de Precintos",
+  "description": "Registro y seguimiento de precintos de seguridad",
+  "category": "🛠️ Herramientas",
+  "custom_template": "precintos.html",
+  "type": "object",
+  "properties": {}
+}

@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "[ALG] Registro de Visitas",
+  "title": "Registro de Visitas",
   "description": "Formulario de registro de visitas a las instalaciones - Algeciras",
   "category": "📊 Sede Algeciras",
   "custom_template": "registro-visitas-alg.html",

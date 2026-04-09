@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "[ALG] Revisión de Motocicletas",
+  "title": "Revisión de Motocicletas",
   "description": "Registro de revisiones y mantenimiento de motocicletas de empresa - Algeciras",
   "category": "📊 Sede Algeciras",
   "custom_template": "revision-motocicletas-alg.html",
@@ -33,19 +33,23 @@
       "title": "Kilometraje"
     },
     "revisionFrenos": {
-      "type": "boolean",
+      "type": "string",
+      "enum": ["✓", "X"],
       "title": "Revisión de Frenos"
     },
     "nivelAceite": {
-      "type": "boolean",
+      "type": "string",
+      "enum": ["✓", "X"],
       "title": "Nivel de Aceite"
     },
     "presionNeumaticos": {
-      "type": "boolean",
+      "type": "string",
+      "enum": ["✓", "X"],
       "title": "Presión de Neumáticos"
     },
     "luces": {
-      "type": "boolean",
+      "type": "string",
+      "enum": ["✓", "X"],
       "title": "Luces Funcionando"
     },
     "observaciones": {

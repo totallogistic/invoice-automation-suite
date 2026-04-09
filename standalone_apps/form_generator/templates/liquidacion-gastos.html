@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Liquidación de Gastos de Viaje</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #2563a8 0%, #1a4d7e 100%);
+            min-height: 100vh;
+            padding: 2rem 1rem;
+        }
+        .container {
+            max-width: 1100px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+        header {
+            background: linear-gradient(135deg, #2563a8 0%, #1a4d7e 100%);
+            color: white;
+            padding: 2rem;
+            text-align: center;
+        }
+        header h1 { font-size: 1.8rem; margin-bottom: 0.4rem; }
+        header p { opacity: 0.85; font-size: 0.95rem; }
+        .back-link {
+            display: inline-block;
+            color: white;
+            text-decoration: none;
+            padding: 0.4rem 0.9rem;
+            background: rgba(255,255,255,0.2);
+            border-radius: 6px;
+            margin-bottom: 1rem;
+            font-size: 0.9rem;
+        }
+
+        /* ── Form sections ─────────────────────────────── */
+        .section {
+            padding: 2rem;
+            border-bottom: 1px solid #e5e7eb;
+        }
+        .section h2 {
+            font-size: 0.8rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: #6b7280;
+            margin-bottom: 1.25rem;
+        }
+        .form-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 1.25rem;
+        }
+        .form-group { display: flex; flex-direction: column; gap: 0.4rem; }
+        .form-group label { font-weight: 600; font-size: 0.875rem; color: #374151; }
+        .form-group input, .form-group select, .form-group textarea {
+            padding: 0.7rem 0.85rem;
+            border: 2px solid #e0e0e0;
+            border-radius: 7px;
+            font-size: 0.95rem;
+            font-family: inherit;
+            transition: border-color 0.2s;
+            width: 100%;
+        }
+        .form-group input:focus, .form-group select:focus, .form-group textarea:focus {
+            outline: none;
+            border-color: #2563a8;
+            box-shadow: 0 0 0 3px rgba(37,99,168,0.1);
+        }
+        .form-group textarea { resize: vertical; min-height: 80px; }
+        .full-width { grid-column: 1 / -1; }
+
+        /* ── Expense table ─────────────────────────────── */
+        .expenses-section { padding: 2rem; }
+        .expenses-section h2 {
+            font-size: 0.8rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: #6b7280;
+            margin-bottom: 1.25rem;
+        }
+        .table-wrap { overflow-x: auto; }
+        table.gastos-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.875rem;
+        }
+        table.gastos-table thead th {
+            background: linear-gradient(135deg, #2563a8, #1a4d7e);
+            color: white;
+            padding: 0.75rem 0.65rem;
+            text-align: left;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+        table.gastos-table thead th:last-child { width: 40px; }
+        table.gastos-table tbody tr {
+            border-bottom: 1px solid #f0f0f0;
+            transition: background 0.1s;
+        }
+        table.gastos-table tbody tr:hover { background: #f8faff; }
+        table.gastos-table td { padding: 0.5rem 0.4rem; vertical-align: middle; }
+        table.gastos-table tfoot td {
+            padding: 0.75rem 0.65rem;
+            background: #f8f9fa;
+            border-top: 2px solid #e0e0e0;
+        }
+
+        /* Cell inputs */
+        .cell-input {
+            width: 100%;
+            padding: 0.45rem 0.55rem;
+            border: 1.5px solid #e0e0e0;
+            border-radius: 5px;
+            font-size: 0.875rem;
+            font-family: inherit;
+        }
+        .cell-input:focus { outline: none; border-color: #2563a8; background: white; }
+        input.cell-input[type="date"] { min-width: 130px; }
+        input.cell-input[type="number"] { width: 90px; text-align: right; }
+        select.cell-input { min-width: 130px; }
+        input.cell-input.fra { min-width: 120px; }
+        input.cell-input.proveedor { min-width: 160px; }
+
+        .btn-del {
+            background: none;
+            border: none;
+            color: #dc2626;
+            cursor: pointer;
+            font-size: 1.1rem;
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            transition: background 0.15s;
+        }
+        .btn-del:hover { background: #fee2e2; }
+
+        .total-label { font-weight: 700; color: #1a4d7e; font-size: 0.95rem; }
+        .total-value { font-weight: 700; color: #1a4d7e; font-size: 1.1rem; font-variant-numeric: tabular-nums; }
+        .empty-row td {
+            text-align: center;
+            color: #9ca3af;
+            font-style: italic;
+            padding: 1.5rem;
+        }
+
+        /* Add row button */
+        .btn-add-row {
+            margin-top: 1rem;
+            padding: 0.6rem 1.2rem;
+            background: #f0f7ff;
+            color: #2563a8;
+            border: 2px dashed #93c5fd;
+            border-radius: 7px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            width: 100%;
+        }
+        .btn-add-row:hover { background: #dbeafe; border-color: #2563a8; }
+
+        /* ── Actions ───────────────────────────────────── */
+        .actions {
+            padding: 1.5rem 2rem;
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
+            align-items: center;
+            border-top: 2px solid #e5e7eb;
+            background: #f9fafb;
+        }
+        .btn-save, .btn-docx {
+            padding: 0.85rem 1.75rem;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.15s, box-shadow 0.15s;
+            font-family: inherit;
+        }
+        .btn-save {
+            background: #e8f0fe;
+            color: #1a4d7e;
+            border: 2px solid #93c5fd;
+        }
+        .btn-save:hover { background: #dbeafe; transform: translateY(-1px); }
+        .btn-docx {
+            background: linear-gradient(135deg, #2563a8, #1a4d7e);
+            color: white;
+        }
+        .btn-docx:hover { transform: translateY(-2px); box-shadow: 0 6px 16px rgba(37,99,168,0.35); }
+        .btn-reset {
+            padding: 0.85rem 1.2rem;
+            border: 2px solid #e5e7eb;
+            border-radius: 8px;
+            background: white;
+            color: #6b7280;
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            font-family: inherit;
+            margin-left: auto;
+        }
+        .btn-reset:hover { background: #f3f4f6; }
+
+        /* ── Messages ──────────────────────────────────── */
+        .message {
+            padding: 1rem 1.5rem;
+            border-radius: 8px;
+            font-weight: 600;
+            display: none;
+            margin: 0 2rem 1.5rem;
+        }
+        .message.success { background: #d1fae5; color: #065f46; border: 1px solid #6ee7b7; }
+        .message.error   { background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; }
+
+        @media (max-width: 640px) {
+            .actions { flex-direction: column; }
+            .btn-reset { margin-left: 0; width: 100%; }
+            .btn-save, .btn-docx { width: 100%; text-align: center; }
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <header>
+        <a href="/" class="back-link">← Volver al inicio</a>
+        <h1>🧾 Liquidación de Gastos de Viaje</h1>
+        <p>Rellena el formulario y descarga el documento listo para firmar</p>
+    </header>
+
+    <!-- ── Empleado + Viaje ────────────────────────────── -->
+    <div class="section">
+        <h2>Datos del empleado y viaje</h2>
+        <div class="form-grid">
+            <div class="form-group">
+                <label for="empleado">Empleado *</label>
+                <select id="empleado" required onchange="onEmpleadoChange()">
+                    <option value="">Seleccionar...</option>
+                    <option value="ANTONIO RODRIGUEZ SANTANA">ANTONIO RODRIGUEZ SANTANA</option>
+                    <option value="DANIEL ALFARO DIAZ">DANIEL ALFARO DIAZ</option>
+                    <option value="DIEGO LADRON FONCUBIERTA">DIEGO LADRON FONCUBIERTA</option>
+                    <option value="HICHAM ASRIH EL KADDOURI">HICHAM ASRIH EL KADDOURI</option>
+                    <option value="MANUEL RODRIGUEZ SANTANA">MANUEL RODRIGUEZ SANTANA</option>
+                    <option value="PABLO CASTELLO RODRIGUEZ">PABLO CASTELLO RODRIGUEZ</option>
+                    <option value="SAMUEL JESUS DAMAS DOMINGUEZ">SAMUEL JESUS DAMAS DOMINGUEZ</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="dni">DNI / NIE *</label>
+                <!-- Actualiza los DNIs en EMPLEADO_DNIS del script -->
+                <input type="text" id="dni" placeholder="12345678A" required>
+            </div>
+            <div class="form-group">
+                <label for="dia_salida">Día de salida *</label>
+                <input type="date" id="dia_salida" required>
+            </div>
+            <div class="form-group">
+                <label for="dia_regreso">Día de regreso *</label>
+                <input type="date" id="dia_regreso" required>
+            </div>
+            <div class="form-group full-width">
+                <label for="motivo">Motivo del desplazamiento *</label>
+                <textarea id="motivo" rows="2" placeholder="Describe brevemente el motivo del viaje..." required></textarea>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── Gastos ─────────────────────────────────────── -->
+    <div class="expenses-section">
+        <h2>Gastos del viaje</h2>
+        <div class="table-wrap">
+            <table class="gastos-table">
+                <thead>
+                    <tr>
+                        <th>Fecha</th>
+                        <th>Nº Fra/Ticket</th>
+                        <th>Proveedor</th>
+                        <th>Concepto</th>
+                        <th style="text-align:right">Importe (€)</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody id="gastos-body">
+                    <tr class="empty-row" id="empty-row">
+                        <td colspan="6">Pulsa "Añadir línea" para registrar el primer gasto</td>
+                    </tr>
+                </tbody>
+                <tfoot>
+                    <tr>
+                        <td colspan="4" class="total-label">TOTAL</td>
+                        <td style="text-align:right"><span class="total-value" id="total-display">0,00 €</span></td>
+                        <td></td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+        <button type="button" class="btn-add-row" onclick="addRow()">➕ Añadir línea de gasto</button>
+    </div>
+
+    <!-- ── Messages ──────────────────────────────────── -->
+    <div id="message" class="message"></div>
+
+    <!-- ── Actions ───────────────────────────────────── -->
+    <div class="actions">
+        <button class="btn-save" onclick="guardar(false)">💾 Guardar en Excel</button>
+        <button class="btn-docx" onclick="guardar(true)">📄 Guardar + Descargar DOCX</button>
+        <button class="btn-reset" onclick="resetForm()">🔄 Limpiar</button>
+    </div>
+</div>
+
+<script>
+    // ── DNI por empleado (actualiza aquí los que falten) ──
+    // TODO: completar DNIs de los demás empleados
+    const EMPLEADO_DNIS = {
+        'ANTONIO RODRIGUEZ SANTANA':  '',
+        'DANIEL ALFARO DIAZ':         '',
+        'DIEGO LADRON FONCUBIERTA':   '30267113X',
+        'HICHAM ASRIH EL KADDOURI':   '',
+        'MANUEL RODRIGUEZ SANTANA':   '',
+        'PABLO CASTELLO RODRIGUEZ':   '',
+        'SAMUEL JESUS DAMAS DOMINGUEZ': '',
+    };
+
+    const CONCEPTOS = [
+        'TAXI', 'DIETA', 'COMBUSTIBLE', 'HOTEL',
+        'PARKING', 'PEAJE', 'AVIÓN', 'TREN', 'OTROS'
+    ];
+
+    let rowCounter = 0;
+
+    // ── Auto-fill DNI ─────────────────────────────────
+    function onEmpleadoChange() {
+        const emp = document.getElementById('empleado').value;
+        const dniField = document.getElementById('dni');
+        const dni = EMPLEADO_DNIS[emp] || '';
+        dniField.value = dni;
+        if (!dni) dniField.focus();
+    }
+
+    // ── Add expense row ───────────────────────────────
+    function addRow(prefill = {}) {
+        const emptyRow = document.getElementById('empty-row');
+        if (emptyRow) emptyRow.remove();
+
+        rowCounter++;
+        const id = rowCounter;
+        const tbody = document.getElementById('gastos-body');
+        const tr = document.createElement('tr');
+        tr.id = `row-${id}`;
+
+        const today = new Date().toISOString().split('T')[0];
+
+        const conceptoOptions = CONCEPTOS.map(c =>
+            `<option value="${c}" ${prefill.concepto === c ? 'selected' : ''}>${c}</option>`
+        ).join('');
+
+        tr.innerHTML = `
+            <td><input type="date" class="cell-input" id="r${id}-fecha" value="${prefill.fecha || today}"></td>
+            <td><input type="text" class="cell-input fra" id="r${id}-fra" value="${prefill.num_fra || ''}" placeholder="Nº ticket"></td>
+            <td><input type="text" class="cell-input proveedor" id="r${id}-proveedor" value="${prefill.proveedor || ''}" placeholder="Nombre proveedor"></td>
+            <td>
+                <select class="cell-input" id="r${id}-concepto">
+                    <option value="">-- Concepto --</option>
+                    ${conceptoOptions}
+                </select>
+            </td>
+            <td>
+                <input type="number" class="cell-input" id="r${id}-importe"
+                    value="${prefill.importe || ''}" step="0.01" min="0" placeholder="0.00">
+            </td>
+            <td>
+                <button type="button" class="btn-del" title="Eliminar" onclick="removeRow(${id})">✕</button>
+            </td>
+        `;
+
+        // Update total on any change
+        tr.querySelectorAll('input, select').forEach(el =>
+            el.addEventListener('input', updateTotal)
+        );
+
+        tbody.appendChild(tr);
+        // Focus on the proveedor field of the new row
+        document.getElementById(`r${id}-proveedor`).focus();
+        updateTotal();
+    }
+
+    function removeRow(id) {
+        const row = document.getElementById(`row-${id}`);
+        if (row) row.remove();
+        // Show empty message if no rows left
+        if (document.getElementById('gastos-body').children.length === 0) {
+            const tr = document.createElement('tr');
+            tr.className = 'empty-row';
+            tr.id = 'empty-row';
+            tr.innerHTML = '<td colspan="6">Pulsa "Añadir línea" para registrar el primer gasto</td>';
+            document.getElementById('gastos-body').appendChild(tr);
+        }
+        updateTotal();
+    }
+
+    // ── Running total ─────────────────────────────────
+    function updateTotal() {
+        let total = 0;
+        document.querySelectorAll('[id$="-importe"]').forEach(input => {
+            const v = parseFloat(input.value);
+            if (!isNaN(v)) total += v;
+        });
+        document.getElementById('total-display').textContent =
+            total.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
+    }
+
+    // ── Collect form data ─────────────────────────────
+    function collectData() {
+        const gastos = [];
+        let rowId = 1;
+        while (rowId <= rowCounter) {
+            const fechaEl = document.getElementById(`r${rowId}-fecha`);
+            if (fechaEl) {
+                gastos.push({
+                    fecha:     fechaEl.value,
+                    num_fra:   document.getElementById(`r${rowId}-fra`).value,
+                    proveedor: document.getElementById(`r${rowId}-proveedor`).value,
+                    concepto:  document.getElementById(`r${rowId}-concepto`).value,
+                    importe:   parseFloat(document.getElementById(`r${rowId}-importe`).value) || 0,
+                });
+            }
+            rowId++;
+        }
+        return {
+            empleado:    document.getElementById('empleado').value,
+            dni:         document.getElementById('dni').value,
+            dia_salida:  document.getElementById('dia_salida').value,
+            dia_regreso: document.getElementById('dia_regreso').value,
+            motivo:      document.getElementById('motivo').value,
+            gastos,
+        };
+    }
+
+    // ── Validate ──────────────────────────────────────
+    function validate(data) {
+        if (!data.empleado)    return 'Selecciona un empleado';
+        if (!data.dni)         return 'Introduce el DNI del empleado';
+        if (!data.dia_salida)  return 'Indica la fecha de salida';
+        if (!data.dia_regreso) return 'Indica la fecha de regreso';
+        if (!data.motivo.trim()) return 'Indica el motivo del desplazamiento';
+        if (data.gastos.length === 0) return 'Añade al menos un gasto';
+        for (const [i, g] of data.gastos.entries()) {
+            if (!g.fecha)     return `Línea ${i+1}: falta la fecha`;
+            if (!g.proveedor.trim()) return `Línea ${i+1}: falta el proveedor`;
+            if (!g.concepto)  return `Línea ${i+1}: selecciona el concepto`;
+            if (g.importe <= 0) return `Línea ${i+1}: el importe debe ser mayor que 0`;
+        }
+        return null;
+    }
+
+    // ── Save ──────────────────────────────────────────
+    async function guardar(withDocx) {
+        const data = collectData();
+        const err = validate(data);
+        if (err) { showMsg(err, 'error'); return; }
+
+        const url = `/api/save-liquidacion${withDocx ? '?generate_docx=true' : ''}`;
+        showMsg('Guardando...', 'info');
+
+        try {
+            const res = await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data),
+            });
+            const result = await res.json();
+
+            if (!res.ok || !result.success) {
+                throw new Error(result.detail || result.message || 'Error desconocido');
+            }
+
+            if (withDocx && result.download_url) {
+                showMsg(`✅ ${result.message} — descargando documento...`, 'success');
+                setTimeout(() => { window.location.href = result.download_url; }, 500);
+            } else if (withDocx && result.docx_error) {
+                showMsg(`✅ Guardado en Excel, pero error al generar DOCX: ${result.docx_error}`, 'error');
+            } else {
+                showMsg(`✅ ${result.message}`, 'success');
+            }
+        } catch (e) {
+            showMsg(`❌ ${e.message}`, 'error');
+        }
+    }
+
+    function resetForm() {
+        if (!confirm('¿Limpiar el formulario? Se perderán los datos no guardados.')) return;
+        document.getElementById('empleado').value = '';
+        document.getElementById('dni').value = '';
+        document.getElementById('dia_salida').value = '';
+        document.getElementById('dia_regreso').value = '';
+        document.getElementById('motivo').value = '';
+        document.getElementById('gastos-body').innerHTML =
+            '<tr class="empty-row" id="empty-row"><td colspan="6">Pulsa "Añadir línea" para registrar el primer gasto</td></tr>';
+        rowCounter = 0;
+        updateTotal();
+        hideMsg();
+    }
+
+    function showMsg(text, type) {
+        const el = document.getElementById('message');
+        el.textContent = text;
+        el.className = `message ${type === 'info' ? 'success' : type}`;
+        el.style.display = 'block';
+        el.style.opacity = type === 'info' ? '0.7' : '1';
+        if (type !== 'info') el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+    function hideMsg() {
+        document.getElementById('message').style.display = 'none';
+    }
+
+    // ── Init: add one empty row on load ──────────────
+    document.addEventListener('DOMContentLoaded', () => addRow());
+</script>
+</body>
+</html>

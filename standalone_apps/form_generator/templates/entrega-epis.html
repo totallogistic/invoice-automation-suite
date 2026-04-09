@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Entrega de EPIs</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #2563a8 0%, #1a4d7e 100%);
+            min-height: 100vh;
+            padding: 2rem 1rem;
+        }
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+        header {
+            background: linear-gradient(135deg, #2563a8 0%, #1a4d7e 100%);
+            color: white;
+            padding: 2rem;
+            text-align: center;
+        }
+        header h1 { font-size: 1.7rem; margin-bottom: 0.4rem; }
+        header p { opacity: 0.85; font-size: 0.9rem; }
+        .back-link {
+            display: inline-block;
+            color: white;
+            text-decoration: none;
+            padding: 0.4rem 0.9rem;
+            background: rgba(255,255,255,0.2);
+            border-radius: 6px;
+            margin-bottom: 1rem;
+            font-size: 0.875rem;
+        }
+
+        /* Header form */
+        .section { padding: 1.75rem 2rem; border-bottom: 1px solid #e5e7eb; }
+        .section h2 {
+            font-size: 0.75rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: #9ca3af;
+            margin-bottom: 1.1rem;
+        }
+        .form-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1.1rem;
+        }
+        .form-group { display: flex; flex-direction: column; gap: 0.35rem; }
+        .form-group label { font-weight: 600; font-size: 0.85rem; color: #374151; }
+        .form-group input, .form-group select {
+            padding: 0.65rem 0.8rem;
+            border: 2px solid #e0e0e0;
+            border-radius: 7px;
+            font-size: 0.95rem;
+            font-family: inherit;
+            transition: border-color 0.2s;
+        }
+        .form-group input:focus, .form-group select:focus {
+            outline: none;
+            border-color: #2563a8;
+            box-shadow: 0 0 0 3px rgba(37,99,168,0.1);
+        }
+
+        /* EPI checklist */
+        .epi-section { padding: 1.75rem 2rem; }
+        .epi-section h2 {
+            font-size: 0.75rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: #9ca3af;
+            margin-bottom: 0;
+        }
+        .epi-hint {
+            font-size: 0.8rem;
+            color: #9ca3af;
+            margin: 0.4rem 0 1.25rem;
+        }
+
+        /* Category header */
+        .cat-header {
+            background: #f0f7ff;
+            border-left: 3px solid #2563a8;
+            padding: 0.5rem 1rem;
+            margin-bottom: 0;
+            font-weight: 700;
+            font-size: 0.82rem;
+            color: #1a4d7e;
+            text-transform: uppercase;
+            letter-spacing: 0.4px;
+        }
+
+        /* EPI table */
+        table.epi-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 1.25rem;
+            border: 1px solid #e5e7eb;
+        }
+        table.epi-table thead th {
+            background: #f8fafc;
+            padding: 0.55rem 0.85rem;
+            text-align: left;
+            font-size: 0.72rem;
+            font-weight: 700;
+            color: #6b7280;
+            text-transform: uppercase;
+            letter-spacing: 0.4px;
+            border-bottom: 1px solid #e5e7eb;
+        }
+        table.epi-table thead th.th-si { text-align: center; width: 70px; }
+        table.epi-table tbody td {
+            padding: 0.6rem 0.85rem;
+            border-bottom: 1px solid #f0f0f0;
+            vertical-align: middle;
+            font-size: 0.875rem;
+        }
+        table.epi-table tbody tr:last-child td { border-bottom: none; }
+        table.epi-table tbody tr:hover { background: #fafbff; }
+        .norm-cell { color: #9ca3af; font-size: 0.78rem; font-family: monospace; white-space: nowrap; }
+        .si-cell { text-align: center; }
+
+        /* Fancy checkbox */
+        .epi-check { display: none; }
+        .epi-check + label {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 28px;
+            height: 28px;
+            border: 2px solid #d1d5db;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.15s;
+            font-size: 1rem;
+        }
+        .epi-check:checked + label {
+            background: #059669;
+            border-color: #059669;
+            color: white;
+        }
+        .epi-check + label::before { content: ''; }
+        .epi-check:checked + label::before { content: '✓'; font-weight: 700; }
+
+        .obs-input {
+            width: 100%;
+            padding: 0.4rem 0.6rem;
+            border: 1.5px solid #e5e7eb;
+            border-radius: 5px;
+            font-size: 0.82rem;
+            font-family: inherit;
+            color: #374151;
+        }
+        .obs-input:focus { outline: none; border-color: #2563a8; }
+
+        /* Select all per category */
+        .cat-actions {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0.5rem 1rem;
+            background: #f0f7ff;
+            border-left: 3px solid #2563a8;
+            margin-bottom: 0;
+        }
+        .cat-name { font-weight: 700; font-size: 0.82rem; color: #1a4d7e; text-transform: uppercase; letter-spacing: 0.4px; }
+        .btn-all {
+            font-size: 0.72rem;
+            padding: 0.25rem 0.6rem;
+            background: #dbeafe;
+            color: #2563a8;
+            border: 1px solid #bfdbfe;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 600;
+            font-family: inherit;
+        }
+        .btn-all:hover { background: #bfdbfe; }
+
+        /* Actions */
+        .actions {
+            padding: 1.5rem 2rem;
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
+            background: #f9fafb;
+            border-top: 1px solid #e5e7eb;
+        }
+        .btn-docx {
+            padding: 0.9rem 2rem;
+            background: linear-gradient(135deg, #2563a8, #1a4d7e);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.15s, box-shadow 0.15s;
+            font-family: inherit;
+        }
+        .btn-docx:hover { transform: translateY(-2px); box-shadow: 0 6px 16px rgba(37,99,168,0.35); }
+        .btn-excel {
+            padding: 0.9rem 1.75rem;
+            background: #e8f0fe;
+            color: #1a4d7e;
+            border: 2px solid #bfdbfe;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            font-family: inherit;
+        }
+        .btn-excel:hover { background: #dbeafe; }
+
+        .message {
+            padding: 1rem 1.5rem;
+            border-radius: 8px;
+            font-weight: 600;
+            display: none;
+            margin: 0 2rem 1rem;
+        }
+        .message.success { background: #d1fae5; color: #065f46; border: 1px solid #6ee7b7; }
+        .message.error   { background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; }
+
+        @media (max-width: 600px) {
+            .actions { flex-direction: column; }
+            .btn-docx, .btn-excel { width: 100%; text-align: center; }
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <header>
+        <a href="/" class="back-link">← Volver al inicio</a>
+        <h1>🦺 Entrega de EPIs — FR-58</h1>
+        <p>Equipos de Protección Individual · Registro de entrega</p>
+    </header>
+
+    <!-- Datos generales -->
+    <div class="section">
+        <h2>Datos del empleado</h2>
+        <div class="form-grid">
+            <div class="form-group">
+                <label for="empleado">Trabajador *</label>
+                <select id="empleado" required>
+                    <option value="">Seleccionar...</option>
+                    <option value="ANTONIO RODRIGUEZ SANTANA">ANTONIO RODRIGUEZ SANTANA</option>
+                    <option value="DANIEL ALFARO DIAZ">DANIEL ALFARO DIAZ</option>
+                    <option value="DIEGO LADRON FONCUBIERTA">DIEGO LADRON FONCUBIERTA</option>
+                    <option value="HICHAM ASRIH EL KADDOURI">HICHAM ASRIH EL KADDOURI</option>
+                    <option value="MANUEL RODRIGUEZ SANTANA">MANUEL RODRIGUEZ SANTANA</option>
+                    <option value="PABLO CASTELLO RODRIGUEZ">PABLO CASTELLO RODRIGUEZ</option>
+                    <option value="SAMUEL JESUS DAMAS DOMINGUEZ">SAMUEL JESUS DAMAS DOMINGUEZ</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="puesto">Puesto de Trabajo *</label>
+                <input type="text" id="puesto" placeholder="Ej: MOTERO, ALMACÉN..." required>
+            </div>
+            <div class="form-group">
+                <label for="fecha">Fecha de Entrega *</label>
+                <input type="date" id="fecha" required>
+            </div>
+        </div>
+    </div>
+
+    <!-- EPI checklist -->
+    <div class="epi-section">
+        <h2>Listado de EPIs</h2>
+        <p class="epi-hint">Marca ✓ los equipos que se entregan en esta ocasión y añade observaciones si es necesario.</p>
+        <div id="epi-list"></div>
+    </div>
+
+    <div id="message" class="message"></div>
+
+    <div class="actions">
+        <button class="btn-docx" onclick="guardar(true)">📄 Guardar + Descargar DOCX</button>
+        <button class="btn-excel" onclick="guardar(false)">💾 Solo guardar en Excel</button>
+    </div>
+</div>
+
+<script>
+    const EPIS = [
+        { cat: 'Vestuario laboral', items: [
+            { norm: '',                          nombre: 'Pantalón mono' },
+            { norm: '',                          nombre: 'Chaqueta mono (Chaleco abrigo sin mangas)' },
+            { norm: '',                          nombre: 'Camiseta (Polos manga corta y manga larga)' },
+            { norm: '',                          nombre: 'Protección de abrigo (Chaquetón tipo Polar)' },
+        ]},
+        { cat: 'Vestuario de protección', items: [
+            { norm: '',                          nombre: 'Polo o chaleco reflectante' },
+            { norm: '',                          nombre: 'Chubasquero' },
+        ]},
+        { cat: 'Protección de pies', items: [
+            { norm: 'EN 420',                    nombre: 'Botas de Seguridad' },
+        ]},
+        { cat: 'Protección de cabeza', items: [
+            { norm: 'EN 397',                    nombre: 'Casco de seguridad' },
+        ]},
+        { cat: 'Protección de ojos y cara', items: [
+            { norm: 'EN 166',                    nombre: 'Gafas' },
+        ]},
+        { cat: 'Protección de oídos', items: [
+            { norm: 'EN 352-1 / EN 353-2 / EN 458', nombre: 'Orejeras' },
+        ]},
+        { cat: 'Protección de vías respiratorias', items: [
+            { norm: 'EN 149',                    nombre: 'Mascarilla FFP2 y SANITARIAS' },
+        ]},
+        { cat: 'Protección de manos y de caída', items: [
+            { norm: 'EN 420',                    nombre: 'Guantes de protección' },
+            { norm: '',                          nombre: 'Guantes de látex' },
+            { norm: '',                          nombre: 'Arneses de seguridad' },
+        ]},
+    ];
+
+    let itemId = 0;
+
+    function buildList() {
+        const container = document.getElementById('epi-list');
+        EPIS.forEach(cat => {
+            // Category header with select-all button
+            const catDiv = document.createElement('div');
+            catDiv.className = 'cat-actions';
+            const catKey = cat.cat.replace(/\s+/g, '_');
+            catDiv.innerHTML = `
+                <span class="cat-name">${cat.cat}</span>
+                <button type="button" class="btn-all" onclick="toggleCat('${catKey}')">✓ Marcar todas</button>
+            `;
+            container.appendChild(catDiv);
+
+            // Table
+            const table = document.createElement('table');
+            table.className = 'epi-table';
+            table.innerHTML = `<thead><tr>
+                <th>Normativa</th>
+                <th>Equipo de Protección Individual</th>
+                <th class="th-si">Sí</th>
+                <th>Observaciones</th>
+            </tr></thead>`;
+            const tbody = document.createElement('tbody');
+
+            cat.items.forEach(item => {
+                itemId++;
+                const id = `epi-${itemId}`;
+                const tr = document.createElement('tr');
+                tr.dataset.cat = catKey;
+                tr.innerHTML = `
+                    <td class="norm-cell">${item.norm}</td>
+                    <td>${item.nombre}</td>
+                    <td class="si-cell">
+                        <input type="checkbox" class="epi-check cat-${catKey}" id="${id}"
+                               data-nombre="${item.nombre}" data-norm="${item.norm}" data-cat="${cat.cat}">
+                        <label for="${id}"></label>
+                    </td>
+                    <td><input type="text" class="obs-input" id="obs-${id}" placeholder="—"></td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+            table.appendChild(tbody);
+            container.appendChild(table);
+        });
+    }
+
+    function toggleCat(catKey) {
+        const checks = document.querySelectorAll(`.cat-${catKey}`);
+        const allChecked = Array.from(checks).every(c => c.checked);
+        checks.forEach(c => c.checked = !allChecked);
+    }
+
+    // ── Collect data ──────────────────────────────────────
+    function collectData() {
+        const epis = [];
+        document.querySelectorAll('.epi-check').forEach(cb => {
+            epis.push({
+                categoria:   cb.dataset.cat,
+                normativa:   cb.dataset.norm,
+                nombre:      cb.dataset.nombre,
+                entregado:   cb.checked,
+                observaciones: document.getElementById(`obs-${cb.id}`).value.trim(),
+            });
+        });
+        return {
+            empleado: document.getElementById('empleado').value,
+            puesto:   document.getElementById('puesto').value.trim(),
+            fecha:    document.getElementById('fecha').value,
+            epis,
+        };
+    }
+
+    // ── Validate ──────────────────────────────────────────
+    function validate(data) {
+        if (!data.empleado) return 'Selecciona un trabajador';
+        if (!data.puesto)   return 'Indica el puesto de trabajo';
+        if (!data.fecha)    return 'Indica la fecha de entrega';
+        if (!data.epis.some(e => e.entregado)) return 'Marca al menos un EPI como entregado';
+        return null;
+    }
+
+    // ── Save ──────────────────────────────────────────────
+    async function guardar(withDocx) {
+        const data = collectData();
+        const err = validate(data);
+        if (err) { showMsg(err, 'error'); return; }
+
+        showMsg('Guardando...', 'info');
+        const url = `/api/save-entrega-epis${withDocx ? '?generate_docx=true' : ''}`;
+
+        try {
+            const res = await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data),
+            });
+            const result = await res.json();
+            if (!res.ok || !result.success) throw new Error(result.detail || result.message || 'Error');
+
+            if (withDocx && result.download_url) {
+                showMsg(`✅ ${result.message} — descargando documento...`, 'success');
+                setTimeout(() => window.location.href = result.download_url, 600);
+            } else {
+                showMsg(`✅ ${result.message}`, 'success');
+            }
+        } catch(e) {
+            showMsg(`❌ ${e.message}`, 'error');
+        }
+    }
+
+    function showMsg(text, type) {
+        const el = document.getElementById('message');
+        el.textContent = text;
+        el.className = `message ${type === 'info' ? 'success' : type}`;
+        el.style.opacity = type === 'info' ? '0.6' : '1';
+        el.style.display = 'block';
+        if (type !== 'info') el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+
+    // Init
+    document.getElementById('fecha').valueAsDate = new Date();
+    buildList();
+</script>
+</body>
+</html>

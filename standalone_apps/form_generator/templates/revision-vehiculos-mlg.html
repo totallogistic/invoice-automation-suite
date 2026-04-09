@@ -31,10 +31,7 @@
 
             <div class="form-group">
                 <label for="vehiculo">Vehículo *</label>
-                <select id="vehiculo" name="vehiculo" required class="form-select">
-                    <option value="">Seleccionar...</option>
-                    <option value="JUMPER 5516 GDV">JUMPER 5516 GDV</option>
-                </select>
+                <input type="text" id="vehiculo" name="vehiculo" value="JUMPER 5516 GDV" readonly class="form-input" style="background:#f0f0f0; cursor:default;">
             </div>
 
             <div class="form-group">
@@ -44,46 +41,58 @@
 
             <h3>Revisión Técnica</h3>
 
-            <div class="checkbox-group">
-                <label>
-                    <input type="checkbox" name="nivelAceite" value="true">
-                    <span>Nivel de Aceite Correcto</span>
-                </label>
+            <div class="form-group">
+                <label for="nivelAceite">Nivel de Aceite Correcto</label>
+                <select id="nivelAceite" name="nivelAceite" required class="form-select">
+                    <option value="">Seleccionar...</option>
+                    <option value="✓">✓ Correcto</option>
+                    <option value="X">X Necesita intervención</option>
+                </select>
             </div>
 
-            <div class="checkbox-group">
-                <label>
-                    <input type="checkbox" name="nivelLiquidoFrenos" value="true">
-                    <span>Nivel de Líquido de Frenos Correcto</span>
-                </label>
+            <div class="form-group">
+                <label for="nivelLiquidoFrenos">Nivel de Líquido de Frenos</label>
+                <select id="nivelLiquidoFrenos" name="nivelLiquidoFrenos" required class="form-select">
+                    <option value="">Seleccionar...</option>
+                    <option value="✓">✓ Correcto</option>
+                    <option value="X">X Necesita intervención</option>
+                </select>
             </div>
 
-            <div class="checkbox-group">
-                <label>
-                    <input type="checkbox" name="nivelRefrigerante" value="true">
-                    <span>Nivel de Refrigerante Correcto</span>
-                </label>
+            <div class="form-group">
+                <label for="nivelRefrigerante">Nivel de Refrigerante</label>
+                <select id="nivelRefrigerante" name="nivelRefrigerante" required class="form-select">
+                    <option value="">Seleccionar...</option>
+                    <option value="✓">✓ Correcto</option>
+                    <option value="X">X Necesita intervención</option>
+                </select>
             </div>
 
-            <div class="checkbox-group">
-                <label>
-                    <input type="checkbox" name="presionNeumaticos" value="true">
-                    <span>Presión de Neumáticos Correcta</span>
-                </label>
+            <div class="form-group">
+                <label for="presionNeumaticos">Presión de Neumáticos</label>
+                <select id="presionNeumaticos" name="presionNeumaticos" required class="form-select">
+                    <option value="">Seleccionar...</option>
+                    <option value="✓">✓ Correcto</option>
+                    <option value="X">X Necesita intervención</option>
+                </select>
             </div>
 
-            <div class="checkbox-group">
-                <label>
-                    <input type="checkbox" name="lucesExteriores" value="true">
-                    <span>Luces Exteriores Funcionando</span>
-                </label>
+            <div class="form-group">
+                <label for="lucesExteriores">Luces Exteriores Funcionando</label>
+                <select id="lucesExteriores" name="lucesExteriores" required class="form-select">
+                    <option value="">Seleccionar...</option>
+                    <option value="✓">✓ Correcto</option>
+                    <option value="X">X Necesita intervención</option>
+                </select>
             </div>
 
-            <div class="checkbox-group">
-                <label>
-                    <input type="checkbox" name="limpiaparabrisas" value="true">
-                    <span>Limpiaparabrisas Funcionando</span>
-                </label>
+            <div class="form-group">
+                <label for="limpiaparabrisas">Limpiaparabrisas Funcionando</label>
+                <select id="limpiaparabrisas" name="limpiaparabrisas" required class="form-select">
+                    <option value="">Seleccionar...</option>
+                    <option value="✓">✓ Correcto</option>
+                    <option value="X">X Necesita intervención</option>
+                </select>
             </div>
 
             <div class="form-group">
@@ -97,9 +106,9 @@
                 </select>
             </div>
 
-            <div class="form-group">
+            <div class="form-group" style="grid-column: 1 / -1;">
                 <label for="observaciones">Observaciones</label>
-                <textarea id="observaciones" name="observaciones" rows="4" class="form-textarea"></textarea>
+                <textarea id="observaciones" name="observaciones" rows="4" class="form-textarea" style="width:100%;"></textarea>
             </div>
 
             <button type="submit" class="btn btn-primary">💾 Guardar Revisión</button>
@@ -116,13 +125,6 @@
             
             const formData = new FormData(e.target);
             const data = Object.fromEntries(formData);
-            
-            // Convert checkboxes to boolean
-            const checkboxes = ['nivelAceite', 'nivelLiquidoFrenos', 'nivelRefrigerante', 
-                               'presionNeumaticos', 'lucesExteriores', 'limpiaparabrisas'];
-            checkboxes.forEach(name => {
-                data[name] = formData.has(name);
-            });
             
             // Convert kilometraje to number
             if (data.kilometraje) {
