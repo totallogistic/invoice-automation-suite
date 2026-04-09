@@ -1726,6 +1726,264 @@ async def precintos_cancelar_reserva(request: Request):
 
     return JSONResponse({"success": True, "msg": f"Reserva del precinto {num} cancelada"})
 
+# ============================================================
+# ENTREGA DE EPIs (FR-58)
+# Añadir este bloque a app.py (antes del if __name__ == "__main__")
+# ============================================================
+
+RESPONSABLE_PREVENCION = "Juan Antonio Martínez Lázaro"
+
+TEXTO_LEGAL_EPIS = (
+    "De acuerdo con el art. 29.2 de la Ley 31/1995 de 8 de Noviembre, de Prevención de Riesgos "
+    "Laborales, así como del sistema de gestión de la prevención de riesgos, el trabajador:\n\n"
+    "a) Se compromete a utilizar correctamente los medios y equipos de protección facilitados.\n"
+    "b) Se responsabiliza de su mantenimiento y conservación.\n"
+    "c) Entiende que el equipo se le asigna de manera personal.\n"
+    "d) Devuelve el EPI usado o deteriorado antes de recibir otro nuevo, quedando prohibida la "
+    "utilización de equipos deteriorados o caducos.\n"
+    "e) Colabora con la gestión documentada para la entrega de los equipos.\n"
+    "f) Comunicará al responsable del grupo o trabajador-enlace la pérdida, merma, deterioro o "
+    "caducidad que pudiera sufrir el equipo de protección individual."
+)
+
+
+def _generate_epis_docx(data: dict):
+    """Generate FR-58 EPI delivery DOCX. Returns (Path, filename)."""
+    from docx import Document
+    from docx.shared import Pt, Cm
+    from docx.oxml import OxmlElement
+    from docx.oxml.ns import qn
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
+
+    doc = Document()
+    for section in doc.sections:
+        section.top_margin    = Cm(2)
+        section.bottom_margin = Cm(2)
+        section.left_margin   = Cm(2.5)
+        section.right_margin  = Cm(2.5)
+
+    def set_run(run, bold=False, size=10):
+        run.font.name = 'Calibri'
+        run.font.size = Pt(size)
+        run.font.bold = bold
+
+    def cell_write(cell, text, bold=False, size=10, center=False):
+        for child in list(cell.paragraphs[0]._p):
+            tag = child.tag.split('}')[-1] if '}' in child.tag else child.tag
+            if tag in ('r', 'sdt', 'hyperlink'):
+                cell.paragraphs[0]._p.remove(child)
+        run = cell.paragraphs[0].add_run(str(text) if text else '')
+        set_run(run, bold=bold, size=size)
+        if center:
+            cell.paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
+
+    def shade_cell(cell, hex_color):
+        tc = cell._tc
+        tcPr = tc.get_or_add_tcPr()
+        shd = OxmlElement('w:shd')
+        shd.set(qn('w:val'), 'clear')
+        shd.set(qn('w:color'), 'auto')
+        shd.set(qn('w:fill'), hex_color)
+        tcPr.append(shd)
+
+    empleado = data.get('empleado', '')
+    puesto   = data.get('puesto', '')
+    fecha    = data.get('fecha', '')
+    epis     = data.get('epis', [])
+
+    # ── HEADER TABLE ──────────────────────────────────────
+    t0 = doc.add_table(rows=3, cols=4)
+    t0.style = 'Table Grid'
+
+    # Row 0: Puesto | value | DATOS EVALUACIÓN | blank
+    cell_write(t0.cell(0, 0), 'Puesto de Trabajo:', bold=True)
+    cell_write(t0.cell(0, 1), puesto.upper())
+    cell_write(t0.cell(0, 2), 'DATOS DE LA EVALUACIÓN DE RIESGOS', bold=True)
+    # Row 1: Trabajador | value | FECHA | date
+    cell_write(t0.cell(1, 0), 'Trabajador:', bold=True)
+    cell_write(t0.cell(1, 1), empleado.upper())
+    cell_write(t0.cell(1, 2), 'FECHA:', bold=True)
+    cell_write(t0.cell(1, 3), fecha)
+    # Row 2: Fecha | mm/yyyy | REALIZACIÓN | COORDINADOR
+    mes_anio = ''
+    if fecha:
+        try:
+            from datetime import datetime as _dt
+            mes_anio = _dt.strptime(fecha, '%Y-%m-%d').strftime('%m/%Y')
+        except Exception:
+            mes_anio = fecha
+    cell_write(t0.cell(2, 0), 'Fecha:', bold=True)
+    cell_write(t0.cell(2, 1), mes_anio)
+    cell_write(t0.cell(2, 2), 'REALIZACIÓN:', bold=True)
+    cell_write(t0.cell(2, 3), 'COORDINADOR')
+
+    doc.add_paragraph()
+
+    # ── EPI TABLE ─────────────────────────────────────────
+    title_p = doc.add_paragraph()
+    r = title_p.add_run("Listado de EPI's")
+    set_run(r, bold=True, size=11)
+
+    # Group by category
+    from itertools import groupby
+    categories = {}
+    for epi in epis:
+        cat = epi.get('categoria', '')
+        categories.setdefault(cat, []).append(epi)
+
+    # Build table: 1 header row + category rows + item rows
+    total_rows = 1 + sum(1 + len(v) for v in categories.values())
+    t1 = doc.add_table(rows=total_rows, cols=4)
+    t1.style = 'Table Grid'
+
+    # Column widths
+    for row in t1.rows:
+        row.cells[0].width = Cm(2.2)   # Normativa
+        row.cells[1].width = Cm(8.5)   # EPI
+        row.cells[2].width = Cm(1.2)   # SÍ
+        row.cells[3].width = Cm(4.1)   # Observaciones
+
+    # Header row
+    cell_write(t1.rows[0].cells[0], 'Normativa', bold=True, center=True)
+    cell_write(t1.rows[0].cells[1], 'Equipo de Protección Individual', bold=True)
+    cell_write(t1.rows[0].cells[2], 'SÍ', bold=True, center=True)
+    cell_write(t1.rows[0].cells[3], 'Observaciones', bold=True)
+    for j in range(4):
+        shade_cell(t1.rows[0].cells[j], 'd9e1f2')
+
+    row_idx = 1
+    for cat_name, items in categories.items():
+        # Category header row
+        t1.cell(row_idx, 0).merge(t1.cell(row_idx, 3))
+        cell_write(t1.rows[row_idx].cells[0], cat_name.upper(), bold=True)
+        shade_cell(t1.rows[row_idx].cells[0], 'f2f2f2')
+        row_idx += 1
+
+        for epi in items:
+            cell_write(t1.rows[row_idx].cells[0], epi.get('normativa', ''), size=9, center=True)
+            cell_write(t1.rows[row_idx].cells[1], epi.get('nombre', ''))
+            cell_write(t1.rows[row_idx].cells[2],
+                       '✓' if epi.get('entregado') else '', center=True, size=12)
+            cell_write(t1.rows[row_idx].cells[3], epi.get('observaciones', ''), size=9)
+            row_idx += 1
+
+    doc.add_paragraph()
+
+    # ── LEGAL TEXT ────────────────────────────────────────
+    for line in TEXTO_LEGAL_EPIS.split('\n'):
+        if not line.strip():
+            continue
+        p = doc.add_paragraph()
+        p.paragraph_format.space_after = Pt(2)
+        run = p.add_run(line)
+        set_run(run, size=9)
+
+    doc.add_paragraph()
+
+    # ── SIGNATURES ────────────────────────────────────────
+    t2 = doc.add_table(rows=2, cols=2)
+    t2.style = 'Table Grid'
+    cell_write(t2.cell(0, 0), 'Fdo: Responsable Prevención', bold=True)
+    cell_write(t2.cell(0, 1), 'Fdo: Trabajador', bold=True)
+    cell_write(t2.cell(1, 0), f'Nombre: {RESPONSABLE_PREVENCION}')
+    cell_write(t2.cell(1, 1), f'Nombre: {empleado.upper()}')
+
+    # ── SAVE ─────────────────────────────────────────────
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    slug = empleado.replace(' ', '_').upper()
+    filename = f"FR58_EPIs_{slug}_{timestamp}.docx"
+    filepath = OUTPUT_DIR / filename
+    doc.save(str(filepath))
+    return filepath, filename
+
+
+@app.post("/api/save-entrega-epis")
+async def save_entrega_epis(request: Request, generate_docx: bool = False):
+    """
+    Guarda una entrega de EPIs:
+    1. Añade los EPIs entregados al Excel histórico (una fila por EPI)
+    2. Si generate_docx=true, genera el FR-58 y devuelve URL de descarga
+
+    Body JSON:
+    {
+      "empleado": "NOMBRE APELLIDOS",
+      "puesto": "MOTERO",
+      "fecha": "2026-04-09",
+      "epis": [
+        {"categoria": "Vestuario laboral", "normativa": "", "nombre": "Pantalón mono",
+         "entregado": true, "observaciones": ""},
+        ...
+      ]
+    }
+    """
+    data     = await request.json()
+    empleado = data.get('empleado', '').strip()
+    puesto   = data.get('puesto',   '').strip()
+    fecha    = data.get('fecha',    '').strip()
+    epis     = data.get('epis',     [])
+
+    if not empleado:
+        raise HTTPException(400, "El campo 'empleado' es obligatorio")
+    if not fecha:
+        raise HTTPException(400, "El campo 'fecha' es obligatorio")
+
+    entregados = [e for e in epis if e.get('entregado')]
+    if not entregados:
+        raise HTTPException(400, "Debe marcarse al menos un EPI como entregado")
+
+    # ── 1. Excel ──────────────────────────────────────────
+    excel_file = EXCEL_STORAGE_DIR / "entrega-epis.xlsx"
+
+    if excel_file.exists():
+        wb = load_workbook(excel_file)
+        ws = wb.active
+    else:
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Entregas EPIs"
+        cols = ["Fecha Registro", "Empleado", "Puesto", "Fecha Entrega",
+                "Categoría", "Normativa", "EPI", "Observaciones"]
+        ws.append(cols)
+        hdr_fill = PatternFill(start_color="1a4d7e", end_color="1a4d7e", fill_type="solid")
+        hdr_font = Font(bold=True, color="FFFFFF")
+        for cell in ws[1]:
+            cell.fill = hdr_fill
+            cell.font = hdr_font
+            cell.alignment = Alignment(horizontal="center")
+
+    now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    for epi in entregados:
+        ws.append([
+            now_str, empleado, puesto, fecha,
+            epi.get('categoria', ''),
+            epi.get('normativa', ''),
+            epi.get('nombre',    ''),
+            epi.get('observaciones', ''),
+        ])
+
+    for col in ws.columns:
+        max_len = max((len(str(c.value or '')) for c in col), default=8)
+        ws.column_dimensions[col[0].column_letter].width = min(max_len + 2, 45)
+    wb.save(excel_file)
+
+    response = {
+        "success": True,
+        "message": f"Entrega registrada: {len(entregados)} EPI(s) para {empleado}",
+        "excel_file": excel_file.name,
+    }
+
+    # ── 2. DOCX ───────────────────────────────────────────
+    if generate_docx:
+        try:
+            _, docx_filename = _generate_epis_docx(data)
+            response["docx_filename"] = docx_filename
+            response["download_url"]  = f"/download/{docx_filename}"
+        except Exception as e:
+            print(f"[epis] Error generando DOCX: {e}")
+            response["docx_error"] = str(e)
+
+    return JSONResponse(response)
+
 if __name__ == "__main__":
     print("=" * 60)
     print("🚀 JSON Schema Form Generator")
