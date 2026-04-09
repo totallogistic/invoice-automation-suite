@@ -1483,6 +1483,249 @@ async def save_liquidacion(request: Request, generate_docx: bool = False):
  
     return JSONResponse(response)
 
+# ============================================================
+# CONTROL DE PRECINTOS
+# Añadir este bloque a app.py (antes del if __name__ == "__main__")
+# Añadir al .env:  PRECINTOS_PIN=TUPIN
+# ============================================================
+
+import threading as _threading
+_precintos_lock = _threading.Lock()
+
+PRECINTOS_FILE = EXCEL_STORAGE_DIR / "control-precintos.xlsx"
+
+PRECINTOS_HEADERS = [
+    "Nº Precinto", "Matrícula", "Expediente",
+    "Estado", "Fecha Creación", "Fecha Modificación", "Notas"
+]
+
+PRECINTOS_COL_WIDTHS = [14, 16, 20, 14, 20, 20, 30]
+
+
+# ── Helpers ───────────────────────────────────────────────────
+
+def _precintos_check_pin(pin) -> bool:
+    expected = os.getenv("PRECINTOS_PIN", "").strip()
+    if not expected:
+        raise HTTPException(500, "PRECINTOS_PIN no configurado en el fichero .env")
+    return str(pin).strip() == expected
+
+
+def _precintos_ensure_file():
+    """Create the Excel file with headers if it doesn't exist."""
+    if PRECINTOS_FILE.exists():
+        return
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Precintos"
+    ws.append(PRECINTOS_HEADERS)
+    hdr_fill = PatternFill(start_color="1a4d7e", end_color="1a4d7e", fill_type="solid")
+    hdr_font = Font(bold=True, color="FFFFFF")
+    for i, cell in enumerate(ws[1]):
+        cell.fill = hdr_fill
+        cell.font = hdr_font
+        cell.alignment = Alignment(horizontal="center")
+        ws.column_dimensions[cell.column_letter].width = PRECINTOS_COL_WIDTHS[i]
+    wb.save(PRECINTOS_FILE)
+
+
+def _precintos_load():
+    """Load workbook. Always call _precintos_ensure_file() first."""
+    _precintos_ensure_file()
+    return load_workbook(PRECINTOS_FILE)
+
+
+def _precintos_get_records(ws) -> list:
+    records = []
+    for row in ws.iter_rows(min_row=2, values_only=True):
+        if row[0] is None:
+            continue
+        def _fmt_dt(v):
+            if v is None:
+                return ""
+            if hasattr(v, 'strftime'):
+                return v.strftime("%d/%m/%Y %H:%M")
+            return str(v)[:16]
+        records.append({
+            "num":               int(row[0]),
+            "matricula":         row[1] or "",
+            "expediente":        row[2] or "",
+            "estado":            row[3] or "ACTIVO",
+            "fecha_creacion":    _fmt_dt(row[4]),
+            "fecha_modificacion":_fmt_dt(row[5]),
+            "notas":             row[6] or "",
+        })
+    return records
+
+
+def _precintos_next_num(records: list) -> int:
+    """Next number = max of all non-CANCELADO + 1 (CANCELADO frees the slot conceptually
+    but we keep it simple: max of ALL + 1, unless there are no records yet)."""
+    active = [r["num"] for r in records if r["estado"] != "CANCELADO"]
+    if not active:
+        # Check if there are any records at all
+        all_nums = [r["num"] for r in records]
+        return (max(all_nums) + 1) if all_nums else 1
+    return max(active) + 1
+
+
+def _precintos_find_row_index(ws, num: int):
+    """Return 1-based row index for a given precinto number, or None."""
+    for idx, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
+        if row[0] is not None and int(row[0]) == num:
+            return idx
+    return None
+
+
+def _precintos_save_autowidth(wb, ws):
+    for i, col in enumerate(ws.columns):
+        max_len = max((len(str(c.value or "")) for c in col), default=8)
+        ws.column_dimensions[col[0].column_letter].width = min(max_len + 2, 40)
+    wb.save(PRECINTOS_FILE)
+
+
+# ── Endpoints ─────────────────────────────────────────────────
+
+@app.get("/precintos", response_class=HTMLResponse)
+async def precintos_page(request: Request):
+    return templates.TemplateResponse("precintos.html", {"request": request})
+
+
+@app.get("/api/precintos/list")
+def precintos_list():
+    with _precintos_lock:
+        wb = _precintos_load()
+        ws = wb.active
+        records = _precintos_get_records(ws)
+
+    records_sorted = sorted(records, key=lambda r: r["num"], reverse=True)
+    stats = {
+        "total":     len(records),
+        "activos":   sum(1 for r in records if r["estado"] == "ACTIVO"),
+        "reservados":sum(1 for r in records if r["estado"] == "RESERVADO"),
+        "anulados":  sum(1 for r in records if r["estado"] == "ANULADO"),
+        "cancelados":sum(1 for r in records if r["estado"] == "CANCELADO"),
+    }
+    return JSONResponse({
+        "records":  records_sorted,
+        "next_num": _precintos_next_num(records),
+        "stats":    stats,
+    })
+
+
+@app.post("/api/precintos/nuevo")
+async def precintos_nuevo(request: Request):
+    """Register a new precinto (ACTIVO) or reserve one (RESERVADO)."""
+    data = await request.json()
+    if not _precintos_check_pin(data.get("pin", "")):
+        raise HTTPException(401, "PIN incorrecto")
+
+    matricula  = data.get("matricula",  "").strip()
+    expediente = data.get("expediente", "").strip()
+    notas      = data.get("notas",      "").strip()
+    estado     = "ACTIVO" if (matricula and expediente) else "RESERVADO"
+    now        = datetime.now()
+
+    with _precintos_lock:
+        wb = _precintos_load()
+        ws = wb.active
+        records  = _precintos_get_records(ws)
+        next_num = _precintos_next_num(records)
+        ws.append([next_num, matricula, expediente, estado, now, now, notas])
+        _precintos_save_autowidth(wb, ws)
+
+    return JSONResponse({
+        "success": True,
+        "num":     next_num,
+        "estado":  estado,
+        "msg":     f"Precinto {next_num} {'registrado' if estado == 'ACTIVO' else 'reservado'} correctamente",
+    })
+
+
+@app.post("/api/precintos/editar")
+async def precintos_editar(request: Request):
+    """Edit matrícula, expediente or notas for an existing precinto."""
+    data = await request.json()
+    if not _precintos_check_pin(data.get("pin", "")):
+        raise HTTPException(401, "PIN incorrecto")
+
+    num        = int(data.get("num", 0))
+    matricula  = data.get("matricula",  "").strip()
+    expediente = data.get("expediente", "").strip()
+    notas      = data.get("notas",      "").strip()
+
+    with _precintos_lock:
+        wb  = _precintos_load()
+        ws  = wb.active
+        row = _precintos_find_row_index(ws, num)
+        if row is None:
+            raise HTTPException(404, f"Precinto {num} no encontrado")
+
+        current_estado = ws.cell(row=row, column=4).value
+        if current_estado in ("ANULADO",):
+            raise HTTPException(400, f"No se puede editar un precinto {current_estado}")
+
+        ws.cell(row=row, column=2).value = matricula
+        ws.cell(row=row, column=3).value = expediente
+        # If both fields are now filled and it was RESERVADO → promote to ACTIVO
+        if current_estado == "RESERVADO" and matricula and expediente:
+            ws.cell(row=row, column=4).value = "ACTIVO"
+        ws.cell(row=row, column=6).value = datetime.now()
+        ws.cell(row=row, column=7).value = notas
+        _precintos_save_autowidth(wb, ws)
+
+    nuevo_estado = "ACTIVO" if (current_estado == "RESERVADO" and matricula and expediente) else current_estado
+    return JSONResponse({"success": True, "estado": nuevo_estado, "msg": f"Precinto {num} actualizado"})
+
+
+@app.post("/api/precintos/anular")
+async def precintos_anular(request: Request):
+    """Mark a precinto as ANULADO (bad/damaged). Number is permanently consumed."""
+    data = await request.json()
+    if not _precintos_check_pin(data.get("pin", "")):
+        raise HTTPException(401, "PIN incorrecto")
+
+    num   = int(data.get("num", 0))
+    notas = data.get("notas", "").strip() or "Anulado por mal estado"
+
+    with _precintos_lock:
+        wb  = _precintos_load()
+        ws  = wb.active
+        row = _precintos_find_row_index(ws, num)
+        if row is None:
+            raise HTTPException(404, f"Precinto {num} no encontrado")
+        ws.cell(row=row, column=4).value = "ANULADO"
+        ws.cell(row=row, column=6).value = datetime.now()
+        ws.cell(row=row, column=7).value = notas
+        _precintos_save_autowidth(wb, ws)
+
+    return JSONResponse({"success": True, "msg": f"Precinto {num} marcado como ANULADO"})
+
+
+@app.post("/api/precintos/cancelar-reserva")
+async def precintos_cancelar_reserva(request: Request):
+    """Cancel a RESERVADO precinto, freeing it (marked CANCELADO)."""
+    data = await request.json()
+    if not _precintos_check_pin(data.get("pin", "")):
+        raise HTTPException(401, "PIN incorrecto")
+
+    num = int(data.get("num", 0))
+
+    with _precintos_lock:
+        wb  = _precintos_load()
+        ws  = wb.active
+        row = _precintos_find_row_index(ws, num)
+        if row is None:
+            raise HTTPException(404, f"Precinto {num} no encontrado")
+        if ws.cell(row=row, column=4).value != "RESERVADO":
+            raise HTTPException(400, "Solo se pueden cancelar precintos en estado RESERVADO")
+        ws.cell(row=row, column=4).value  = "CANCELADO"
+        ws.cell(row=row, column=6).value  = datetime.now()
+        ws.cell(row=row, column=7).value  = "Reserva cancelada"
+        _precintos_save_autowidth(wb, ws)
+
+    return JSONResponse({"success": True, "msg": f"Reserva del precinto {num} cancelada"})
+
 if __name__ == "__main__":
     print("=" * 60)
     print("🚀 JSON Schema Form Generator")
