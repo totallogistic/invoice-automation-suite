@@ -1,0 +1,9 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Revisión Extintores/BIEs/Señalización – Málaga",
+  "description": "Acta trimestral PCI",
+  "category": "🔥 PCI",
+  "custom_template": "revision-extintores-mlg.html",
+  "type": "object",
+  "properties": {}
+}

@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Revisión Extintores/BIEs/Señalización – Puerto Real</title>
+<style>
+:root{--bg:#f0f2f5;--card:#fff;--primary:#1a3f6f;--acc:#e74c3c;--green:#27ae60;--border:#dde3eb;--text:#2c3e50;--muted:#7f8c8d}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);font-family:'Segoe UI',sans-serif;color:var(--text);font-size:14px;padding-bottom:80px}
+.hdr{background:var(--primary);color:#fff;padding:14px 22px;display:flex;align-items:center;gap:10px}
+.hdr h1{font-size:17px;font-weight:700}
+.badge{background:rgba(255,255,255,.2);padding:3px 10px;border-radius:12px;font-size:12px;margin-left:auto}
+.tabs{background:#fff;border-bottom:2px solid var(--border);display:flex;overflow-x:auto;gap:0}
+.tab{padding:11px 18px;cursor:pointer;font-size:13px;font-weight:600;color:var(--muted);border-bottom:3px solid transparent;white-space:nowrap;transition:.15s}
+.tab.on{color:var(--primary);border-bottom-color:var(--primary)}
+.pane{display:none;padding:18px;max-width:1100px;margin:0 auto}
+.pane.on{display:block}
+.card{background:#fff;border-radius:8px;border:1px solid var(--border);margin-bottom:14px;overflow:hidden}
+.ch{background:var(--primary);color:#fff;padding:9px 15px;font-size:13px;font-weight:700;display:flex;justify-content:space-between;align-items:center}
+.cb{padding:14px}
+.row{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:10px}
+.f{display:flex;flex-direction:column;gap:4px;flex:1;min-width:110px}
+.f label{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase}
+.f input,.f select,.f textarea{border:1px solid var(--border);border-radius:6px;padding:7px 9px;font-size:13px;width:100%}
+.f textarea{resize:vertical;min-height:55px}
+/* checklist */
+.ck-tbl{width:100%;border-collapse:collapse;font-size:12px}
+.ck-tbl th{background:#f8f9fa;padding:6px 8px;text-align:left;font-weight:700;color:var(--muted);border-bottom:2px solid var(--border)}
+.ck-tbl td{padding:5px 8px;border-bottom:1px solid #f0f2f5;vertical-align:middle}
+.ck-tbl tr:hover td{background:#fafbfc}
+.pe{display:inline-block;background:#e8f4fd;color:#2980b9;font-size:10px;font-weight:700;padding:2px 5px;border-radius:4px;min-width:22px;text-align:center}
+.pe.A{background:#fef3cd;color:#856404}
+.rg{display:flex;gap:8px;align-items:center}
+.rg label{display:flex;align-items:center;gap:3px;cursor:pointer;font-weight:600;font-size:12px}
+/* dynamic table */
+.dt{width:100%;border-collapse:collapse;font-size:12px}
+.dt th{background:#f8f9fa;padding:6px 7px;font-weight:700;color:var(--muted);border-bottom:2px solid var(--border);white-space:nowrap}
+.dt td{padding:3px 4px;border-bottom:1px solid #f0f2f5;vertical-align:middle}
+.dt input,.dt select{border:1px solid var(--border);border-radius:4px;padding:4px 5px;font-size:12px;width:100%;min-width:0}
+.btn-add{background:#e8f4fd;color:#2980b9;border:1px dashed #2980b9;border-radius:6px;padding:6px 12px;cursor:pointer;font-size:12px;font-weight:600;margin-top:8px}
+.btn-del{background:#fde8e8;color:#c0392b;border:none;border-radius:4px;width:22px;height:22px;cursor:pointer;font-size:14px;line-height:1;flex-shrink:0}
+/* BIE / pulsador cards */
+.bie{border:1px solid var(--border);border-radius:8px;margin-bottom:10px}
+.bie-h{background:#f0f4f8;padding:7px 13px;font-weight:700;font-size:13px;display:flex;align-items:center;gap:6px}
+.bie-h input{border:none;background:transparent;font-weight:700;font-size:13px;flex:1}
+.bie-b{padding:12px}
+/* conclusion */
+.conc{display:flex;gap:14px;flex-wrap:wrap}
+.cop{display:flex;align-items:center;gap:5px;cursor:pointer;font-weight:600;font-size:13px}
+/* submit */
+.sbar{background:#fff;border-top:2px solid var(--border);padding:14px 22px;position:fixed;bottom:0;left:0;right:0;display:flex;justify-content:flex-end;gap:10px;z-index:200}
+.btn-gen{background:var(--acc);color:#fff;border:none;border-radius:8px;padding:11px 26px;font-size:14px;font-weight:700;cursor:pointer}
+.btn-gen:disabled{opacity:.6}
+.msg{padding:11px 15px;border-radius:8px;margin:10px 0;font-weight:600}
+.msg.ok{background:#d4edda;color:#155724}
+.msg.err{background:#f8d7da;color:#721c24}
+a.dl{display:inline-block;background:var(--green);color:#fff;padding:9px 18px;border-radius:8px;text-decoration:none;font-weight:700;margin-top:7px}
+</style>
+</head>
+<body>
+
+<div class="hdr">
+  <h1>🔥 Revisión Extintores · BIEs · Señalización · Pulsadores</h1>
+  <span class="badge">Puerto Real · FR-40</span>
+</div>
+
+<div class="tabs">
+  <div class="tab on" onclick="ST(0)">📋 Datos</div>
+  <div class="tab" onclick="ST(1)">🧯 Extintores</div>
+  <div class="tab" onclick="ST(2)">💧 BIEs</div>
+  <div class="tab" onclick="ST(3)">🚸 Señalización</div>
+  <div class="tab" onclick="ST(4)">🔔 Pulsadores</div>
+</div>
+
+<!-- TAB 0 -->
+<div class="pane on" id="p0">
+  <div class="card"><div class="ch">Fecha y Responsable</div><div class="cb">
+    <div class="row">
+      <div class="f"><label>Día</label><input type="number" id="dia" min="1" max="31"></div>
+      <div class="f"><label>Mes</label><select id="mes">
+        <option>ENERO</option><option>FEBRERO</option><option>MARZO</option><option>ABRIL</option>
+        <option>MAYO</option><option>JUNIO</option><option>JULIO</option><option>AGOSTO</option>
+        <option>SEPTIEMBRE</option><option>OCTUBRE</option><option>NOVIEMBRE</option><option>DICIEMBRE</option>
+      </select></div>
+      <div class="f"><label>Año</label><input type="number" id="anio" value="2026"></div>
+    </div>
+    <div class="row">
+      <div class="f"><label>Responsable revisión</label><select id="resp">
+        <option>ANTONIO RODRIGUEZ SANTANA</option><option>DANIEL ALFARO DIAZ</option>
+        <option>DIEGO LADRON FONCUBIERTA</option><option>HICHAM ASRIH EL KADDOURI</option>
+        <option selected>MANUEL RODRIGUEZ SANTANA</option><option>PABLO CASTELLO RODRIGUEZ</option>
+        <option>SAMUEL JESUS DAMAS DOMINGUEZ</option>
+      </select></div>
+    </div>
+  </div></div>
+</div>
+
+<!-- TAB 1: Extintores -->
+<div class="pane" id="p1">
+  <div class="card"><div class="ch">1. Lista de verificación – Inspección Visual</div><div class="cb">
+    <table class="ck-tbl"><thead><tr><th>Nº</th><th>PE</th><th>Descripción</th><th style="width:130px;text-align:center">Resultado</th></tr></thead>
+    <tbody id="ext-chk"></tbody></table>
+  </div></div>
+
+  <div class="card"><div class="ch">2. Listado de Extintores <button class="btn-add" onclick="addExt()">+ Añadir</button></div>
+  <div class="cb" style="overflow-x:auto">
+    <table class="dt"><thead><tr>
+      <th>Nº Serie</th><th>Eficacia</th><th>Altura&gt;1.7m</th>
+      <th>F.Fabric.</th><th>F.Retimbr.</th>
+      <th>Señal</th><th>Manguera</th><th>Precinto</th><th>Accesib.</th><th>Peso/P.</th>
+      <th style="min-width:130px">Ubicación</th><th>Obs.</th><th></th>
+    </tr></thead><tbody id="ext-lst"></tbody></table>
+  </div></div>
+
+  <div class="card"><div class="ch">3. Conclusión</div><div class="cb">
+    <div class="conc">
+      <label class="cop"><input type="radio" name="ec" value="ok" checked> ✅ Correcto sin anomalías</label>
+      <label class="cop"><input type="radio" name="ec" value="mal"> ⚠️ Con anomalías</label>
+    </div>
+    <div id="ea-box" style="display:none;margin-top:10px">
+      <div class="f"><label>Descripción anomalías</label><textarea id="ea"></textarea></div>
+    </div>
+  </div></div>
+</div>
+
+<!-- TAB 2: BIEs -->
+<div class="pane" id="p2">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+    <b>BIEs instaladas</b><button class="btn-add" onclick="addBIE()">+ Añadir BIE</button>
+  </div>
+  <div id="bie-cont"></div>
+
+  <div class="card" style="margin-top:14px"><div class="ch">Preguntas Generales BIEs</div><div class="cb">
+    <table class="ck-tbl"><thead><tr><th>PE</th><th>Pregunta</th><th style="width:130px;text-align:center">Resultado</th></tr></thead>
+    <tbody>
+      <tr><td><span class="pe">T</span></td><td>¿La señal de cada BIE es adecuada, visible e identificable?</td><td id="gc0"></td></tr>
+      <tr><td><span class="pe">T</span></td><td>¿La BIE es accesible y correctamente ubicada?</td><td id="gc1"></td></tr>
+      <tr><td><span class="pe">T</span></td><td>¿Válvula y boquilla a máximo 1,5 m del suelo?</td><td id="gc2"></td></tr>
+      <tr><td><span class="pe">T</span></td><td>¿A menos de 50 m de la BIE más próxima?</td><td id="gc3"></td></tr>
+      <tr><td><span class="pe">T</span></td><td>¿Cantidad de BIEs adecuada para cubrir todas las zonas?</td><td id="gc4"></td></tr>
+    </tbody></table>
+  </div></div>
+
+  <div class="card"><div class="ch">Conclusión BIEs</div><div class="cb">
+    <div class="conc">
+      <label class="cop"><input type="radio" name="bc" value="ok" checked> ✅ Correcto sin anomalías</label>
+      <label class="cop"><input type="radio" name="bc" value="mal"> ⚠️ Con anomalías</label>
+    </div>
+  </div></div>
+</div>
+
+<!-- TAB 3: Señalización -->
+<div class="pane" id="p3">
+  <div class="card"><div class="ch">1. Inspección Visual</div><div class="cb">
+    <table class="ck-tbl"><thead><tr><th>Nº</th><th>PE</th><th>Descripción</th><th style="width:150px;text-align:center">Resultado</th></tr></thead>
+    <tbody id="sen-chk"></tbody></table>
+  </div></div>
+
+  <div class="card"><div class="ch">2. Listado de Señales <button class="btn-add" onclick="addSenal()">+ Añadir</button></div>
+  <div class="cb" style="overflow-x:auto">
+    <table class="dt"><thead><tr><th style="width:60px">Nº</th><th>Tipo</th><th>Ubicación</th><th>Obs.</th><th></th></tr></thead>
+    <tbody id="sen-lst"></tbody></table>
+  </div></div>
+
+  <div class="card"><div class="ch">Conclusión Señalización</div><div class="cb">
+    <div class="conc">
+      <label class="cop"><input type="radio" name="sc" value="ok" checked> ✅ Correcto sin anomalías</label>
+      <label class="cop"><input type="radio" name="sc" value="mal"> ⚠️ Con anomalías</label>
+    </div>
+  </div></div>
+</div>
+
+<!-- TAB 4: Pulsadores -->
+<div class="pane" id="p4">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+    <b>Dispositivos de activación manual de alarma</b>
+    <button class="btn-add" onclick="addPul()">+ Añadir pulsador</button>
+  </div>
+  <div id="pul-cont"></div>
+
+  <div class="card" style="margin-top:14px"><div class="ch">Conclusión Pulsadores</div><div class="cb">
+    <div class="conc">
+      <label class="cop"><input type="radio" name="pc" value="ok" checked> ✅ Correcto sin anomalías</label>
+      <label class="cop"><input type="radio" name="pc" value="mal"> ⚠️ Con anomalías</label>
+    </div>
+  </div></div>
+</div>
+
+<div class="sbar">
+  <button class="btn-gen" id="gbtn" onclick="generar()">⬇ Generar Acta Excel</button>
+</div>
+<div id="msgbox" style="max-width:700px;margin:10px auto 90px;padding:0 18px"></div>
+
+<script>
+// ─── Tab switch ───────────────────────────────────────────────────────────────
+function ST(i){
+  document.querySelectorAll('.tab').forEach((t,j)=>t.classList.toggle('on',i===j));
+  document.querySelectorAll('.pane').forEach((p,j)=>p.classList.toggle('on',i===j));
+}
+
+// ─── Static data ──────────────────────────────────────────────────────────────
+const EXT_CHK = [
+  ["1.1","T","¿La señal de cada extintor es adecuada, visible e identificable y correctamente colocada?",true],
+  ["1.2","T","¿El extintor es accesible y está correctamente ubicado para acceder a él en caso de fuego?",true],
+  ["1.3","T","¿La altura desde el suelo es correcta (máximo 1,70 m)?",true],
+  ["1.4","T","Aspecto externo: ¿están exentos de corrosión, golpes, abolladuras, suciedad?",true],
+  ["1.5","T","¿Los precintos y seguros están intactos?",true],
+  ["1.6","T","¿El anclaje y soporte de fijación es correcto y seguro?",true],
+  ["1.7","T","¿Están en buen estado la manguera, boquilla, válvula y manómetro?",true],
+  ["1.8","T","La identificación y etiquetas (fabricación, retimbrado y mantenimiento) ¿son correctas?",true],
+  ["1.9","T","Comprobación del estado de la carga del extintor mediante pesada, ¿el peso es correcto?",true],
+  ["1.10","A","En extintores de presión adosada, desmontaje del botellín y pesaje ¿es correcto?",false],
+  ["1.11","A","¿Está retimbrado el extintor conforme al RAP?",false],
+  ["1.12","A","Comprobación del estado del agente extintor, ¿está exento de anomalías aparentes?",false],
+  ["1.13","A","Comprobación de la presión interior ¿es correcta?",false],
+  ["1.14","T","¿La cantidad, tipo y eficacia de los extintores es correcto conforme al uso y zona?",true],
+];
+
+const DEF_EXT = [
+  ["23-900684-PV","PI - 6 KGS",false,2023,2023,true,true,true,true,true,"ENTRADA NAVE IZQUIERDA"],
+  ["24-213533-PV","CO2 5KG",false,2024,2024,true,true,true,true,true,"OFICINA"],
+  ["24-685779-PV","PI - 6 KGS",false,2024,2024,true,true,true,true,true,"NAVE JUNTO BOTIQUÍN"],
+  ["24-685951-PV","PI - 6 KGS",false,2024,2024,true,true,true,true,true,"NAVE JUNTO DEPÓSITO"],
+  ["24-685987-PV","PI - 6 KGS",false,2024,2024,true,true,true,true,true,"NAVE PLANTA SUPERIOR"],
+  ["24-3445267-PV","PI-25KGS",false,2024,2024,true,true,true,true,true,"CARRO JUNTO ARMARIO"],
+];
+
+const BIE_CHK = [
+  "Diámetro tubería entrada",
+  "Estado del armario (limpieza)",
+  "Estado del cristal o precinto",
+  "Estado de la etiqueta RCDI",
+  "Estado de válvula de corte y juntas, ausencia de fugas de agua",
+  "Estado de la devanadera. La manguera se extrae y orienta fácilmente en cualquier dirección.",
+  "Lectura del Manómetro patrón",
+  "Lectura del Manómetro de la BIE",
+];
+
+const DEF_BIE = [
+  {n:"50700",fab:2025,tipo:25},
+  {n:"50571",fab:2025,tipo:25},
+];
+
+const SEN_CHK = [
+  ["1.1","A","¿Existen señales luminiscentes?","si"],
+  ["1.2","A","¿Es correcta la ubicación de las señales luminiscentes?","si"],
+  ["1.3","A","¿Es correcto el estado de limpieza, legibilidad e iluminación en la oscuridad de las señales luminiscentes?","si"],
+  ["1.4","A","¿Existen balizamientos?","no"],
+  ["1.5","A","¿Es correcta la ubicación de los balizamientos?","na"],
+  ["1.6","A","¿Es correcto el estado de limpieza, legibilidad e iluminación en la oscuridad de los balizamientos?","na"],
+  ["1.7","A","¿Existen planos de evacuación?","si"],
+  ["1.8","A","¿Es correcta la ubicación de los planos de evacuación?","si"],
+  ["1.9","A","¿Es correcto el estado de limpieza, legibilidad e iluminación en la oscuridad de los planos de evacuación?","si"],
+  ["1.10","A","Verificación del estado de los elementos de sujeción (anclajes, varillas, angulares, tornillería, adhesivos, etc.)","si"],
+];
+
+const DEF_SEN = [
+  [2,"SALIDA DE EMERGENCIA","OFICINA / NAVE"],
+  [2,"EVACUACIÓN","OFICINA / NAVE"],
+  [10,"PROTECCIÓN CONTRAINCENDIOS","OFICINA / NAVE"],
+];
+
+const PUL_CHK = ["Ubicación","Identificación","Visibilidad","Accesibilidad","Estado: fijación","Estado: limpieza","Estado: corrosión","Estado: aspecto exterior"];
+const DEF_PUL = ["PUERTA LATERAL NAVE IZQUIERDA","NAVE JUNTO ARMARIO"];
+
+// ─── Counters ─────────────────────────────────────────────────────────────────
+let eIdx=0, bIdx=0, sIdx=0, pIdx=0;
+let bIds=[], pIds=[];
+
+// ─── Render helpers ───────────────────────────────────────────────────────────
+const R=(n,v,checked)=>`<label class="cop" style="font-size:12px"><input type="radio" name="${n}" value="${v}" ${checked?'checked':''}> ${v.toUpperCase()}</label>`;
+
+function chkRow(id,pe,desc,defBien){
+  return `<tr><td>${id}</td><td><span class="pe ${pe}">${pe}</span></td><td style="font-size:12px">${desc}</td>
+  <td><div class="rg">${R('e'+id,'bien',defBien)}${R('e'+id,'mal',!defBien)}</div></td></tr>`;
+}
+function senChkRow(id,pe,desc,def){
+  return `<tr><td>${id}</td><td><span class="pe ${pe}">${pe}</span></td><td style="font-size:12px">${desc}</td>
+  <td><div class="rg">${R('s'+id,'si',def==='si')}${R('s'+id,'no',def==='no')}${R('s'+id,'na',def==='na')}</div></td></tr>`;
+}
+function genBool(tdId){
+  document.getElementById(tdId).innerHTML=`<div class="rg">${R('g'+tdId,'bien',true)}${R('g'+tdId,'mal',false)}</div>`;
+}
+
+// ─── Extintor table ───────────────────────────────────────────────────────────
+function selBM(id,trueVal,falseVal,dflt){
+  return `<select id="${id}"><option value="true" ${dflt?'selected':''}>${trueVal}</option><option value="false" ${!dflt?'selected':''}>${falseVal}</option></select>`;
+}
+function addExt(d){
+  d=d||{s:'',ef:'PI - 6 KGS',a:false,ff:new Date().getFullYear(),fr:new Date().getFullYear(),sn:true,mb:true,pr:true,ab:true,pb:true,u:'',o:''};
+  const i=eIdx++,tb=document.getElementById('ext-lst'),tr=document.createElement('tr');
+  tr.id='er'+i;
+  tr.innerHTML=`
+    <td><input id="es${i}" value="${d[0]||d.s||''}"></td>
+    <td><input id="ef${i}" value="${d[1]||d.ef||''}"></td>
+    <td>${selBM('ea'+i,'NO (≤1.7m)','SI (>1.7m)',!(d[2]??d.a))}</td>
+    <td><input id="eff${i}" type="number" value="${d[3]||d.ff||''}" style="width:65px"></td>
+    <td><input id="efr${i}" type="number" value="${d[4]||d.fr||''}" style="width:65px"></td>
+    <td>${selBM('esn'+i,'SI','NO',d[5]??d.sn??true)}</td>
+    <td>${selBM('emb'+i,'BIEN','MAL',d[6]??d.mb??true)}</td>
+    <td>${selBM('epr'+i,'SI','NO',d[7]??d.pr??true)}</td>
+    <td>${selBM('eab'+i,'BIEN','MAL',d[8]??d.ab??true)}</td>
+    <td>${selBM('epb'+i,'BIEN','MAL',d[9]??d.pb??true)}</td>
+    <td><input id="eu${i}" value="${d[10]||d.u||''}"></td>
+    <td><input id="eo${i}" value="${d[11]||d.o||''}" style="min-width:70px"></td>
+    <td><button class="btn-del" onclick="document.getElementById('er${i}').remove()">×</button></td>`;
+  tb.appendChild(tr);
+}
+
+// ─── BIE cards ────────────────────────────────────────────────────────────────
+function addBIE(d){
+  d=d||{n:'',fab:2025,tipo:25};
+  const i=bIdx++; bIds.push(i);
+  const chks=BIE_CHK.map((desc,ci)=>`<tr>
+    <td style="font-size:11px;color:#555;padding:4px 8px">${desc}</td>
+    <td style="padding:4px 8px"><div class="rg">${R('b'+i+'c'+ci,'bien',true)}${R('b'+i+'c'+ci,'mal',false)}</div></td>
+  </tr>`).join('');
+  const card=document.createElement('div');
+  card.className='bie'; card.id='bc'+i;
+  card.innerHTML=`<div class="bie-h">BIE ${i+1} &mdash; 
+    <input id="bn${i}" value="${d.n||d[0]||''}">
+    <div class="row" style="margin:0 0 0 auto;gap:8px;flex-wrap:nowrap">
+      <div class="f" style="min-width:90px"><label>F.Fabr.</label><input type="number" id="bf${i}" value="${d.fab||2025}" style="width:80px;padding:3px 6px"></div>
+      <div class="f" style="min-width:70px"><label>Tipo BIE</label><select id="bt${i}" style="padding:3px 6px"><option value="25" ${d.tipo!==45?'selected':''}>25mm</option><option value="45" ${d.tipo===45?'selected':''}>45mm</option></select></div>
+      <button class="btn-del" style="margin-top:16px" onclick="document.getElementById('bc${i}').remove();bIds=bIds.filter(x=>x!==${i})">×</button>
+    </div>
+  </div>
+  <div class="bie-b"><table class="ck-tbl"><thead><tr><th>Comprobación (T)</th><th style="width:130px;text-align:center">Resultado</th></tr></thead>
+  <tbody>${chks}</tbody></table></div>`;
+  document.getElementById('bie-cont').appendChild(card);
+}
+
+// ─── Señal rows ───────────────────────────────────────────────────────────────
+function addSenal(d){
+  d=d||[null,'',''];
+  const i=sIdx++,tb=document.getElementById('sen-lst'),tr=document.createElement('tr');
+  tr.id='sr'+i;
+  tr.innerHTML=`<td><input type="number" id="sq${i}" value="${d[0]||''}" style="width:55px"></td>
+    <td><input id="st${i}" value="${d[1]||''}"></td>
+    <td><input id="su${i}" value="${d[2]||''}"></td>
+    <td><input id="so${i}" value="" style="min-width:80px"></td>
+    <td><button class="btn-del" onclick="document.getElementById('sr${i}').remove()">×</button></td>`;
+  tb.appendChild(tr);
+}
+
+// ─── Pulsador cards ───────────────────────────────────────────────────────────
+function addPul(nombre){
+  nombre=nombre||'';
+  const i=pIdx++; pIds.push(i);
+  const chks=PUL_CHK.map((desc,ci)=>`<tr>
+    <td style="font-size:11px;color:#555;padding:4px 8px">${desc}</td>
+    <td style="padding:4px 8px"><div class="rg">${R('p'+i+'c'+ci,'bien',true)}${R('p'+i+'c'+ci,'mal',false)}</div></td>
+  </tr>`).join('');
+  const card=document.createElement('div');
+  card.className='bie'; card.id='pc'+i;
+  card.innerHTML=`<div class="bie-h">Pulsador ${i+1} &mdash; 
+    <input id="pn${i}" value="${nombre}" style="flex:1">
+    <button class="btn-del" onclick="document.getElementById('pc${i}').remove();pIds=pIds.filter(x=>x!==${i})">×</button>
+  </div>
+  <div class="bie-b"><table class="ck-tbl"><thead><tr><th>Comprobación (T)</th><th style="width:130px;text-align:center">Resultado</th></tr></thead>
+  <tbody>${chks}</tbody></table></div>`;
+  document.getElementById('pul-cont').appendChild(card);
+}
+
+// ─── Init ─────────────────────────────────────────────────────────────────────
+function init(){
+  const now=new Date();
+  document.getElementById('dia').value=now.getDate();
+  document.getElementById('anio').value=now.getFullYear();
+  const ms=["ENERO","FEBRERO","MARZO","ABRIL","MAYO","JUNIO","JULIO","AGOSTO","SEPTIEMBRE","OCTUBRE","NOVIEMBRE","DICIEMBRE"];
+  document.getElementById('mes').value=ms[now.getMonth()];
+
+  // Extintores
+  document.getElementById('ext-chk').innerHTML=EXT_CHK.map(c=>chkRow(c[0],c[1],c[2],c[3])).join('');
+  DEF_EXT.forEach(e=>addExt(e));
+  document.querySelectorAll('input[name="ec"]').forEach(r=>r.addEventListener('change',()=>{
+    document.getElementById('ea-box').style.display=document.querySelector('input[name="ec"]:checked').value==='mal'?'block':'none';
+  }));
+
+  // BIEs
+  DEF_BIE.forEach(b=>addBIE(b));
+  [0,1,2,3,4].forEach(i=>genBool('gc'+i));
+
+  // Señalización
+  document.getElementById('sen-chk').innerHTML=SEN_CHK.map(c=>senChkRow(c[0],c[1],c[2],c[3])).join('');
+  DEF_SEN.forEach(s=>addSenal(s));
+
+  // Pulsadores
+  DEF_PUL.forEach(n=>addPul(n));
+}
+
+// ─── Collect & send ───────────────────────────────────────────────────────────
+function gr(name){const e=document.querySelector(`input[name="${name}"]:checked`);return e?e.value:null;}
+function gb(n){const v=gr(n);return v==='bien'||v==='si';}
+
+function generar(){
+  const btn=document.getElementById('gbtn');
+  btn.disabled=true; btn.textContent='⏳ Generando...';
+  document.getElementById('msgbox').innerHTML='';
+
+  const ext_checks=EXT_CHK.map(c=>({id:c[0],bien:gr('e'+c[0])!=='mal',na:false}));
+
+  const ext_lista=[];
+  document.querySelectorAll('tr[id^="er"]').forEach(tr=>{
+    const i=tr.id.slice(2);
+    ext_lista.push({
+      serie:document.getElementById('es'+i).value,
+      eficacia:document.getElementById('ef'+i).value,
+      altura_ok:document.getElementById('ea'+i).value==='false',// false = NO = correcto
+      fecha_fabric:parseInt(document.getElementById('eff'+i).value)||null,
+      fecha_retimbr:parseInt(document.getElementById('efr'+i).value)||null,
+      senal:document.getElementById('esn'+i).value==='true',
+      manguera_bien:document.getElementById('emb'+i).value==='true',
+      precinto:document.getElementById('epr'+i).value==='true',
+      accesibilidad_bien:document.getElementById('eab'+i).value==='true',
+      peso_bien:document.getElementById('epb'+i).value==='true',
+      ubicacion:document.getElementById('eu'+i).value,
+      obs:document.getElementById('eo'+i).value,
+    });
+  });
+
+  const bie_lista=bIds.filter(i=>document.getElementById('bc'+i)).map(i=>({
+    nombre:document.getElementById('bn'+i).value,
+    fecha_fab:parseInt(document.getElementById('bf'+i).value)||null,
+    tipo:parseInt(document.getElementById('bt'+i).value)||25,
+    checks:BIE_CHK.map((_,ci)=>gr('b'+i+'c'+ci)!=='mal'),
+  }));
+
+  const bie_generales={
+    senal:gb('ggc0'),accesible:gb('ggc1'),altura_valvula:gb('ggc2'),menos50m:gb('ggc3'),cantidad:gb('ggc4'),
+  };
+
+  const sen_checks=SEN_CHK.map(c=>{
+    const v=gr('s'+c[0]);return{id:c[0],bien:v==='si',na:v==='na'};
+  });
+
+  const sen_lista=[];
+  document.querySelectorAll('tr[id^="sr"]').forEach(tr=>{
+    const i=tr.id.slice(2);
+    sen_lista.push({
+      cantidad:parseInt(document.getElementById('sq'+i).value)||null,
+      tipo:document.getElementById('st'+i).value,
+      ubicacion:document.getElementById('su'+i).value,
+      obs:document.getElementById('so'+i).value,
+    });
+  });
+
+  const pul_lista=pIds.filter(i=>document.getElementById('pc'+i)).map(i=>({
+    nombre:document.getElementById('pn'+i).value,
+    checks:PUL_CHK.map((_,ci)=>gr('p'+i+'c'+ci)!=='mal'),
+  }));
+
+  const payload={
+    sede:'pr',
+    dia:parseInt(document.getElementById('dia').value),
+    mes:document.getElementById('mes').value,
+    anio:parseInt(document.getElementById('anio').value),
+    responsable:document.getElementById('resp').value,
+    ext_checks,ext_lista,
+    ext_conclusion_ok:gr('ec')==='ok',
+    ext_anomalias:document.getElementById('ea')?.value||'',
+    bie_lista,bie_generales,bie_puestos:[],
+    bie_conclusion_ok:gr('bc')==='ok',
+    sen_checks,sen_lista,
+    sen_conclusion_ok:gr('sc')==='ok',
+    pul_lista,pul_conclusion_ok:gr('pc')==='ok',
+  };
+
+  fetch('/api/generar-acta-extintores/pr',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)})
+    .then(r=>r.json()).then(d=>{
+      if(d.status==='ok'){
+        document.getElementById('msgbox').innerHTML=`<div class="msg ok">✅ Acta generada correctamente.<br>
+          <a class="dl" href="${d.download_url}" download>⬇ Descargar ${d.filename}</a></div>`;
+      } else {
+        document.getElementById('msgbox').innerHTML=`<div class="msg err">❌ Error: ${JSON.stringify(d)}</div>`;
+      }
+    }).catch(e=>{
+      document.getElementById('msgbox').innerHTML=`<div class="msg err">❌ Error: ${e.message}</div>`;
+    }).finally(()=>{btn.disabled=false;btn.textContent='⬇ Generar Acta Excel';});
+}
+
+init();
+</script>
+</body>
+</html>

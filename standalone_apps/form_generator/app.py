@@ -44,6 +44,9 @@ from docx.oxml.ns import qn as _qn
 from docx.oxml import OxmlElement as _OxmlElement
 from docx.enum.text import WD_ALIGN_PARAGRAPH as _WD_ALIGN
 
+from app_extintores import router_extintores
+app.include_router(router_extintores)
+
 # Configuration
 SCHEMAS_DIR = Path(__file__).parent / "schemas"
 OUTPUT_DIR = Path(__file__).parent / "output"

@@ -94,7 +94,7 @@
     <div><a href="/">← Volver</a></div>
     <div>
       <h1>📋 BL Viewer — Conocimientos de Embarque</h1>
-      <p>AML · Balearia · DFDS · RFS · Trasmediterranea</p>
+      <p>AML · Balearia · DFDS · RFS · Trasmediterranea &nbsp;|&nbsp; Destino: ALGECIRAS</p>
     </div>
   </header>
 
@@ -120,18 +120,6 @@
         </select>
       </div>
       <div class="fg">
-        <label>Tipo</label>
-        <select id="f-tipo">
-          <option value="">Todos</option>
-          <option value="exp">Exportaciones (ALGECIRAS)</option>
-          <option value="imp">Importaciones (otros)</option>
-        </select>
-      </div>
-      <div class="fg">
-        <label>Puerto destino</label>
-        <input type="search" id="f-puerto" placeholder="Ej: ALGECIRAS, CEUTA…" style="width:160px;"/>
-      </div>
-      <div class="fg">
         <label>Estado</label>
         <select id="f-est">
           <option value="">Todos</option>
@@ -148,7 +136,7 @@
     </div>
 
     <div id="print-header">
-      <h2>📋 Conocimientos de Embarque</h2>
+      <h2>📋 Conocimientos de Embarque — ALGECIRAS</h2>
       <p id="print-meta"></p>
     </div>
 
@@ -166,15 +154,14 @@
 
   <script>
     const COLS = [
-      {k:'fecha',          h:'Fecha'},
-      {k:'hora',           h:'Hora'},
-      {k:'naviera',        h:'Naviera',        badge:true},
-      {k:'num_bl',         h:'Nº BL'},
-      {k:'nombre',         h:'Embarcador'},
-      {k:'buque',          h:'Buque'},
-      {k:'puerto_destino', h:'Destino'},
-      {k:'matricula',      h:'Matrícula',      mono:true},
-      {k:'archivo',        h:'Fichero',        pdf:true},
+      {k:'fecha',     h:'Fecha'},
+      {k:'hora',      h:'Hora'},
+      {k:'naviera',   h:'Naviera',   badge:true},
+      {k:'num_bl',    h:'Nº BL'},
+      {k:'nombre',    h:'Embarcador'},
+      {k:'buque',     h:'Buque'},
+      {k:'matricula', h:'Matrícula', mono:true},
+      {k:'archivo',   h:'Fichero',   pdf:true},
     ];
 
     // Columnas para el PDF exportado — sin FICHERO
@@ -226,13 +213,11 @@
       });
       // Tabla: todos los filtros
       const pTabla = new URLSearchParams({
-        naviera:        document.getElementById('f-nav').value,
-        fecha_desde:    document.getElementById('f-desde').value,
-        fecha_hasta:    document.getElementById('f-hasta').value,
-        q:              document.getElementById('f-q').value,
-        solo_hecho:     document.getElementById('f-est').value,
-        tipo:           document.getElementById('f-tipo').value,
-        puerto_destino: document.getElementById('f-puerto').value,
+        naviera:     document.getElementById('f-nav').value,
+        fecha_desde: document.getElementById('f-desde').value,
+        fecha_hasta: document.getElementById('f-hasta').value,
+        q:           document.getElementById('f-q').value,
+        solo_hecho:  document.getElementById('f-est').value,
       });
 
       try {
@@ -298,13 +283,11 @@
     }
 
     function limpiar() {
-      document.getElementById('f-nav').value    = '';
-      document.getElementById('f-tipo').value   = '';
-      document.getElementById('f-puerto').value = '';
-      document.getElementById('f-est').value    = '0';
-      document.getElementById('f-desde').value  = TODAY;
-      document.getElementById('f-hasta').value  = TODAY;
-      document.getElementById('f-q').value      = '';
+      document.getElementById('f-nav').value  = '';
+      document.getElementById('f-est').value  = '0';
+      document.getElementById('f-desde').value = TODAY;
+      document.getElementById('f-hasta').value = TODAY;
+      document.getElementById('f-q').value    = '';
       cargar();
     }
 
@@ -312,8 +295,6 @@
       const desde  = document.getElementById('f-desde').value;
       const hasta  = document.getElementById('f-hasta').value;
       const nav    = document.getElementById('f-nav').value;
-      const tipo   = document.getElementById('f-tipo').value;
-      const puerto = document.getElementById('f-puerto').value;
       const estado = document.getElementById('f-est').value;
       const count  = document.getElementById('count').textContent;
 
@@ -321,9 +302,6 @@
       const partes = [];
       if (desde || hasta) partes.push(`Período: ${desde || '—'} → ${hasta || '—'}`);
       if (nav)            partes.push(`Naviera: ${nav}`);
-      if (tipo === 'exp') partes.push('Exportaciones (ALGECIRAS)');
-      if (tipo === 'imp') partes.push('Importaciones (otros destinos)');
-      if (puerto)         partes.push(`Destino: ${puerto}`);
       if (estado === '0') partes.push('Estado: Pendientes');
       if (estado === '1') partes.push('Estado: Hechos');
       partes.push(`${count} registros`);
@@ -349,9 +327,6 @@
       }).join('');
 
       const win = window.open('', '_blank');
-      const tituloExport = tipo === 'exp' ? 'Exportaciones — ALGECIRAS'
-                         : tipo === 'imp' ? 'Importaciones — Otros destinos'
-                         : 'Conocimientos de Embarque';
       win.document.write(`<!doctype html>
 <html lang="es">
 <head>
@@ -380,7 +355,7 @@
 </head>
 <body>
 <div class="hdr">
-  <h1>${tituloExport}</h1>
+  <h1>Conocimientos de Embarque — ALGECIRAS</h1>
   <p>${partes.join('  ·  ')}</p>
 </div>
 <table>
