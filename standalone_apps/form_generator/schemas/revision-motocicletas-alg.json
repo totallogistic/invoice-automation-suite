@@ -33,19 +33,23 @@
       "title": "Kilometraje"
     },
     "revisionFrenos": {
-      "type": "boolean",
+      "type": "string",
+      "enum": ["✓", "X"],
       "title": "Revisión de Frenos"
     },
     "nivelAceite": {
-      "type": "boolean",
+      "type": "string",
+      "enum": ["✓", "X"],
       "title": "Nivel de Aceite"
     },
     "presionNeumaticos": {
-      "type": "boolean",
+      "type": "string",
+      "enum": ["✓", "X"],
       "title": "Presión de Neumáticos"
     },
     "luces": {
-      "type": "boolean",
+      "type": "string",
+      "enum": ["✓", "X"],
       "title": "Luces Funcionando"
     },
     "observaciones": {

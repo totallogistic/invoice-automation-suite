@@ -29,10 +29,7 @@
     "apiladora_baterias": {"type": "string", "title": "Apiladora - Baterías"},
     "apiladora_baterias_obs": {"type": "string", "title": "Apiladora - Baterías Obs"},
     "apiladora_engrase": {"type": "string", "title": "Apiladora - Engrase"},
-    "apiladora_engrase_obs": {"type": "string", "title": "Apiladora - Engrase Obs"},
-    
-    "furgon_engrase": {"type": "string", "title": "Furgón - Engrase"},
-    "furgon_engrase_obs": {"type": "string", "title": "Furgón - Engrase Obs"}
+    "apiladora_engrase_obs": {"type": "string", "title": "Apiladora - Engrase Obs"}
   },
   "required": [
     "mes",
@@ -46,7 +43,6 @@
     "carretilla_baterias",
     "carretilla_engrase",
     "apiladora_baterias",
-    "apiladora_engrase",
-    "furgon_engrase"
+    "apiladora_engrase"
   ]
 }
