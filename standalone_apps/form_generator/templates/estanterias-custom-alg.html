@@ -109,11 +109,28 @@
         }
         .check-item {
             display: flex;
-            align-items: center;
-            gap: 0.5rem;
+            flex-direction: column;
+            gap: 0.4rem;
         }
-        .check-item input {
+        .check-item .check-label {
+            font-weight: 600;
+            font-size: 0.9rem;
+            color: #374151;
+        }
+        .check-item .radio-group {
+            display: flex;
+            gap: 1rem;
+        }
+        .check-item .radio-group label {
+            display: flex;
+            align-items: center;
+            gap: 0.3rem;
+            font-weight: normal;
+            cursor: pointer;
+        }
+        .check-item .radio-group input[type="radio"] {
             width: auto;
+            cursor: pointer;
         }
         .zone-obs {
             margin-top: 1rem;
@@ -247,7 +264,6 @@
         const container = document.getElementById('zonasContainer');
 
         zonas.forEach(zona => {
-            const zoneId = zona.replace(/\s+/g, '-');
             const div = document.createElement('div');
             div.className = 'zone-row';
             div.dataset.zone = zona;
@@ -257,11 +273,45 @@
                     <span class="zone-name">${zona}</span>
                 </div>
                 <div class="checks-grid">
-                    <div class="check-item"><label><input type="checkbox" class="check-colocacion" data-zone="${zona}"> Colocación correcta</label></div>
-                    <div class="check-item"><label><input type="checkbox" class="check-accesibilidad" data-zone="${zona}"> Accesibilidad y señalización</label></div>
-                    <div class="check-item"><label><input type="checkbox" class="check-corrosion" data-zone="${zona}"> Sin corrosión en patas</label></div>
-                    <div class="check-item"><label><input type="checkbox" class="check-anclajes" data-zone="${zona}"> Anclajes al suelo correctos</label></div>
-                    <div class="check-item"><label><input type="checkbox" class="check-protecciones" data-zone="${zona}"> Protecciones contra golpes</label></div>
+                    <div class="check-item">
+                        <span class="check-label">Colocación correcta</span>
+                        <div class="radio-group">
+                            <label><input type="radio" name="colocacion_${zona}" value="✓" class="check-colocacion" data-zone="${zona}"> ✓ OK</label>
+                            <label><input type="radio" name="colocacion_${zona}" value="X" class="check-colocacion-nok" data-zone="${zona}"> ✗ NOK</label>
+                        </div>
+                    </div>
+                    <div class="check-item">
+                        <span class="check-label">Accesibilidad y señalización</span>
+                        <div class="radio-group">
+                            <label><input type="radio" name="accesibilidad_${zona}" value="✓" class="check-accesibilidad" data-zone="${zona}"> ✓ OK</label>
+                            <label><input type="radio" name="accesibilidad_${zona}" value="X" class="check-accesibilidad-nok" data-zone="${zona}"> ✗ NOK</label>
+                        </div>
+                    </div>
+                    <div class="check-item">
+                        <span class="check-label">Sin corrosión en patas</span>
+                        <div class="radio-group">
+                            <label><input type="radio" name="corrosion_${zona}" value="✓" class="check-corrosion" data-zone="${zona}"> ✓ OK</label>
+                            <label><input type="radio" name="corrosion_${zona}" value="X" class="check-corrosion-nok" data-zone="${zona}"> ✗ NOK</label>
+                        </div>
+                    </div>
+                    <div class="check-item">
+                        <span class="check-label">Anclajes al suelo correctos</span>
+                        <div class="radio-group">
+                            <label><input type="radio" name="anclajes_${zona}" value="✓" class="check-anclajes" data-zone="${zona}"> ✓ OK</label>
+                            <label><input type="radio" name="anclajes_${zona}" value="X" class="check-anclajes-nok" data-zone="${zona}"> ✗ NOK</label>
+                        </div>
+                    </div>
+                    <div class="check-item">
+                        <span class="check-label">Protecciones contra golpes</span>
+                        <div class="radio-group">
+                            <label><input type="radio" name="protecciones_${zona}" value="✓" class="check-protecciones" data-zone="${zona}"> ✓ OK</label>
+                            <label><input type="radio" name="protecciones_${zona}" value="X" class="check-protecciones-nok" data-zone="${zona}"> ✗ NOK</label>
+                        </div>
+                    </div>
+                </div>
+                <div class="zone-obs">
+                    <label>Observaciones</label>
+                    <textarea class="zone-obs-input" data-zone="${zona}" rows="2" placeholder="Observaciones para esta zona..."></textarea>
                 </div>
             `;
             container.appendChild(div);
@@ -275,9 +325,9 @@
                     zoneRow.classList.add('selected');
                 } else {
                     zoneRow.classList.remove('selected');
-                    zoneRow.querySelectorAll('input[type="checkbox"]:not(.zone-checkbox)').forEach(check => {
-                        check.checked = false;
-                    });
+                    zoneRow.querySelectorAll('input[type="radio"]').forEach(r => { r.checked = false; });
+                    const obs = zoneRow.querySelector('.zone-obs-input');
+                    if (obs) obs.value = '';
                 }
             });
         });
@@ -303,14 +353,19 @@
             zonas.forEach(zona => {
                 const checkbox = document.querySelector(`.zone-checkbox[data-zone="${zona}"]`);
                 if (checkbox && checkbox.checked) {
+                    const getRadio = (cls) => {
+                        const checked = document.querySelector(`input[name="${cls}_${zona}"]:checked`);
+                        return checked ? checked.value : '';
+                    };
+                    const obsInput = document.querySelector(`.zone-obs-input[data-zone="${zona}"]`);
                     filas.push({
                         fila: zona,
-                        colocacion: document.querySelector(`.check-colocacion[data-zone="${zona}"]`)?.checked ? '√' : 'X',
-                        accesibilidad: document.querySelector(`.check-accesibilidad[data-zone="${zona}"]`)?.checked ? '√' : 'X',
-                        corrosion: document.querySelector(`.check-corrosion[data-zone="${zona}"]`)?.checked ? '√' : 'X',
-                        anclajes: document.querySelector(`.check-anclajes[data-zone="${zona}"]`)?.checked ? '√' : 'X',
-                        protecciones: document.querySelector(`.check-protecciones[data-zone="${zona}"]`)?.checked ? '√' : 'X',
-                        observaciones: ''
+                        colocacion: getRadio('colocacion'),
+                        accesibilidad: getRadio('accesibilidad'),
+                        corrosion: getRadio('corrosion'),
+                        anclajes: getRadio('anclajes'),
+                        protecciones: getRadio('protecciones'),
+                        observaciones: obsInput ? obsInput.value : ''
                     });
                 }
             });
