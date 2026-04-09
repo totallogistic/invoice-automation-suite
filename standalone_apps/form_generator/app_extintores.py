@@ -242,8 +242,9 @@ def _fill_pul_pr(d, ws):
 
 router_extintores = APIRouter()
 
-TEMPLATE_DIR = os.path.join(os.path.dirname(__file__), "templates")
-OUTPUT_DIR   = os.path.join(os.path.dirname(__file__), "output")
+TEMPLATE_DIR    = os.path.join(os.path.dirname(__file__), "templates")
+OUTPUT_DIR      = os.path.join(os.path.dirname(__file__), "output")
+EXCEL_STORAGE_DIR = os.path.join(os.path.dirname(__file__), "excel_storage")
 
 @router_extintores.post("/api/generar-acta-extintores/{sede}")
 async def generar_acta(sede: str, data: ExtintoresPayload):
@@ -256,6 +257,7 @@ async def generar_acta(sede: str, data: ExtintoresPayload):
         raise HTTPException(500, f"Template no encontrado: template-extintores-{sede}.xlsx")
 
     os.makedirs(OUTPUT_DIR, exist_ok=True)
+    os.makedirs(EXCEL_STORAGE_DIR, exist_ok=True)
     ts  = datetime.now().strftime("%Y%m%d_%H%M%S")
     out_name = f"Acta_Extintores_{'PR' if sede=='pr' else 'MLG'}_{data.anio}_T{_trimestre(data.mes)}_{ts}.xlsx"
     out_path = os.path.join(OUTPUT_DIR, out_name)
@@ -281,4 +283,9 @@ async def generar_acta(sede: str, data: ExtintoresPayload):
                   [64,65,66,67,68,69,70,71,72,73], 86, 124)
 
     wb.save(out_path)
+
+    # También guardar en excel_storage (igual que el resto de formularios)
+    storage_path = os.path.join(EXCEL_STORAGE_DIR, out_name)
+    shutil.copy2(out_path, storage_path)
+
     return {"status":"ok","filename":out_name,"download_url":f"/download/{out_name}"}
