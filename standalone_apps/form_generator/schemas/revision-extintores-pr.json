@@ -1,0 +1,9 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Revisión Extintores/BIEs/Señalización – Puerto Real",
+  "description": "Acta trimestral PCI",
+  "category": "🔥 PCI",
+  "custom_template": "revision-extintores-pr.html",
+  "type": "object",
+  "properties": {}
+}

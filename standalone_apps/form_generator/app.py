@@ -44,6 +44,8 @@ from docx.oxml.ns import qn as _qn
 from docx.oxml import OxmlElement as _OxmlElement
 from docx.enum.text import WD_ALIGN_PARAGRAPH as _WD_ALIGN
 
+
+
 # Configuration
 SCHEMAS_DIR = Path(__file__).parent / "schemas"
 OUTPUT_DIR = Path(__file__).parent / "output"
@@ -75,6 +77,8 @@ app = FastAPI(title="JSON Schema Form Generator", version="1.0")
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 templates = Jinja2Templates(directory=TEMPLATES_DIR)
 
+from app_extintores import router_extintores
+app.include_router(router_extintores)
 
 def send_email_with_json(to_email: str, subject: str, schema_name: str, data: dict, json_path: str):
     """
