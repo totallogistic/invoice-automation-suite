@@ -210,16 +210,6 @@
                         </select>
                     </div>
                     <div class="form-group">
-                        <label>Nave *</label>
-                        <select id="nave" required>
-                            <option value="">Seleccionar...</option>
-                            <option value="NAVE 1T">NAVE 1T</option>
-                            <option value="NAVE 2T">NAVE 2T</option>
-                            <option value="NAVE 3T">NAVE 3T</option>
-                            <option value="NAVE 4T">NAVE 4T</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
                         <label>Trimestre *</label>
                         <select id="trimestre" required>
                             <option value="">Seleccionar...</option>
@@ -616,7 +606,6 @@
 
             const fechaRevision = document.getElementById('fechaRevision').value;
             const responsable = document.getElementById('responsable').value;
-            const nave = document.getElementById('nave').value;
             const trimestre = document.getElementById('trimestre').value;
             const observacionesGenerales = document.getElementById('observacionesGenerales').value;
 
@@ -652,7 +641,7 @@
             const data = {
                 fechaRevision,
                 responsable,
-                nave,
+                nave: 'MÁLAGA',
                 trimestre,
                 observacionesGenerales,
                 filas
