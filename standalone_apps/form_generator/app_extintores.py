@@ -65,6 +65,7 @@ class SenalEntry(BaseModel):
     tipo: str = ""
     ubicacion: str = ""
     obs: str = ""
+    estado: str = "correcto"   # "correcto" | "revisar"
 
 class ExtintoresPayload(BaseModel):
     sede: str
@@ -223,6 +224,7 @@ def _fill_sen(d, ws, check_rows, start_row, conc_row):
         if s.cantidad is not None: _w(ws,r,1,s.cantidad)
         _w(ws,r,5,s.tipo); _w(ws,r,33,s.ubicacion)
         if s.obs: _w(ws,r,40,s.obs)
+        _w(ws,r,44,s.estado)  # Estado: correcto / revisar
     if d.sen_conclusion_ok: _w(ws,conc_row,6,"X")
 
 # ── Fill: pulsadores ──────────────────────────────────────────────────────────

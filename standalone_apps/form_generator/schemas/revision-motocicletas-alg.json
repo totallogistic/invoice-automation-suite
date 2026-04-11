@@ -32,24 +32,44 @@
       "type": "number",
       "title": "Kilometraje"
     },
+    "aspectoLimpieza": {
+      "type": "string",
+      "enum": [
+        "✓",
+        "X"
+      ],
+      "title": "Aspecto General / Limpieza"
+    },
     "revisionFrenos": {
       "type": "string",
-      "enum": ["✓", "X"],
+      "enum": [
+        "✓",
+        "X"
+      ],
       "title": "Revisión de Frenos"
     },
     "nivelAceite": {
       "type": "string",
-      "enum": ["✓", "X"],
+      "enum": [
+        "✓",
+        "X"
+      ],
       "title": "Nivel de Aceite"
     },
     "presionNeumaticos": {
       "type": "string",
-      "enum": ["✓", "X"],
+      "enum": [
+        "✓",
+        "X"
+      ],
       "title": "Presión de Neumáticos"
     },
     "luces": {
       "type": "string",
-      "enum": ["✓", "X"],
+      "enum": [
+        "✓",
+        "X"
+      ],
       "title": "Luces Funcionando"
     },
     "observaciones": {

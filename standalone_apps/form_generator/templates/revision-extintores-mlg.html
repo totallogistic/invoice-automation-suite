@@ -163,7 +163,7 @@ a.dl{display:inline-block;background:var(--green);color:#fff;padding:9px 18px;bo
 
   <div class="card"><div class="ch">2. Listado de Señales <button class="btn-add" onclick="addSenal()">+ Añadir</button></div>
   <div class="cb" style="overflow-x:auto">
-    <table class="dt"><thead><tr><th>Tipo</th><th>Ubicación</th><th>Obs.</th><th></th></tr></thead>
+    <table class="dt"><thead><tr><th>Tipo</th><th>Ubicación</th><th>Obs.</th><th style="width:140px;text-align:center">Estado</th><th></th></tr></thead>
     <tbody id="sen-lst"></tbody></table>
   </div></div>
 
@@ -346,6 +346,15 @@ function addSenal(d){
     <td><input id="st${i}" value="${d[0]||''}"></td>
     <td><input id="su${i}" value="${d[1]||''}"></td>
     <td><input id="so${i}" value="" style="min-width:80px"></td>
+    <td style="text-align:center;white-space:nowrap">
+      <label style="display:inline-flex;align-items:center;gap:3px;cursor:pointer;font-size:12px;font-weight:600;color:#27ae60">
+        <input type="radio" name="ss${i}" value="correcto" checked style="accent-color:#27ae60"> ✓
+      </label>
+      &nbsp;
+      <label style="display:inline-flex;align-items:center;gap:3px;cursor:pointer;font-size:12px;font-weight:600;color:#e74c3c">
+        <input type="radio" name="ss${i}" value="revisar" style="accent-color:#e74c3c"> ⚠
+      </label>
+    </td>
     <td><button class="btn-del" onclick="document.getElementById('sr${i}').remove()">×</button></td>`;
   tb.appendChild(tr);
 }
@@ -429,6 +438,7 @@ function generar(){
       tipo:document.getElementById('st'+i).value,
       ubicacion:document.getElementById('su'+i).value,
       obs:document.getElementById('so'+i).value,
+      estado:document.querySelector(`input[name="ss${i}"]:checked`)?.value||'correcto',
     });
   });
 
