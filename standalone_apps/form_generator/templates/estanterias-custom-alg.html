@@ -208,16 +208,7 @@
                             <option value="DANIEL ALFARO DIAZ">DANIEL ALFARO DIAZ</option>
                         </select>
                     </div>
-                    <div class="form-group">
-                        <label>Nave *</label>
-                        <select id="nave" required>
-                            <option value="">Seleccionar...</option>
-                            <option value="NAVE 1T25">NAVE 1T25</option>
-                            <option value="NAVE 2T25">NAVE 2T25</option>
-                            <option value="NAVE 3T25">NAVE 3T25</option>
-                            <option value="NAVE 4T25">NAVE 4T25</option>
-                        </select>
-                    </div>
+
                     <div class="form-group">
                         <label>Trimestre *</label>
                         <select id="trimestre" required>
@@ -337,11 +328,10 @@
 
             const fechaRevision = document.getElementById('fechaRevision').value;
             const responsable = document.getElementById('responsable').value;
-            const nave = document.getElementById('nave').value;
             const trimestre = document.getElementById('trimestre').value;
             const observacionesGenerales = document.getElementById('observacionesGenerales').value;
 
-            if (!fechaRevision || !responsable || !nave || !trimestre) {
+            if (!fechaRevision || !responsable || !trimestre) {
                 const msg = document.getElementById('message');
                 msg.textContent = 'Por favor completa todos los campos obligatorios';
                 msg.className = 'message error';
@@ -375,7 +365,7 @@
                 return;
             }
 
-            const data = { fechaRevision, responsable, nave, trimestre, observacionesGenerales, filas };
+            const data = { fechaRevision, responsable, nave: 'ALGECIRAS', trimestre, observacionesGenerales, filas };
 
             try {
                 const response = await fetch('/api/save-estanterias-completo?sede=alg', {
