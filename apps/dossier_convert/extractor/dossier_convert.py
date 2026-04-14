@@ -236,7 +236,7 @@ def parse_desglose(csv_path: Path) -> list[DesgloseRow]:
         missing = {k for k in ("taric", "price", "gross_weight", "net_weight", "boxes")
                    if k not in mapped}
         if missing:
-            print(f"[WARN] Fila {i}: columnas no reconocidas ignoradas ({missing})", file=sys.stderr)
+            print(f"[WARN] Fila {i}: columnas requeridas no encontradas, fila ignorada ({missing})", file=sys.stderr)
             continue
 
         price = _parse_decimal(mapped.get("price", "0"))
@@ -441,7 +441,7 @@ def generate_convert(
         print(f"[INFO] {skipped} filas omitidas (PRICE = 0)", file=sys.stderr)
 
     if not valid_rows:
-        print("[WARN] No hay filas válidas. Fichero de salida vacío.", file=sys.stderr)
+        print("[WARN] No hay filas válidas. Se generará el fichero de salida solo con cabecera.", file=sys.stderr)
 
     # 2. Construir filas de salida
     cabecera = _cabecera_row(cfg, valid_rows, fecha_doc)
