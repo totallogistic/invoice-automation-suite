@@ -122,6 +122,11 @@ def bl_version():
     path = "/app/apps/bl/extractor/extract_bl.py"
     return {"version": _read_script_version(path), "changelog": _read_script_changelog(path)}
 
+@app.get("/api/export_visual/version")
+def export_visual_version():
+    path = "/app/apps/export_visual/extractor/export_visual.py"
+    return {"version": _read_script_version(path), "changelog": _read_script_changelog(path)}
+
 # ── Shared ZIP download helper ────────────────────────────────────────────────
 
 def _zip_batch_download(tool_name: str, batch_id: str, zip_prefix: str) -> StreamingResponse:
@@ -185,6 +190,7 @@ async def create_batch(
     skip_validation: str = Form("0"),
     run_t1:          str = Form("1"),
     run_dae:         str = Form("1"),
+    cliente: str = Form("aldi"),
 ):
     """Create new batch."""
     tool = registry.get_tool(tool_name)
@@ -210,7 +216,9 @@ async def create_batch(
                 (batch_inbox / "_SKIP_T1").write_text("1", encoding="utf-8")
             if not run_dae_flag:
                 (batch_inbox / "_SKIP_DAE").write_text("1", encoding="utf-8")
-
+            if tool_name == "export_visual":
+                cliente_val = str(cliente).strip() or "aldi"
+                (batch_inbox / "_CLIENTE.txt").write_text(cliente_val, encoding="utf-8")
         file_count = 0
         for upload_file in files:
             content = await upload_file.read()

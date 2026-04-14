@@ -41,6 +41,7 @@ class ToolConfig:
     camion_mode: bool = False
     croton_import_mode: bool = False
     bl_mode: bool = False
+    export_visual_mode: bool = False
 
 class ToolRegistry:
     """Registry of all available tools."""
@@ -91,7 +92,7 @@ class ToolRegistry:
                 camion_mode=tool_data.get("extractor", {}).get("camion_mode", False),
                 croton_import_mode=tool_data.get("extractor", {}).get("croton_import_mode", False),
                 bl_mode=tool_data.get("extractor", {}).get("bl_mode", False),
-
+                export_visual_mode=tool_data.get("extractor", {}).get("export_visual_mode", False),
             )
             
             # Ensure directories exist

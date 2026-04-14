@@ -233,6 +233,10 @@ class UnifiedProcessor:
             )
         elif tool.bl_mode:
             cmd = self._build_bl_cmd(tool, files)
+
+        elif tool.export_visual_mode:
+            cmd = self._build_export_visual_cmd(tool, files, output_path)
+
         else:
             cmd = [
                 "python3",
@@ -410,6 +414,42 @@ class UnifiedProcessor:
             "--xlsx", str(xlsx_files[0]),
             "--output", str(output_path),
         ]
+
+    def _build_export_visual_cmd(self, tool: ToolConfig, files: List[Path], output_path: Path) -> List[str]:
+            """
+            Modo export_visual: lee el CSV de partidas del cliente y genera el CONVERT.
+            El cliente y la fecha opcional se leen de ficheros marcadores en el batch.
+            """
+            csv_files = [f for f in files if f.suffix.lower() == ".csv"]
+            if len(csv_files) != 1:
+                raise RuntimeError(
+                    f"[{tool.name}] export_visual_mode espera exactamente 1 CSV, "
+                    f"recibió {len(csv_files)}: {[f.name for f in csv_files]}"
+                )
+    
+            # Leer cliente del marcador _CLIENTE.txt (por defecto: aldi)
+            cliente_marker = output_path.parent.parent / "processing" / output_path.name / "_CLIENTE.txt"
+            # El processing_path es el directorio del batch; buscamos el marcador allí
+            # Nota: en _run_extractor se llama con processing_path como base,
+            # pero aquí recibimos output_path. Buscamos el marcador via el inbox original.
+            # Solución simple: el marcador se guarda como fichero en el mismo batch junto al CSV.
+            batch_dir = csv_files[0].parent
+            cliente_file = batch_dir / "_CLIENTE.txt"
+            cliente = cliente_file.read_text(encoding="utf-8").strip() if cliente_file.exists() else "aldi"
+    
+            fecha_file = batch_dir / "_FECHA.txt"
+            fecha = fecha_file.read_text(encoding="utf-8").strip() if fecha_file.exists() else None
+    
+            cmd = [
+                "python3", str(tool.extractor_path),
+                str(csv_files[0]),
+                "-o", str(output_path),
+                "--cliente", cliente,
+            ]
+            if fecha:
+                cmd += ["--fecha", fecha]
+    
+            return cmd
 
     def _get_recipients(self, tool_name: str) -> List[str]:
         tool_key = f"MAIL_TO_{tool_name.upper()}"
