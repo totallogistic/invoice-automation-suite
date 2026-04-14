@@ -11,22 +11,38 @@ Uso:
     python3 bl_mail_fetcher.py --since-hours 12 # ventana custom de últimas 12 horas
 
 Variables de entorno (todas en .env.prod):
-    GMAIL_USER_LEAR         tls-lear@totallogistic.es
-    GMAIL_APP_PASSWORD_LEAR contraseña de aplicación de 16 caracteres
-    GMAIL_LABEL             Label de Gmail a buscar (default: BL)
-    BL_INBOX                Carpeta donde dejar los PDFs (default: /data/bl/inbox)
+    GMAIL_USER_LEAR            tls-lear@totallogistic.es
+    GMAIL_APP_PASSWORD_LEAR    contraseña de aplicación de 16 caracteres
+    GMAIL_LABEL                Label de Gmail a buscar (default: BL)
+    BL_INBOX                   Carpeta donde dejar los PDFs (default: /data/bl/inbox)
     BL_MAIL_WINDOW_START_HOUR  Hora inicio ventana día anterior (default: 22)
     BL_MAIL_WINDOW_END_HOUR    Hora fin ventana hoy (default: 8)
     BL_MAIL_WINDOW_END_MIN     Minuto fin ventana hoy (default: 59)
+
+    ── Nuevas variables para reenvío a Zammad ───────────────────────────────
+    BL_FORWARD_ENABLED         Activar reenvío: "true" / "false" (default: false)
+    BL_FORWARD_TO              Destino del reenvío (default: miguel.pino@codeengtools.eu)
+    BL_FORWARD_DELETE_ORIGINAL Borrar original tras reenvío: "true" / "false" (default: false)
+    BL_FORWARD_SMTP_HOST       SMTP host para reenvío (default: smtp.gmail.com)
+    BL_FORWARD_SMTP_PORT       SMTP port (default: 587)
+
+    Fases de validación:
+      Fase 1 — BL_FORWARD_ENABLED=true, BL_FORWARD_TO=miguel.pino@codeengtools.eu, BL_FORWARD_DELETE_ORIGINAL=false
+      Fase 2 — BL_FORWARD_ENABLED=true, BL_FORWARD_TO=tls-lear@totallogistic.es,  BL_FORWARD_DELETE_ORIGINAL=false
+      Fase 3 — BL_FORWARD_ENABLED=true, BL_FORWARD_TO=tls-lear@totallogistic.es,  BL_FORWARD_DELETE_ORIGINAL=true
 """
 
 import argparse
 import email
+import email.utils
 import imaplib
 import logging
 import os
+import smtplib
 import sys
 from datetime import datetime, timedelta, timezone
+from email.header import decode_header as _decode_header
+from email.utils import parsedate_to_datetime
 from pathlib import Path
 
 logging.basicConfig(
@@ -45,6 +61,14 @@ WINDOW_START_HOUR  = int(os.getenv("BL_MAIL_WINDOW_START_HOUR", "22"))
 WINDOW_END_HOUR    = int(os.getenv("BL_MAIL_WINDOW_END_HOUR",   "8"))
 WINDOW_END_MIN     = int(os.getenv("BL_MAIL_WINDOW_END_MIN",    "59"))
 
+# ── Config reenvío ────────────────────────────────────────────────────────────
+FORWARD_ENABLED         = os.getenv("BL_FORWARD_ENABLED",         "false").lower() == "true"
+FORWARD_TO              = os.getenv("BL_FORWARD_TO",              "miguel.pino@codeengtools.eu")
+FORWARD_DELETE_ORIGINAL = os.getenv("BL_FORWARD_DELETE_ORIGINAL", "false").lower() == "true"
+FORWARD_SMTP_HOST       = os.getenv("BL_FORWARD_SMTP_HOST",       "smtp.gmail.com")
+FORWARD_SMTP_PORT       = int(os.getenv("BL_FORWARD_SMTP_PORT",   "587"))
+FORWARD_SUBJECT_PREFIX  = "[BL] "
+
 # ── Filtros de nombre de fichero ──────────────────────────────────────────────
 PALABRAS_SI = ["bl", "bill", "lading", "conocimiento", "embarque", "con_emb"]
 PALABRAS_NO = ["peticion", "request", "booking", "nota", "instrucciones", "draft",
@@ -58,13 +82,7 @@ def ventana_tiempo(
     to_hour: int | None = None,
     to_min: int = 59,
 ) -> tuple[datetime, datetime]:
-    """Calcula la ventana de tiempo para buscar emails.
-
-    Prioridad:
-      1. since_hours  → últimas N horas desde ahora
-      2. from_hour / to_hour → ventana explícita (hoy si to_hour > from_hour, si no ayer→hoy)
-      3. Variables de entorno / defaults del módulo
-    """
+    """Calcula la ventana de tiempo para buscar emails."""
     ahora = datetime.now(timezone.utc)
 
     if since_hours is not None:
@@ -77,7 +95,6 @@ def ventana_tiempo(
 
     hasta = ahora.replace(hour=th, minute=tm, second=59, microsecond=0)
 
-    # Si from_hour > to_hour el inicio es el día anterior (ventana nocturna: ej 22→09)
     if fh > th:
         desde = (ahora - timedelta(days=1)).replace(hour=fh, minute=fm, second=0, microsecond=0)
     else:
@@ -90,21 +107,98 @@ def filtrar_adjunto(nombre: str) -> bool:
     """Devuelve True si el adjunto debe descargarse."""
     nombre_low = nombre.lower()
 
-    # Solo PDF
     if not nombre_low.endswith(".pdf"):
         return False
 
-    # Debe contener alguna palabra clave
     tiene_si = any(p in nombre_low for p in PALABRAS_SI)
     if not tiene_si:
         log.info("  IGNORADO (sin palabras clave): %s", nombre)
         return False
 
-    # No debe contener palabras excluidas
     tiene_no = any(p in nombre_low for p in PALABRAS_NO)
     if tiene_no:
         log.info("  IGNORADO (palabra excluida): %s", nombre)
         return False
+
+    return True
+
+
+def _decode_str(s: str) -> str:
+    """Decodifica un header MIME."""
+    decoded = _decode_header(s)
+    return "".join(
+        chunk.decode(enc or "utf-8") if isinstance(chunk, bytes) else chunk
+        for chunk, enc in decoded
+    )
+
+
+def _reenviar_email(
+    imap_conn: imaplib.IMAP4_SSL,
+    msg_id: bytes,
+    msg: email.message.Message,
+    msg_raw: bytes,
+    dry_run: bool = False,
+) -> bool:
+    """
+    Reenvía el email original a FORWARD_TO con [BL] prepended al asunto.
+    Si FORWARD_DELETE_ORIGINAL=true, mueve el original a Trash tras reenviar.
+    Devuelve True si el reenvío fue exitoso.
+    """
+    asunto_original = msg.get("Subject", "")
+    # Decodificar asunto si está encoded
+    try:
+        asunto_original = _decode_str(asunto_original)
+    except Exception:
+        pass
+
+    nuevo_asunto = f"{FORWARD_SUBJECT_PREFIX}{asunto_original}"
+
+    if dry_run:
+        log.info("  [DRY-RUN] Reenviaría a %s con asunto: %s", FORWARD_TO, nuevo_asunto[:60])
+        return True
+
+    # Construir mensaje de reenvío — clonar el original y cambiar headers
+    try:
+        msg_reenvio = email.message_from_bytes(msg_raw)
+
+        # Actualizar headers clave
+        if "Subject" in msg_reenvio:
+            msg_reenvio.replace_header("Subject", nuevo_asunto)
+        else:
+            msg_reenvio["Subject"] = nuevo_asunto
+
+        if "To" in msg_reenvio:
+            msg_reenvio.replace_header("To", FORWARD_TO)
+        else:
+            msg_reenvio["To"] = FORWARD_TO
+
+        # Mantener el From original para contexto — añadir X-Forwarded-From
+        from_original = msg.get("From", "")
+        msg_reenvio["X-Forwarded-From"] = from_original
+        msg_reenvio["X-BL-Fetcher"] = "bl_mail_fetcher/zammad-forward"
+
+        # Enviar via SMTP
+        with smtplib.SMTP(FORWARD_SMTP_HOST, FORWARD_SMTP_PORT) as smtp:
+            smtp.ehlo()
+            smtp.starttls()
+            smtp.login(GMAIL_USER, GMAIL_PASSWORD)
+            smtp.sendmail(GMAIL_USER, [FORWARD_TO], msg_reenvio.as_bytes())
+
+        log.info("  REENVIADO → %s | Asunto: %s", FORWARD_TO, nuevo_asunto[:60])
+
+    except Exception as e:
+        log.error("  ERROR en reenvío: %s", e)
+        return False
+
+    # Fase 3 — borrar original (solo si FORWARD_DELETE_ORIGINAL=true)
+    if FORWARD_DELETE_ORIGINAL:
+        try:
+            # En Gmail via IMAP: quitar label BL + mover a Trash
+            imap_conn.store(msg_id, "-X-GM-LABELS", f"\\{GMAIL_LABEL}")
+            imap_conn.store(msg_id, "+X-GM-LABELS", "\\Trash")
+            log.info("  ORIGINAL eliminado (movido a Trash)")
+        except Exception as e:
+            log.error("  ERROR eliminando original: %s — el reenvío sí se realizó", e)
 
     return True
 
@@ -127,6 +221,12 @@ def descargar_adjuntos(
     log.info("Ventana: %s → %s", desde.strftime("%Y-%m-%d %H:%M UTC"), hasta.strftime("%Y-%m-%d %H:%M UTC"))
     log.info("Label: %s | Inbox: %s", GMAIL_LABEL, BL_INBOX)
 
+    if FORWARD_ENABLED:
+        log.info("Reenvío: ACTIVADO → %s | Borrar original: %s",
+                 FORWARD_TO, "SÍ" if FORWARD_DELETE_ORIGINAL else "NO")
+    else:
+        log.info("Reenvío: DESACTIVADO (BL_FORWARD_ENABLED=false)")
+
     BL_INBOX.mkdir(parents=True, exist_ok=True)
 
     # Conectar a Gmail
@@ -139,7 +239,6 @@ def descargar_adjuntos(
         sys.exit(1)
 
     # Seleccionar label
-    # Gmail labels en IMAP usan formato especial para labels con espacios
     label_imap = GMAIL_LABEL if " " not in GMAIL_LABEL else f'"{GMAIL_LABEL}"'
     status, _ = mail.select(label_imap)
     if status != "OK":
@@ -147,7 +246,7 @@ def descargar_adjuntos(
         mail.logout()
         sys.exit(1)
 
-    # Buscar emails por fecha (IMAP usa fecha sin hora, filtramos por hora en código)
+    # Buscar emails por fecha
     fecha_desde_str = desde.strftime("%d-%b-%Y")
     fecha_hasta_str = (hasta + timedelta(days=1)).strftime("%d-%b-%Y")
     search_criteria = f'(SINCE "{fecha_desde_str}" BEFORE "{fecha_hasta_str}")'
@@ -161,29 +260,19 @@ def descargar_adjuntos(
     ids = message_ids[0].split()
     log.info("Emails encontrados en label %s: %d", GMAIL_LABEL, len(ids))
 
-    descargados = 0
-    ignorados   = 0
-
-    from email.utils import parsedate_to_datetime
-    from email.header import decode_header as _decode_header
-
-    def _decode_str(s: str) -> str:
-        decoded = _decode_header(s)
-        return "".join(
-            chunk.decode(enc or "utf-8") if isinstance(chunk, bytes) else chunk
-            for chunk, enc in decoded
-        )
+    descargados  = 0
+    ignorados    = 0
+    reenviados   = 0
 
     for msg_id in ids:
         try:
-            # ── Paso 1: solo cabeceras (bytes, no MB) ────────────────────────────
+            # ── Paso 1: solo cabeceras ────────────────────────────────────────
             status, hdr_data = mail.fetch(msg_id, "(BODY[HEADER])")
             if status != "OK":
                 continue
 
             hdr = email.message_from_bytes(hdr_data[0][1])
 
-            # Filtro temporal — sin descargar adjuntos
             fecha_str = hdr.get("Date", "")
             try:
                 fecha_email = parsedate_to_datetime(fecha_str)
@@ -201,19 +290,18 @@ def descargar_adjuntos(
             log.info("Email: %s | %s",
                      fecha_email.strftime("%Y-%m-%d %H:%M UTC"), hdr.get("Subject", "")[:60])
 
-            # ── Paso 2: estructura MIME sin cuerpo (solo metadata de partes) ─────
+            # ── Paso 2: BODYSTRUCTURE ─────────────────────────────────────────
             status, struct_data = mail.fetch(msg_id, "(BODYSTRUCTURE)")
             if status != "OK":
                 continue
 
-            # ── Paso 3: mensaje completo solo si tiene adjuntos PDF candidatos ───
-            # Para simplificar el parsing de BODYSTRUCTURE usamos RFC822 solo
-            # para los emails que pasaron el filtro temporal — ya son pocos.
+            # ── Paso 3: RFC822 completo ───────────────────────────────────────
             status, msg_data = mail.fetch(msg_id, "(RFC822)")
             if status != "OK":
                 continue
 
-            msg = email.message_from_bytes(msg_data[0][1])
+            msg_raw = msg_data[0][1]
+            msg     = email.message_from_bytes(msg_raw)
 
         except imaplib.IMAP4.abort as e:
             if "OVERQUOTA" in str(e):
@@ -226,7 +314,9 @@ def descargar_adjuntos(
             log.warning("Error procesando email %s: %s — continuando", msg_id, e)
             continue
 
-        # Procesar adjuntos
+        # ── Procesar adjuntos ─────────────────────────────────────────────────
+        descargados_este_email = 0
+
         for part in msg.walk():
             if part.get_content_maintype() == "multipart":
                 continue
@@ -243,7 +333,7 @@ def descargar_adjuntos(
                 ignorados += 1
                 continue
 
-            # Resolver nombre de destino — si ya existe añadir sufijo _1, _2...
+            # Resolver nombre de destino
             destino  = BL_INBOX / nombre
             stem     = Path(nombre).stem
             suffix   = Path(nombre).suffix
@@ -256,29 +346,36 @@ def descargar_adjuntos(
 
             if dry_run:
                 log.info("  [DRY-RUN] Descargaría: %s", destino.name)
+                descargados_este_email += 1
                 descargados += 1
                 continue
 
-            # Descargar
             payload = part.get_payload(decode=True)
             if not payload:
                 continue
 
             destino.write_bytes(payload)
             log.info("  DESCARGADO: %s (%.1f KB)", nombre, len(payload) / 1024)
+            descargados_este_email += 1
             descargados += 1
+
+        # ── Reenvío — solo si se descargó al menos un PDF válido ─────────────
+        if descargados_este_email > 0 and FORWARD_ENABLED:
+            ok = _reenviar_email(mail, msg_id, msg, msg_raw, dry_run=dry_run)
+            if ok:
+                reenviados += 1
 
     mail.logout()
 
     log.info("─────────────────────────────────────")
-    log.info("Descargados: %d | Ignorados: %d", descargados, ignorados)
+    log.info("Descargados: %d | Ignorados: %d | Reenviados: %d", descargados, ignorados, reenviados)
 
     return descargados
 
 
 def main():
     parser = argparse.ArgumentParser(description="BL Mail Fetcher — descarga adjuntos BL de Gmail")
-    parser.add_argument("--dry-run",     action="store_true", help="Solo muestra qué descargaría, sin guardar")
+    parser.add_argument("--dry-run",     action="store_true", help="Solo muestra qué descargaría, sin guardar ni reenviar")
     parser.add_argument("--since-hours", type=int,  default=None, help="Ventana custom: últimas N horas")
     parser.add_argument("--from-hour",   type=int,  default=None, help="Hora inicio ventana (0-23)")
     parser.add_argument("--from-min",    type=int,  default=0,    help="Minuto inicio ventana (default: 0)")
