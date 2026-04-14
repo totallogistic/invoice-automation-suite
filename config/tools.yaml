@@ -273,3 +273,33 @@ tools:
       subject_template: ""
 
     status_dir: /data/bl/status
+
+    # ── Añadir este bloque al fichero config/tools.yaml existente ────────────────
+# (dentro del array "tools:", al mismo nivel que los demás tools)
+
+  - name: export_visual
+    enabled: true
+    display_name: "Export Visual — Partidas Dossier"
+    description: >
+      Convierte el fichero de partidas enviado por el cliente (CSV separado por ";")
+      al formato CSV de importación de dossier de exportación de Visualtrans.
+      Soporta múltiples clientes (ALDI, y futuros). Genera un fichero
+      Convert_-_{nombre_entrada}.csv listo para cargar en el expediente de Visual.
+
+    input:
+      formats: [csv]
+      inbox: /data/export_visual/inbox
+
+    extractor:
+      path: /apps/export_visual/extractor/export_visual.py
+      export_visual_mode: true       # activa el handler específico en el processor
+
+    output:
+      directory: /data/out
+      artifacts:
+        - "Convert_-_*.csv"
+
+    email:
+      subject_template: "[Export Visual] Batch {batch_id} - CSV listo"
+
+    status_dir: /data/export_visual/status
