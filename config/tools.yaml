@@ -244,6 +244,34 @@ tools:
 
     status_dir: /data/croton_import/status
 
+# Dossier Convert — Importación Dossier a Visual
+  - name: dossier_convert
+    enabled: true
+    display_name: "Importación Dossier a Visual"
+    description: >
+      Convierte el DESGLOSE de partidas de un cliente al formato CSV de carga
+      de dossier de exportación de Visualtrans (CONVERT).
+      Actualmente soporta el formato de ALDI Melilla; se añadirán más clientes
+      cuando se reciban sus ficheros de muestra.
+
+    input:
+      formats: [csv]
+      inbox: /data/dossier_convert/inbox
+
+    extractor:
+      type: python
+      path: /apps/dossier_convert/extractor/dossier_convert.py
+
+    output:
+      directory: /data/out
+      artifacts:
+        - "Convert_-_*.csv"
+
+    email:
+      subject_template: "[Dossier Convert] Batch {batch_id} - Convert listo"
+
+    status_dir: /data/dossier_convert/status
+
 # BL - Conocimientos de Embarque
 
   - name: bl

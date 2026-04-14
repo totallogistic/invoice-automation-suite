@@ -122,6 +122,11 @@ def bl_version():
     path = "/app/apps/bl/extractor/extract_bl.py"
     return {"version": _read_script_version(path), "changelog": _read_script_changelog(path)}
 
+@app.get("/api/dossier_convert/version")
+def dossier_convert_version():
+    path = "/app/apps/dossier_convert/extractor/dossier_convert.py"
+    return {"version": _read_script_version(path), "changelog": _read_script_changelog(path)}
+
 # ── Shared ZIP download helper ────────────────────────────────────────────────
 
 def _zip_batch_download(tool_name: str, batch_id: str, zip_prefix: str) -> StreamingResponse:
