@@ -65,8 +65,11 @@ WINDOW_END_MIN     = int(os.getenv("BL_MAIL_WINDOW_END_MIN",    "59"))
 FORWARD_ENABLED         = os.getenv("BL_FORWARD_ENABLED",         "false").lower() == "true"
 FORWARD_TO              = os.getenv("BL_FORWARD_TO",              "miguel.pino@codeengtools.eu")
 FORWARD_DELETE_ORIGINAL = os.getenv("BL_FORWARD_DELETE_ORIGINAL", "false").lower() == "true"
-FORWARD_SMTP_HOST       = os.getenv("BL_FORWARD_SMTP_HOST",       "smtp.gmail.com")
-FORWARD_SMTP_PORT       = int(os.getenv("BL_FORWARD_SMTP_PORT",   "587"))
+FORWARD_SMTP_HOST       = os.getenv("BL_FORWARD_SMTP_HOST",       "tlseng-es.correoseguro.dinaserver.com")
+FORWARD_SMTP_PORT       = int(os.getenv("BL_FORWARD_SMTP_PORT",   "465"))
+FORWARD_SMTP_USER       = os.getenv("BL_FORWARD_SMTP_USER",       os.getenv("SMTP_USER", ""))
+FORWARD_SMTP_PASS       = os.getenv("BL_FORWARD_SMTP_PASS",       os.getenv("SMTP_PASS", ""))
+FORWARD_SMTP_FROM       = os.getenv("BL_FORWARD_SMTP_FROM",       os.getenv("MAIL_FROM", "procesos@tlseng.es"))
 FORWARD_SUBJECT_PREFIX  = "[BL] "
 
 # ── Filtros de nombre de fichero ──────────────────────────────────────────────
@@ -177,14 +180,12 @@ def _reenviar_email(
         msg_reenvio["X-Forwarded-From"] = from_original
         msg_reenvio["X-BL-Fetcher"] = "bl_mail_fetcher/zammad-forward"
 
-        # Enviar via SMTP
-        with smtplib.SMTP(FORWARD_SMTP_HOST, FORWARD_SMTP_PORT) as smtp:
-            smtp.ehlo()
-            smtp.starttls()
-            smtp.login(GMAIL_USER, GMAIL_PASSWORD)
-            smtp.sendmail(GMAIL_USER, [FORWARD_TO], msg_reenvio.as_bytes())
+        # Enviar via SMTP — usa procesos@tlseng.es con SSL (puerto 465)
+        with smtplib.SMTP_SSL(FORWARD_SMTP_HOST, FORWARD_SMTP_PORT) as smtp:
+            smtp.login(FORWARD_SMTP_USER, FORWARD_SMTP_PASS)
+            smtp.sendmail(FORWARD_SMTP_FROM, [FORWARD_TO], msg_reenvio.as_bytes())
 
-        log.info("  REENVIADO → %s | Asunto: %s", FORWARD_TO, nuevo_asunto[:60])
+        log.info("  REENVIADO %s → %s | Asunto: %s", FORWARD_SMTP_FROM, FORWARD_TO, nuevo_asunto[:60])
 
     except Exception as e:
         log.error("  ERROR en reenvío: %s", e)
@@ -222,8 +223,8 @@ def descargar_adjuntos(
     log.info("Label: %s | Inbox: %s", GMAIL_LABEL, BL_INBOX)
 
     if FORWARD_ENABLED:
-        log.info("Reenvío: ACTIVADO → %s | Borrar original: %s",
-                 FORWARD_TO, "SÍ" if FORWARD_DELETE_ORIGINAL else "NO")
+        log.info("Reenvío: ACTIVADO %s → %s | Borrar original: %s",
+                 FORWARD_SMTP_FROM, FORWARD_TO, "SÍ" if FORWARD_DELETE_ORIGINAL else "NO")
     else:
         log.info("Reenvío: DESACTIVADO (BL_FORWARD_ENABLED=false)")
 
