@@ -216,9 +216,9 @@ async def create_batch(
                 (batch_inbox / "_SKIP_T1").write_text("1", encoding="utf-8")
             if not run_dae_flag:
                 (batch_inbox / "_SKIP_DAE").write_text("1", encoding="utf-8")
-            if tool_name == "export_visual":
-                cliente_val = str(cliente).strip() or "aldi"
-                (batch_inbox / "_CLIENTE.txt").write_text(cliente_val, encoding="utf-8")
+        if tool_name == "export_visual":
+            cliente_val = str(cliente).strip() or "aldi"
+            (batch_inbox / "_CLIENTE.txt").write_text(cliente_val, encoding="utf-8")
         file_count = 0
         for upload_file in files:
             content = await upload_file.read()
