@@ -65,11 +65,11 @@ WINDOW_END_MIN     = int(os.getenv("BL_MAIL_WINDOW_END_MIN",    "59"))
 FORWARD_ENABLED         = os.getenv("BL_FORWARD_ENABLED",         "false").lower() == "true"
 FORWARD_TO              = os.getenv("BL_FORWARD_TO",              "miguel.pino@codeengtools.eu")
 FORWARD_DELETE_ORIGINAL = os.getenv("BL_FORWARD_DELETE_ORIGINAL", "false").lower() == "true"
-FORWARD_SMTP_HOST       = os.getenv("BL_FORWARD_SMTP_HOST",       "tlseng-es.correoseguro.dinaserver.com")
-FORWARD_SMTP_PORT       = int(os.getenv("BL_FORWARD_SMTP_PORT",   "465"))
-FORWARD_SMTP_USER       = os.getenv("BL_FORWARD_SMTP_USER",       os.getenv("SMTP_USER", ""))
-FORWARD_SMTP_PASS       = os.getenv("BL_FORWARD_SMTP_PASS",       os.getenv("SMTP_PASS", ""))
-FORWARD_SMTP_FROM       = os.getenv("BL_FORWARD_SMTP_FROM",       os.getenv("MAIL_FROM", "procesos@tlseng.es"))
+FORWARD_SMTP_HOST       = os.getenv("BL_FORWARD_SMTP_HOST",  os.getenv("SMTP_HOST",  "tlseng-es.correoseguro.dinaserver.com"))
+FORWARD_SMTP_PORT       = int(os.getenv("BL_FORWARD_SMTP_PORT", os.getenv("SMTP_PORT", "465")))
+FORWARD_SMTP_USER       = os.getenv("BL_FORWARD_SMTP_USER",  os.getenv("SMTP_USER",  "procesos@tlseng.es"))
+FORWARD_SMTP_PASS       = os.getenv("BL_FORWARD_SMTP_PASS",  os.getenv("SMTP_PASS",  ""))
+FORWARD_SMTP_FROM       = os.getenv("BL_FORWARD_SMTP_FROM",  os.getenv("MAIL_FROM",  "procesos@tlseng.es"))
 FORWARD_SUBJECT_PREFIX  = "[BL] "
 
 # ── Filtros de nombre de fichero ──────────────────────────────────────────────
