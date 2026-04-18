@@ -116,9 +116,8 @@ class ParserAML:
                     rec.puerto_destino = lineas[i + 2].strip().upper()
                 break
 
-        m = re.search(r"^(\d+)\s+\d+\s*x\s+\w+\s+disant", text, re.MULTILINE | re.IGNORECASE)
-        if m:
-            rec.matricula = m.group(1)
+        matriculas = re.findall(r"^([A-Z0-9]{6,10})\s+\d+\s*x\s+\w+\s+disant", text, re.MULTILINE | re.IGNORECASE)
+        rec.matricula = " / ".join(matriculas[:2]) if matriculas else ""
 
         m = re.search(r"(\d{1,2})\s*/\s*([\w]+)\s*/\s*(\d{4})", text)
         if m:
