@@ -123,8 +123,8 @@
         <label>Tipo</label>
         <select id="f-tipo">
           <option value="">Todos</option>
-          <option value="exp">Exportaciones (ALGECIRAS)</option>
-          <option value="imp">Importaciones (otros)</option>
+          <option value="exp">Exportaciones (otros destinos)</option>
+          <option value="imp">Importaciones (ALGECIRAS)</option>
         </select>
       </div>
       <div class="fg">
@@ -321,8 +321,8 @@
       const partes = [];
       if (desde || hasta) partes.push(`Período: ${desde || '—'} → ${hasta || '—'}`);
       if (nav)            partes.push(`Naviera: ${nav}`);
-      if (tipo === 'exp') partes.push('Exportaciones (ALGECIRAS)');
-      if (tipo === 'imp') partes.push('Importaciones (otros destinos)');
+      if (tipo === 'exp') partes.push('Exportaciones (otros destinos)');
+      if (tipo === 'imp') partes.push('Importaciones (ALGECIRAS)');
       if (puerto)         partes.push(`Destino: ${puerto}`);
       if (estado === '0') partes.push('Estado: Pendientes');
       if (estado === '1') partes.push('Estado: Hechos');
@@ -349,8 +349,8 @@
       }).join('');
 
       const win = window.open('', '_blank');
-      const tituloExport = tipo === 'exp' ? 'Exportaciones — ALGECIRAS'
-                         : tipo === 'imp' ? 'Importaciones — Otros destinos'
+      const tituloExport = tipo === 'exp' ? 'Exportaciones — Otros destinos'
+                         : tipo === 'imp' ? 'Importaciones — ALGECIRAS'
                          : 'Conocimientos de Embarque';
       win.document.write(`<!doctype html>
 <html lang="es">

@@ -49,7 +49,7 @@ NAV_STYLES = {
 }
 
 
-DESTINO_EXPORTACIONES = "ALGECIRAS"
+DESTINO_IMPORTACIONES = "ALGECIRAS"
 
 def leer_csv(csv_path: Path, filtrar_fecha: str | None = None) -> list[dict]:
     """Lee el CSV y filtra opcionalmente por fecha de embarque (campo 'fecha')."""
@@ -186,9 +186,9 @@ def enviar_email(pdfs: list[Path], registros_exp: list[dict], registros_imp: lis
     msg["Subject"] = f"[BL] {total_exp} Exportaciones · {total_imp} Importaciones — {fecha}"
 
     body = f"""<html><body style="font-family:Arial,sans-serif;color:#1f2937;">
-<p><strong>Exportaciones (destino ALGECIRAS): {total_exp} BLs</strong></p>
+<p><strong>Exportaciones (otros destinos): {total_exp} BLs</strong></p>
 <p style="color:#6b7280;font-size:13px;">{resumen_nav(registros_exp) or '—'}</p>
-<p style="margin-top:1rem;"><strong>Importaciones (otros destinos): {total_imp} BLs</strong></p>
+<p style="margin-top:1rem;"><strong>Importaciones (destino ALGECIRAS): {total_imp} BLs</strong></p>
 <p style="color:#6b7280;font-size:13px;">{resumen_nav(registros_imp) or '—'}</p>
 <p style="margin-top:1rem;">Adjuntos los informes completos en PDF.</p>
 <hr style="border:none;border-top:1px solid #e5e7eb;margin:16px 0;">
@@ -247,18 +247,19 @@ def main():
         log.warning("CSV vacío — nada que reportar")
         sys.exit(0)
 
-    # Dividir en exportaciones (ALGECIRAS) e importaciones (resto)
-    registros_exp = [r for r in registros if DESTINO_EXPORTACIONES in (r.get("puerto_destino") or "").upper()]
-    registros_imp = [r for r in registros if DESTINO_EXPORTACIONES not in (r.get("puerto_destino") or "").upper()]
+    # ALGECIRAS = puerto de llegada desde Marruecos = IMPORTACIONES
+    # Otros destinos (Tánger, Kenitra, etc.) = EXPORTACIONES
+    registros_imp = [r for r in registros if DESTINO_IMPORTACIONES in (r.get("puerto_destino") or "").upper()]
+    registros_exp = [r for r in registros if DESTINO_IMPORTACIONES not in (r.get("puerto_destino") or "").upper()]
 
-    log.info("Exportaciones (ALGECIRAS): %d · Importaciones (otros): %d", len(registros_exp), len(registros_imp))
+    log.info("Exportaciones (otros destinos): %d · Importaciones (ALGECIRAS): %d", len(registros_exp), len(registros_imp))
 
     tag      = fecha.replace("-", "")
     pdfs_generados: list[Path] = []
 
     # Reporte Exportaciones
     if registros_exp:
-        html_exp  = generar_html(registros_exp, fecha, titulo="Exportaciones — ALGECIRAS")
+        html_exp  = generar_html(registros_exp, fecha, titulo="Exportaciones — Otros destinos")
         pdf_exp   = BL_CSV_DIR / f"bl_exportaciones_{tag}.pdf"
         if generar_pdf(html_exp, pdf_exp):
             pdfs_generados.append(pdf_exp)
@@ -267,7 +268,7 @@ def main():
 
     # Reporte Importaciones
     if registros_imp:
-        html_imp  = generar_html(registros_imp, fecha, titulo="Importaciones — Otros destinos")
+        html_imp  = generar_html(registros_imp, fecha, titulo="Importaciones — ALGECIRAS")
         pdf_imp   = BL_CSV_DIR / f"bl_importaciones_{tag}.pdf"
         if generar_pdf(html_imp, pdf_imp):
             pdfs_generados.append(pdf_imp)
