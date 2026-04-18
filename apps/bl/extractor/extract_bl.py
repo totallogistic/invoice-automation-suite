@@ -116,7 +116,17 @@ class ParserAML:
                     rec.puerto_destino = lineas[i + 2].strip().upper()
                 break
 
-        matriculas = re.findall(r"^([A-Z0-9]{6,10})\s+\d+\s*x\s+\w+\s+disant", text, re.MULTILINE | re.IGNORECASE)
+        matriculas = []
+        for m in re.finditer(r"^([A-Z0-9]{6,10})\s+\d+\s*x\s+\w+\s+disant(.+)?$", text, re.MULTILINE | re.IGNORECASE):
+            matriculas.append(m.group(1))
+            # Buscar segunda matrícula en la línea inmediatamente siguiente
+            pos_fin = m.end()
+            resto = text[pos_fin:]
+            lineas_resto = resto.split("\n")
+            siguiente = lineas_resto[1].strip() if len(lineas_resto) > 1 else ""
+            m2 = re.match(r"^([A-Z0-9]{6,12})\b", siguiente)
+            if m2:
+                matriculas.append(m2.group(1))
         rec.matricula = " / ".join(matriculas[:2]) if matriculas else ""
 
         m = re.search(r"(\d{1,2})\s*/\s*([\w]+)\s*/\s*(\d{4})", text)
