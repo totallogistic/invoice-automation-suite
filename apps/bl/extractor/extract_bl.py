@@ -119,7 +119,6 @@ class ParserAML:
         matriculas = []
         for m in re.finditer(r"^([A-Z0-9]{6,10})\s+\d+\s*x\s+\w+\s+disant(.+)?$", text, re.MULTILINE | re.IGNORECASE):
             matriculas.append(m.group(1))
-            # Buscar segunda matrícula en la línea inmediatamente siguiente
             pos_fin = m.end()
             resto = text[pos_fin:]
             lineas_resto = resto.split("\n")
@@ -127,7 +126,7 @@ class ParserAML:
             m2 = re.match(r"^([A-Z0-9]{6,12})\b", siguiente)
             if m2:
                 matriculas.append(m2.group(1))
-        rec.matricula = " / ".join(matriculas[:2]) if matriculas else ""
+        rec.matricula = "\n".join(matriculas[:2]) if matriculas else ""
 
         m = re.search(r"(\d{1,2})\s*/\s*([\w]+)\s*/\s*(\d{4})", text)
         if m:
@@ -175,7 +174,7 @@ class ParserBalearia:
         if seccion:
             matriculas = re.findall(r"^([A-Z0-9]{7,9})\b", seccion.group(1), re.MULTILINE)
             matriculas = [m for m in matriculas if re.search(r"[A-Z]", m) and re.search(r"\d", m)]
-            rec.matricula = " / ".join(matriculas) if matriculas else ""
+            rec.matricula = "\n".join(matriculas) if matriculas else ""
 
         return rec
 
@@ -223,9 +222,16 @@ class ParserRFS:
         rec = ParserDFDS().parse(path)
         rec.naviera = self.NAVIERA
         text = _txt(path)
-        matriculas_solas = re.findall(r"^([A-Z0-9]{6,10})\s*$", text, re.MULTILINE)
-        if matriculas_solas:
-            rec.matricula = " / ".join(matriculas_solas)
+        # Buscar matrículas en la sección DATOS DECLARADOS (evita capturar CIF/NIFs del bloque RECEPTOR)
+        seccion = re.search(
+            r"DATOS DECLARADOS.+?\n(.+?)(?:CLIENTE PAGADOR|Total Tara|EL CARGADOR)",
+            text, re.DOTALL | re.IGNORECASE
+        )
+        if seccion:
+            matriculas_solas = re.findall(r"^([A-Z0-9]{6,10})\b", seccion.group(1), re.MULTILINE)
+            matriculas_solas = [m for m in matriculas_solas if re.search(r"[A-Z]", m) and re.search(r"\d", m)]
+            if matriculas_solas:
+                rec.matricula = "\n".join(matriculas_solas)
         return rec
 
 
