@@ -296,10 +296,18 @@ def descargar_adjuntos(
             if status != "OK":
                 continue
 
-            # ── Paso 3: RFC822 completo ───────────────────────────────────────
+            # ── Paso 3: Guardar estado leído/no leído antes de descargar ─────
+            status, flag_data = mail.fetch(msg_id, "(FLAGS)")
+            ya_leido = status == "OK" and flag_data and b"\\Seen" in flag_data[0]
+
+            # ── Paso 4: RFC822 completo ───────────────────────────────────────
             status, msg_data = mail.fetch(msg_id, "(RFC822)")
             if status != "OK":
                 continue
+
+            # Restaurar estado no leído si no estaba leído antes
+            if not ya_leido:
+                mail.store(msg_id, "-FLAGS", "\\Seen")
 
             msg_raw = msg_data[0][1]
             msg     = email.message_from_bytes(msg_raw)
