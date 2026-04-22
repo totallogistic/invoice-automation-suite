@@ -456,10 +456,13 @@
                 body: JSON.stringify(data),
             });
             const result = await res.json();
-            if (!res.ok || !result.success) throw new Error(result.detail || result.message || 'Error');
+            if (!res.ok) throw new Error(result.detail || result.message || 'Error');
 
-            if (mode && result.download_url) {
-                showMsg(`✅ ${result.message} — descargando documento...`, 'success');
+            if (result.doc_error) {
+                // Excel guardado pero PDF falló — mostrar ambos mensajes
+                showMsg(`⚠️ ${result.message}`, 'error');
+            } else if (mode && result.download_url) {
+                showMsg(`✅ ${result.message} — descargando PDF...`, 'success');
                 setTimeout(() => window.location.href = result.download_url, 600);
             } else {
                 showMsg(`✅ ${result.message}`, 'success');

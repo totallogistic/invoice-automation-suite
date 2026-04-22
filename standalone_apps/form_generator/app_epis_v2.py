@@ -276,14 +276,18 @@ def _generate_epis_docx_v2(data: dict, output_dir: Path) -> tuple:
 
 def _docx_to_pdf(docx_path: Path, output_dir: Path) -> Path:
     """Convert DOCX to PDF using LibreOffice. Returns PDF path."""
-    result = subprocess.run(
-        ['soffice', '--headless', '--convert-to', 'pdf', '--outdir', str(output_dir), str(docx_path)],
-        capture_output=True, text=True, timeout=60
-    )
-    pdf_path = output_dir / (docx_path.stem + '.pdf')
-    if not pdf_path.exists():
-        raise RuntimeError(f"PDF conversion failed: {result.stderr}")
-    return pdf_path
+    for cmd in ['soffice', 'libreoffice', '/usr/bin/soffice', '/usr/bin/libreoffice']:
+        try:
+            result = subprocess.run(
+                [cmd, '--headless', '--convert-to', 'pdf', '--outdir', str(output_dir), str(docx_path)],
+                capture_output=True, text=True, timeout=90
+            )
+            pdf_path = output_dir / (docx_path.stem + '.pdf')
+            if pdf_path.exists():
+                return pdf_path
+        except FileNotFoundError:
+            continue
+    raise RuntimeError(f"PDF conversion failed — LibreOffice no encontrado. stdout: {result.stdout} stderr: {result.stderr}")
 
 
 # ── Endpoint (replaces existing save_entrega_epis in app.py) ──────────────────
@@ -377,5 +381,7 @@ async def save_entrega_epis_v2(request: Request, generate_docx: bool = False, co
         except Exception as e:
             print(f"[epis] Error generando documento: {e}")
             response["doc_error"] = str(e)
+            response["success"] = False
+            response["message"] = f"Excel guardado, pero error al generar PDF: {e}"
 
     return JSONResponse(response)
