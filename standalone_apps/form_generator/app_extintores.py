@@ -240,6 +240,83 @@ def _fill_pul_pr(d, ws):
             _w(ws,row,cb,_x(bien)); _w(ws,row,cm_,_x(not bien))
     if d.pul_conclusion_ok: _w(ws,111,6,"X")
 
+
+# ── Fill: dates ALG ──────────────────────────────────────────────────────────
+
+def _dates_alg(d, wb):
+    cfg = {
+        'Datos Generales':           (49, 7, 15, 20, 27, "ALGECIRAS"),
+        'BIEs':                      (153, 8, 16, 21, 28, "ALGECIRAS"),
+        'Señalización Luminiscente': (143, 7, 15, 20, 27, "ALGECIRAS"),
+        'Extintores_2':              (123, 7, 15, 20, 27, "ALGECIRAS"),
+        'PULSADORES':                (120, 7, 15, 20, 27, "ALGECIRAS"),
+    }
+    for sn, (r, cc, cd, cm, ca, ciudad) in cfg.items():
+        if sn not in wb.sheetnames: continue
+        ws = wb[sn]
+        _w(ws,r,cc,ciudad); _w(ws,r,cd,d.dia); _w(ws,r,cm,d.mes.upper()); _w(ws,r,ca,str(d.anio))
+
+# ── Fill: extintores ALG (has Nº at col1, Num.Serie at col30) ────────────────
+
+def _fill_ext_lista_alg(d, ws):
+    for i, e in enumerate(d.ext_lista):
+        r = 95+i
+        _w(ws,r,1,i+1)           # Nº interno
+        _w(ws,r,5,e.eficacia)
+        _w(ws,r,8,"NO" if not e.altura_ok else "SI")
+        if e.fecha_fabric:  _w(ws,r,11,e.fecha_fabric)
+        if e.fecha_retimbr: _w(ws,r,14,e.fecha_retimbr)
+        _w(ws,r,17,_sino(e.senal))
+        _w(ws,r,19,_bm(e.manguera_bien))
+        _w(ws,r,22,_sino(e.precinto))
+        _w(ws,r,25,_bm(e.accesibilidad_bien))
+        _w(ws,r,28,_bm(e.peso_bien))
+        _w(ws,r,30,str(e.serie))   # Num. Serie en col 30
+        _w(ws,r,33,e.ubicacion)
+        if e.obs: _w(ws,r,40,e.obs)
+    if d.ext_conclusion_ok: _w(ws,114,6,"X")
+    elif d.ext_anomalias:   _w(ws,116,9,d.ext_anomalias)
+
+# ── Fill: BIEs ALG (5 BIEs + Puesto de Control) ──────────────────────────────
+
+_ALG_BIE_TROWS = [87,88,89,90,91,93,94,95]   # T-check rows (same as PR)
+
+def _fill_bies_alg(d, ws):
+    for bi, b in enumerate(d.bie_lista):
+        cb, cm_ = 13+4*bi, 15+4*bi
+        _w(ws,82,cb,b.nombre)
+        if b.fecha_fab: _w(ws,98,cb,b.fecha_fab)
+        if b.tipo:      _w(ws,101,cb,b.tipo)
+        for ci,row in enumerate(_ALG_BIE_TROWS):
+            bien = b.checks[ci] if ci < len(b.checks) else True
+            _w(ws,row,cb,_x(bien)); _w(ws,row,cm_,_x(not bien))
+    # General questions R102-R106
+    gen = d.bie_generales or BIEGenerales()
+    gv = [gen.senal,gen.accesible,gen.altura_valvula,gen.menos50m,gen.cantidad]
+    for ri,row in enumerate([102,103,104,105,106]):
+        _w(ws,row,13,_x(gv[ri])); _w(ws,row,15,_x(not gv[ri]))
+    # Puesto de control R135-R139
+    for pi,pc in enumerate(d.bie_puestos):
+        r = 135+pi
+        _w(ws,r,2,pc.numero); _w(ws,r,6,pc.presion_suministro); _w(ws,r,9,pc.presion_sistema)
+        _w(ws,r,12,_x(pc.apertura_bien)); _w(ws,r,14,_x(not pc.apertura_bien))
+        _w(ws,r,17,_x(pc.finales_carrera_bien)); _w(ws,r,19,_x(not pc.finales_carrera_bien))
+        _w(ws,r,22,_x(pc.interruptores_bien)); _w(ws,r,24,_x(not pc.interruptores_bien))
+        _w(ws,r,27,_x(pc.suministro_bien)); _w(ws,r,30,_x(not pc.suministro_bien))
+        _w(ws,r,33,pc.red_bies)
+    if d.bie_conclusion_ok: _w(ws,149,6,"X")
+
+# ── Fill: pulsadores ALG (4 pulsadores, same structure as PR) ────────────────
+
+def _fill_pul_alg(d, ws):
+    for pi,p in enumerate(d.pul_lista):
+        cb,cm_ = 13+4*pi, 15+4*pi
+        _w(ws,84,cb,p.nombre)
+        for ci,row in enumerate(_PR_PUL_ROWS):
+            bien = p.checks[ci] if ci < len(p.checks) else True
+            _w(ws,row,cb,_x(bien)); _w(ws,row,cm_,_x(not bien))
+    if d.pul_conclusion_ok: _w(ws,111,6,"X")
+
 # ── Router ────────────────────────────────────────────────────────────────────
 
 router_extintores = APIRouter()
@@ -251,8 +328,8 @@ EXCEL_STORAGE_DIR = os.path.join(os.path.dirname(__file__), "excel_storage")
 @router_extintores.post("/api/generar-acta-extintores/{sede}")
 async def generar_acta(sede: str, data: ExtintoresPayload):
     sede = sede.lower()
-    if sede not in ("pr","mlg"):
-        raise HTTPException(400, "sede debe ser 'pr' o 'mlg'")
+    if sede not in ("pr","mlg","alg"):
+        raise HTTPException(400, "sede debe ser 'pr', 'mlg' o 'alg'")
 
     tpl = os.path.join(TEMPLATE_DIR, f"template-extintores-{sede}.xlsx")
     if not os.path.exists(tpl):
@@ -261,7 +338,8 @@ async def generar_acta(sede: str, data: ExtintoresPayload):
     os.makedirs(OUTPUT_DIR, exist_ok=True)
     os.makedirs(EXCEL_STORAGE_DIR, exist_ok=True)
     ts  = datetime.now().strftime("%Y%m%d_%H%M%S")
-    out_name = f"Acta_Extintores_{'PR' if sede=='pr' else 'MLG'}_{data.anio}_T{_trimestre(data.mes)}_{ts}.xlsx"
+    label = {'pr':'PR','mlg':'MLG','alg':'ALG'}[sede]
+    out_name = f"Acta_Extintores_{label}_{data.anio}_T{_trimestre(data.mes)}_{ts}.xlsx"
     out_path = os.path.join(OUTPUT_DIR, out_name)
     shutil.copy2(tpl, out_path)
 
@@ -276,6 +354,15 @@ async def generar_acta(sede: str, data: ExtintoresPayload):
                   [57,58,59,60,61,62,63,64,65,66], 73, 89)
         if 'PULSADORES' in wb.sheetnames:
             _fill_pul_pr(data, wb['PULSADORES'])
+    elif sede == "alg":
+        _dates_alg(data, wb)
+        _fill_ext_checks(data, wb['Extintores_2'])
+        _fill_ext_lista_alg(data, wb['Extintores_2'])
+        _fill_bies_alg(data, wb['BIEs'])
+        _fill_sen(data, wb['Señalización Luminiscente'],
+                  [57,58,59,60,61,62,63,64,65,66], 73, 134)
+        if 'PULSADORES' in wb.sheetnames:
+            _fill_pul_alg(data, wb['PULSADORES'])
     else:
         _dates_mlg(data, wb)
         _fill_ext_checks(data, wb['Extintores'])

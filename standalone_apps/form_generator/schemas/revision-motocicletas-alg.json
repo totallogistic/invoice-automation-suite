@@ -24,8 +24,7 @@
       "title": "Responsable",
       "enum": [
         "HICHAM ASRIH EL KADDOURI",
-        "SAMUEL JESUS DAMAS DOMINGUEZ",
-        "PABLO CASTELLO RODRIGUEZ"
+        "SAMUEL JESUS DAMAS DOMINGUEZ"
       ]
     },
     "kilometraje": {
@@ -71,6 +70,14 @@
         "X"
       ],
       "title": "Luces Funcionando"
+    },
+     "estadoGeneral": {
+      "type": "string",
+      "enum": [
+        "✓",
+        "X"
+      ],
+      "title": "Estado General"
     },
     "observaciones": {
       "type": "string",

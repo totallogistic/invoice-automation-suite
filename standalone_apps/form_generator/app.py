@@ -78,6 +78,7 @@ app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 templates = Jinja2Templates(directory=TEMPLATES_DIR)
 
 from app_extintores import router_extintores
+from app_epis_v2 import save_entrega_epis_v2
 app.include_router(router_extintores)
 
 def send_email_with_json(to_email: str, subject: str, schema_name: str, data: dict, json_path: str):
@@ -542,14 +543,23 @@ async def save_and_email(
 
 @app.get("/download/{filename}")
 async def download_file(filename: str):
-    """Download a generated JSON file."""
+    """Download a generated file (JSON, DOCX or PDF)."""
     filepath = OUTPUT_DIR / filename
     if not filepath.exists():
         raise HTTPException(404, "File not found")
     
+    ext = filename.rsplit('.', 1)[-1].lower() if '.' in filename else ''
+    media_types = {
+        'pdf':  'application/pdf',
+        'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'json': 'application/json',
+    }
+    media_type = media_types.get(ext, 'application/octet-stream')
+    
     return FileResponse(
         filepath,
-        media_type="application/json",
+        media_type=media_type,
         filename=filename
     )
 
@@ -1114,7 +1124,7 @@ def bl_registros(
     fecha_hasta:    str = "",
     q:              str = "",
     solo_hecho:     str = "",
-    tipo:           str = "",   # "exp" = otros destinos, "imp" = ALGECIRAS
+    tipo:           str = "",   # "exp" = ALGECIRAS, "imp" = otros
     puerto_destino: str = "",
 ):
     registros = _bl_leer_registros()
@@ -1131,9 +1141,9 @@ def bl_registros(
     if fecha_hasta:
         registros = [r for r in registros if r.get("fecha","") <= fecha_hasta]
     if tipo == "exp":
-        registros = [r for r in registros if "ALGECIRAS"not in (r.get("puerto_destino") or "").upper()]
-    elif tipo == "imp":
         registros = [r for r in registros if "ALGECIRAS" in (r.get("puerto_destino") or "").upper()]
+    elif tipo == "imp":
+        registros = [r for r in registros if "ALGECIRAS" not in (r.get("puerto_destino") or "").upper()]
     if puerto_destino:
         pd_up = puerto_destino.strip().upper()
         registros = [r for r in registros if pd_up in (r.get("puerto_destino") or "").upper()]
@@ -1902,7 +1912,7 @@ def _generate_epis_docx(data: dict):
 
 
 @app.post("/api/save-entrega-epis")
-async def save_entrega_epis(request: Request, generate_docx: bool = False):
+async def save_entrega_epis(request: Request, generate_docx: bool = False, convert_pdf: bool = False):
     """
     Guarda una entrega de EPIs:
     1. Añade los EPIs entregados al Excel histórico (una fila por EPI)
@@ -1920,6 +1930,11 @@ async def save_entrega_epis(request: Request, generate_docx: bool = False):
       ]
     }
     """
+    return await save_entrega_epis_v2(request, generate_docx, convert_pdf)
+
+
+async def _save_entrega_epis_original(request: Request, generate_docx: bool = False, convert_pdf: bool = False):
+    """Original implementation (kept for reference, no longer called)."""
     data     = await request.json()
     empleado = data.get('empleado', '').strip()
     puesto   = data.get('puesto',   '').strip()
