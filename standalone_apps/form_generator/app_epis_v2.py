@@ -358,23 +358,21 @@ async def save_entrega_epis_v2(request: Request, generate_docx: bool = False, co
         "excel_file": excel_file.name,
     }
 
-    # ── 2. DOCX + optional PDF ────────────────────────────────────────────────
+    # ── 2. DOCX + PDF — todo en excel_storage ─────────────────────────────────
     if generate_docx:
         try:
-            docx_path, docx_filename = _generate_epis_docx_v2(data, OUTPUT_DIR)
+            # DOCX en excel_storage
+            docx_path, docx_filename = _generate_epis_docx_v2(data, EXCEL_DIR)
             response["docx_filename"] = docx_filename
 
             if convert_pdf:
-                # Guardar PDF en excel_storage (copia permanente)
+                # PDF en excel_storage
                 pdf_path = _docx_to_pdf(docx_path, EXCEL_DIR)
                 pdf_filename = pdf_path.name
-                # Copiar a output/ para servir la descarga
-                import shutil as _shutil
-                _shutil.copy2(pdf_path, OUTPUT_DIR / pdf_filename)
-                response["pdf_filename"]  = pdf_filename
-                response["download_url"]  = f"/download/{pdf_filename}"
+                response["pdf_filename"] = pdf_filename
+                response["download_url"] = f"/download-storage/{pdf_filename}"
             else:
-                response["download_url"] = f"/download/{docx_filename}"
+                response["download_url"] = f"/download-storage/{docx_filename}"
 
         except Exception as e:
             print(f"[epis] Error generando documento: {e}")

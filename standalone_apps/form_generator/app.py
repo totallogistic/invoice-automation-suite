@@ -564,6 +564,22 @@ async def download_file(filename: str):
     )
 
 
+
+@app.get("/download-storage/{filename}")
+async def download_storage_file(filename: str):
+    """Download a file from excel_storage (EPIs PDFs, DOCXs)."""
+    filepath = EXCEL_STORAGE_DIR / filename
+    if not filepath.exists():
+        raise HTTPException(404, "File not found")
+    ext = filename.rsplit('.', 1)[-1].lower() if '.' in filename else ''
+    media_types = {
+        'pdf':  'application/pdf',
+        'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    }
+    media_type = media_types.get(ext, 'application/octet-stream')
+    return FileResponse(filepath, media_type=media_type, filename=filename)
+
 @app.get("/health")
 async def health():
     """Health check endpoint."""
