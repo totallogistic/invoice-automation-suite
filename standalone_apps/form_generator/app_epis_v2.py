@@ -365,11 +365,14 @@ async def save_entrega_epis_v2(request: Request, generate_docx: bool = False, co
             response["docx_filename"] = docx_filename
 
             if convert_pdf:
-                pdf_path = _docx_to_pdf(docx_path, OUTPUT_DIR)
+                # Guardar PDF en excel_storage (copia permanente)
+                pdf_path = _docx_to_pdf(docx_path, EXCEL_DIR)
                 pdf_filename = pdf_path.name
+                # Copiar a output/ para servir la descarga
+                import shutil as _shutil
+                _shutil.copy2(pdf_path, OUTPUT_DIR / pdf_filename)
                 response["pdf_filename"]  = pdf_filename
                 response["download_url"]  = f"/download/{pdf_filename}"
-                # Serve PDF via download endpoint (needs media_type update)
             else:
                 response["download_url"] = f"/download/{docx_filename}"
 

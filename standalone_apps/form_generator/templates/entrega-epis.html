@@ -307,9 +307,7 @@
     <div id="message" class="message"></div>
 
     <div class="actions">
-        <button class="btn-docx" onclick="guardar('pdf')">📄 Guardar + Descargar PDF</button>
-        <button class="btn-docx" style="background:#1a5276" onclick="guardar('docx')">📝 Guardar + Descargar DOCX</button>
-        <button class="btn-excel" onclick="guardar(false)">💾 Solo guardar en Excel</button>
+        <button class="btn-docx" onclick="guardar('pdf')">💾 Guardar y Descargar PDF</button>
     </div>
 </div>
 
@@ -460,7 +458,7 @@
             const result = await res.json();
             if (!res.ok || !result.success) throw new Error(result.detail || result.message || 'Error');
 
-            if (withDocx && result.download_url) {
+            if (mode && result.download_url) {
                 showMsg(`✅ ${result.message} — descargando documento...`, 'success');
                 setTimeout(() => window.location.href = result.download_url, 600);
             } else {
