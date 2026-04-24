@@ -2,9 +2,8 @@
 <html lang="es">
   <head>
     <meta charset="utf-8" />
-    <meta http-equiv="refresh" content="0; url=/procesos/" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>totallogistic Automatizacion</title>
+    <title>Admin — totallogistic</title>
     <style>
       * { margin: 0; padding: 0; box-sizing: border-box; }
       body {
@@ -47,6 +46,16 @@
         font-weight: 600;
         letter-spacing: 0.5px;
       }
+      .back-link {
+        position: absolute;
+        top: 1rem;
+        left: 1.5rem;
+        color: rgba(255,255,255,0.85);
+        text-decoration: none;
+        font-size: 0.875rem;
+        font-weight: 500;
+      }
+      .back-link:hover { color: white; }
       .tool-badge {
         display: inline-block;
         padding: 0.25rem 0.75rem;
@@ -61,7 +70,6 @@
       .badge-validando  { background: #ede9fe; color: #5b21b6; }
       .badge-wip        { background: #fef3c7; color: #92400e; }
       .badge-draft      { background: #f3f4f6; color: #6b7280; }
-
       main {
         flex: 1;
         max-width: 800px;
@@ -75,9 +83,8 @@
         color: #6b7280;
         text-transform: uppercase;
         letter-spacing: 0.5px;
-        margin: 2rem 0 1rem;
+        margin: 0 0 1rem;
       }
-      .section-title:first-child { margin-top: 0; }
       .tools-list {
         background: white;
         border-radius: 8px;
@@ -95,11 +102,6 @@
       }
       .tools-list a:last-child { border-bottom: none; }
       .tools-list a:hover { background: #f0f7ff; padding-left: 2rem; }
-      .tools-list a.external::after {
-        content: " ↗";
-        opacity: 0.5;
-        font-size: 0.875rem;
-      }
       footer {
         text-align: center;
         padding: 1.5rem;
@@ -110,52 +112,13 @@
   </head>
   <body>
     <header>
+      <a href="/main/" class="back-link">← Inicio</a>
       <div class="env-badge" id="env-badge">...</div>
       <img src="/assets/totallogistic-logo.png" alt="totallogistic" class="logo">
-      <p class="header-description">Portal de Herramientas y Procesos</p>
+      <p class="header-description">Admin</p>
     </header>
     <main>
-
-      <div class="section-title">Procesos</div>
-      <div class="tools-list">
-        <a href="/tools/lear_cable/">
-          🔗 Lear Cable
-          <span class="tool-badge badge-operativo">Operativo</span>
-        </a>
-        <a href="/tools/lear_rabat/">
-          🇲🇦 Lear Rabat (DUA)
-          <span class="tool-badge badge-operativo">Operativo</span>
-        </a>
-        <a href="/tools/export_visual/">
-          📤 Export Visual — Partidas
-          <span class="tool-badge badge-operativo">Operativo</span>
-        </a>
-        <a href="/tools/croton/">
-          🌿 Croton Export
-          <span class="tool-badge badge-wip">En Desarrollo</span>
-        </a>
-        <a href="/tools/croton_import/">
-          📦 Croton Import
-         <span class="tool-badge badge-operativo">Operativo</span>
-         <span class="tool-badge badge-validando">Validando</span>
-        </a>
-        <a href="/tools/camion/">
-          🚛 Camion Export
-          <span class="tool-badge badge-wip">Operativo-Parcial</span>
-          <span class="tool-badge badge-validando">Validando</span>
-        </a>
-        <a href="/tools/import_partida/">
-          💹 Import Partida
-          <span class="tool-badge badge-draft">Pendiente Detalles</span>
-        </a>
-          <a href="/tools/bl/">
-          🚢 BL Extractor
-         <span class="tool-badge badge-operativo">Operativo</span>
-        </a>
-      </div>
-
-
-      <div class="section-title">Admin</div>
+      <div class="section-title">Herramientas de Administración</div>
       <div class="tools-list">
         <a href="/tools/cuadre_asientos/">
           📊 Cuadre Asientos
@@ -170,26 +133,17 @@
           <span class="tool-badge badge-operativo">Operativo</span>
         </a>
       </div>
-
-      <div class="section-title">Formularios</div>
-      <div class="tools-list">
-<!-- Reemplazar el enlace BL Viewer en la sección Formularios -->
-      <a href="#" id="bl-viewer-link" target="_blank" class="external">
-        📋 BL Viewer — Conocimientos de Embarque
-        <span class="tool-badge badge-operativo">Operativo</span>
-      </a>
-        <a href="#" id="form-generator-link" target="_blank" class="external">
-          ⚙️ Lista de formularios de registro
-          <span class="tool-badge badge-operativo">Operativo</span>
-        </a>
-      </div>
-
     </main>
     <footer>
       © 2026 totallogistic
     </footer>
     <script>
-window.location.replace('/procesos/');
+fetch('/env.json')
+    .then(r => r.json())
+    .then(data => {
+      document.title = `Admin [${data.env.toUpperCase()}]`;
+      document.getElementById('env-badge').textContent = data.env.toUpperCase();
+    });
     </script>
   </body>
 </html>
