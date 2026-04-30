@@ -266,13 +266,9 @@
     </header>
     <main>
       <p class="muted">
-        Sube el packing list (<strong>.xlsx</strong>) y opcionalmente:
-        DOCs (<strong>.pdf</strong>, nombre debe contener <strong>DOC</strong>) para validar el XLSX y extraer HS codes,
-        y T1s (<strong>.pdf</strong>, nombre debe contener <strong>T1</strong>) para generar la hoja T1_CIERRE_CAMION.
-        La herramienta genera un XLSX enriquecido con las hojas
-        <strong>DAE_CIERRE_CAMION</strong>, <strong>DAE_LISTADO</strong>,
-        <strong>T1_CIERRE_CAMION</strong>, <strong>T1_RESUMEN</strong>,
-        <strong>VALIDACION_PL_DOC</strong>, y un CSV <strong>DAE_VISUAL</strong> listo para Visualtrans.
+        Sube el packing list (<strong>.xlsx</strong>), opcionalmente el documento DOC
+        (<strong>.pdf</strong>, nombre debe contener <strong>DOC</strong>) si quieres validar el XLSX antes de procesar.
+        La herramienta genera un XLSX enriquecido con las hojas <strong>T1_RESULT</strong> y/o <strong>DAE_RESULT</strong>.
       </p>
 
     <div class="card">
@@ -288,61 +284,39 @@
         </div>
 
         <div class="file-field">
-          <label>📄 Documentos DOC (opcional, múltiples)</label>
+          <label>📄 Documento DOC <span style="color:#dc2626"></span></label>
           <input
             id="docInput"
             type="file"
-            multiple
             accept=".pdf,application/pdf"
           />
-          <span class="hint">
-            Uno o varios PDFs — el nombre debe contener <strong>DOC</strong>
-            (ej. <span class="mono">20260310_DOC.pdf</span>, <span class="mono">20260415_TRIM_DOC.pdf</span>).
-            Necesario si quieres validación XLSX vs DOC y/o extracción de HS codes.
-          </span>
-        </div>
-
-        <div class="file-field">
-          <label>🚛 PDFs T1 (opcional, múltiples)</label>
-          <input
-            id="t1Input"
-            type="file"
-            multiple
-            accept=".pdf,application/pdf"
-          />
-          <span class="hint">
-            Uno o varios PDFs — el nombre debe contener <strong>T1</strong>
-            (ej. <span class="mono">T1_4436.pdf</span>).
-            Si no subes ninguno, no se genera la hoja T1_CIERRE_CAMION ni T1_RESUMEN.
-          </span>
+          <span class="hint">Un PDF — el nombre debe contener <strong>DOC</strong> (ej. 20260310_DOC.pdf)</span>
         </div>
       </div>
-
       <div class="file-field">
         <label>
           <input id="skipValidationInput" type="checkbox" />
           Omitir validación XLSX vs DOC
         </label>
         <span class="hint">
-          Úsalo solo si el XLSX ya fue revisado/corregido manualmente y quieres reprocesar
-          sin regenerar la hoja VALIDACION_PL_DOC. Si los DOCs están subidos, se seguirán
-          usando para extracción de HS codes (transparente).
+          Úsalo solo si el XLSX ya fue revisado/corregido manualmente y quieres reprocesar sin regenerar PDF_VALIDADO.
         </span>
       </div>
 
       <div class="file-field" style="margin-top:0.75rem">
         <label style="font-weight:600;margin-bottom:0.35rem;display:block">Subprocesos a ejecutar</label>
+        <label style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.3rem">
+          <input id="runT1Input" type="checkbox" checked />
+          <span><strong>T1_RESULT</strong> — tránsito aduanero (T1/EX, pesos del PDF)</span>
+        </label>
         <label style="display:flex;align-items:center;gap:0.5rem">
           <input id="runDaeInput" type="checkbox" checked />
-          <span><strong>DAE_CIERRE_CAMION + DAE_LISTADO + CSV DAE_VISUAL</strong> (round half-up).
-          Si lo desactivas, debes subir al menos un T1 PDF.</span>
+          <span><strong>DAE_RESULT</strong> — declaraciones de exportación (round half-up)</span>
         </label>
-        <span class="hint" style="margin-top:0.4rem">
-          El procesado T1 se activa automáticamente si subes T1 PDFs;
-          la extracción de HS codes (OCR) se activa automáticamente si subes DOCs.
+        <span class="hint" id="subprocesosHint" style="display:none;color:#dc2626">
+          Selecciona al menos un subproceso.
         </span>
       </div>
-
       <div class="row">
         <button id="btnUpload">Procesar</button>
         <span id="uploadMsg" class="muted"></span>
@@ -557,12 +531,17 @@
 
       $("btnUpload").addEventListener("click", async () => {
         const xlsxFile = $("xlsxInput").files[0];
-        const docFiles = Array.from($("docInput").files);
-        const t1Files  = Array.from($("t1Input").files);
+                const docFile = $("docInput").files[0];
         const skipValidation = $("skipValidationInput").checked;
+        const runT1  = $("runT1Input").checked;
         const runDae = $("runDaeInput").checked;
 
-        // ── XLSX (requerido) ───────────────────────────────────────────
+        if (!runT1 && !runDae) {
+          $("subprocesosHint").style.display = "block";
+          return setUploadMsg("Selecciona al menos un subproceso (T1_RESULT y/o DAE_RESULT).", true);
+        }
+        $("subprocesosHint").style.display = "none";
+
         if (!xlsxFile) {
           return setUploadMsg("Selecciona el packing list (.xlsx).", true);
         }
@@ -570,47 +549,17 @@
           return setUploadMsg(`Packing list no válido: ${xlsxFile.name}. Debe ser .xlsx`, true);
         }
 
-        // ── DOCs: validación si NO se omite la validación XLSX vs DOC ──
         if (!skipValidation) {
-          if (docFiles.length === 0) {
-            return setUploadMsg(
-              "Sube al menos un DOC (.pdf) o marca 'Omitir validación XLSX vs DOC'.",
-              true
-            );
+          if (!docFile) {
+            return setUploadMsg("Selecciona el documento DOC (.pdf) o marca 'Omitir validación XLSX vs DOC'.", true);
+          }
+          if (!/\.pdf$/i.test(docFile.name)) {
+            return setUploadMsg(`Documento DOC no válido: ${docFile.name}. Debe ser .pdf`, true);
+          }
+          if (!/doc/i.test(docFile.name)) {
+            return setUploadMsg(`El nombre del DOC debe contener "DOC": ${docFile.name}`, true);
           }
         }
-        // Si hay DOCs subidos, validar formato y nombre (aunque sea con skip_validation)
-        for (const f of docFiles) {
-          if (!/\.pdf$/i.test(f.name)) {
-            return setUploadMsg(`DOC no válido: ${f.name}. Debe ser .pdf`, true);
-          }
-          if (!/doc/i.test(f.name)) {
-            return setUploadMsg(`El nombre del DOC debe contener "DOC": ${f.name}`, true);
-          }
-        }
-
-        // ── T1s: validación de formato y nombre ───────────────────────
-        for (const f of t1Files) {
-          if (!/\.pdf$/i.test(f.name)) {
-            return setUploadMsg(`T1 no válido: ${f.name}. Debe ser .pdf`, true);
-          }
-          if (!/t1/i.test(f.name)) {
-            return setUploadMsg(`El nombre del T1 debe contener "T1": ${f.name}`, true);
-          }
-        }
-
-        // ── Validación cruzada: --no-dae requiere --t1 ───────────────
-        if (!runDae && t1Files.length === 0) {
-          return setUploadMsg(
-            "Si desactivas 'Generar DAE' debes subir al menos un T1 PDF " +
-            "(no se generaría ningún output útil).",
-            true
-          );
-        }
-
-        // ── Edge case: el operador no subió DOCs ni T1s, marcó skip_validation ──
-        // Es escenario A (solo PL fuente): válido, solo genera DAE_CIERRE_CAMION
-        // y DAE_LISTADO vacío. El CLI lo soporta.
 
         setUploadMsg("Subiendo…");
         $("statusCard").style.display = "none";
@@ -620,9 +569,12 @@
         try {
           const fd = new FormData();
           fd.append("files", xlsxFile, xlsxFile.name);
-          for (const f of docFiles) fd.append("files", f, f.name);
-          for (const f of t1Files)  fd.append("files", f, f.name);
+
+          if (docFile) {
+            fd.append("files", docFile, docFile.name);
+          }
           fd.append("skip_validation", skipValidation ? "1" : "0");
+          fd.append("run_t1",  runT1  ? "1" : "0");
           fd.append("run_dae", runDae ? "1" : "0");
 
           const r = await fetch("/api/camion/batches", { method: "POST", body: fd });
@@ -633,8 +585,7 @@
           const data = await r.json();
           const batchId = data.batch_id;
           showStatusCard(batchId);
-          const totalFiles = 1 + docFiles.length + t1Files.length;
-          setUploadMsg(`✓ Batch creado: ${batchId} (${data.files_uploaded ?? totalFiles} archivo(s))`);
+          setUploadMsg(`✓ Batch creado: ${batchId} (${data.files_uploaded} archivo(s))`);
           await startPolling(batchId);
         } catch (e) {
           setUploadMsg(e.message, true);

@@ -223,10 +223,12 @@ class UnifiedProcessor:
             cmd = self._build_croton_import_cmd(tool, files, output_path)
         elif tool.camion_mode:
             skip_validation = (processing_path / "_SKIP_VALIDATION").exists()
+            skip_t1  = (processing_path / "_SKIP_T1").exists()
             skip_dae = (processing_path / "_SKIP_DAE").exists()
             cmd = self._build_camion_cmd(
                 tool, files, output_path,
                 skip_validation=skip_validation,
+                skip_t1=skip_t1,
                 skip_dae=skip_dae,
             )
         elif tool.bl_mode:
@@ -345,36 +347,40 @@ class UnifiedProcessor:
         files: List[Path],
         output_path: Path,
         skip_validation: bool = False,
+        skip_t1:  bool = False,
         skip_dae: bool = False,
     ) -> List[str]:
         xlsx_files = [f for f in files if f.suffix.lower() == ".xlsx"]
-        pdf_files  = [f for f in files if f.suffix.lower() == ".pdf"]
+        pdf_files = [f for f in files if f.suffix.lower() == ".pdf"]
 
         if len(xlsx_files) != 1:
             raise RuntimeError(
-                f"[{tool.name}] camion_mode espera exactamente 1 XLSX file "
+                f"[{tool.name}] camion_mode expects exactly 1 XLSX file "
                 f"(packing list), got {len(xlsx_files)}."
             )
         xlsx_file = xlsx_files[0]
 
-        # Clasificación por filename
-        t1_files   = [f for f in pdf_files if "t1"  in f.name.lower()]
-        doc_files  = [f for f in pdf_files if "doc" in f.name.lower()]
+        t1_files = [f for f in pdf_files if "t1" in f.name.lower()]
+        doc_files = [f for f in pdf_files if "doc" in f.name.lower()]
         other_pdfs = [f for f in pdf_files if f not in t1_files and f not in doc_files]
 
-        if other_pdfs:
-            raise RuntimeError(
-                f"[{tool.name}] No puedo clasificar PDFs: "
-                f"{[f.name for f in other_pdfs]}. "
-                "El nombre debe contener 't1' o 'doc'."
-            )
+        if not skip_validation:
+            if other_pdfs:
+                if not doc_files and len(other_pdfs) == 1:
+                    doc_files = other_pdfs
+                    other_pdfs = []
+                else:
+                    raise RuntimeError(
+                        f"[{tool.name}] Cannot classify PDF(s): "
+                        f"{[f.name for f in other_pdfs]}. "
+                        "Use filenames containing 't1' or 'doc'."
+                    )
 
-        # Coherencia con CLI nuevo: --no-dae sin T1 aborta el orquestador
-        if skip_dae and not t1_files:
-            raise RuntimeError(
-                f"[{tool.name}] skip_dae sin T1 PDFs: el pipeline no generaría "
-                "ningún output. Sube al menos un T1 o desactiva skip_dae."
-            )
+            if len(doc_files) != 1:
+                raise RuntimeError(
+                    f"[{tool.name}] Expected exactly 1 DOC PDF file, "
+                    f"got {len(doc_files)}. Filename must contain 'doc'."
+                )
 
         cmd = [
             "python3", str(tool.extractor_path),
@@ -382,23 +388,16 @@ class UnifiedProcessor:
             "-o", str(output_path),
         ]
 
-        # Múltiples DOCs permitidos
-        if doc_files:
-            cmd.extend(["--doc", *[str(f) for f in doc_files]])
+        if not skip_validation:
+            cmd.extend(["--doc", str(doc_files[0])])
 
-        # Múltiples T1s permitidos
         if t1_files:
             cmd.extend(["--t1", *[str(f) for f in t1_files]])
 
-        # Validación: opt-in en CLI nuevo. Si no se pide skip y hay DOCs → activar.
-        if not skip_validation and doc_files:
-            cmd.append("--validate")
-
-        # DAE: solo emitir --no-dae si se pidió explícitamente (default ON en CLI)
+        if skip_t1:
+            cmd.append("--skip-t1")
         if skip_dae:
-            cmd.append("--no-dae")
-
-        # HS: transparente. CLI default = ON con DOC, OFF sin DOC. No tocar.
+            cmd.append("--skip-dae")
 
         return cmd
 

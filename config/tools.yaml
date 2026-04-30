@@ -152,7 +152,6 @@ tools:
       directory: /data/out
       artifacts:
         - "*-PROCESSED.xlsx"
-        - "*-DAE_VISUAL.csv"
 
     email:
       subject_template: "[Camion] Batch {batch_id} - Packing list procesado"

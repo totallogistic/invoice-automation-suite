@@ -219,12 +219,6 @@ def load_entries_from_xlsx(xlsx_path: Path) -> list[RowEntry]:
     wb = openpyxl.load_workbook(xlsx_path, data_only=False)
     ws = wb[wb.sheetnames[0]]
 
-    # Detectar layout dinámico (Kenitra/Tangier)
-    header_row = tuple(ws.cell(1, c).value for c in range(1, ws.max_column + 1))
-    col = _detect_col_layout(header_row)
-    pk_idx = col['pk']
-    cl_idx = col.get('cl')
-
     entries: list[RowEntry] = []
     current_tour = None
     current_date = None
@@ -244,11 +238,6 @@ def load_entries_from_xlsx(xlsx_path: Path) -> list[RowEntry]:
                 current_date = str(date_val)
         if trailer:
             current_trailer = str(trailer)
-
-        def at(idx):
-            if idx is None or idx >= len(row):
-                return None
-            return row[idx]
 
         entries.append(RowEntry(
             excel_row=row_idx,
@@ -272,8 +261,8 @@ def load_entries_from_xlsx(xlsx_path: Path) -> list[RowEntry]:
             hu=safe_float(row[17]),
             peso_bruto=safe_float(row[18]),
             peso_neto=safe_float(row[19]),
-            pk=safe_float(at(pk_idx)),
-            cl=safe_float(at(cl_idx)),
+            pk=safe_float(row[20]),
+            cl=safe_float(row[21]),
         ))
 
     return entries
@@ -583,67 +572,30 @@ def extract_t1_info(pdf_path: str) -> dict:
     }
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Detección de columnas — soporta Kenitra (22 cols) y Tangier (25 cols)
-# ─────────────────────────────────────────────────────────────────────────────
-# IMPORTANTE: el _COL hardcoded original tenía cl=21, lo que en formato Tangier
-# (que tiene PK=20, BX=21, PX=22, CL=23, RO=24) hacía que BX se leyera como CL.
-# Esta función localiza los índices buscando por nombre en la fila de cabeceras.
-
-_COL_BASE = {
-    'tour':           0,
-    'date':           1,
-    'trailer':        2,
-    'to':             3,
-    'shipper_name':   4,
-    'shipper_iso':    5,
-    'shipper_city':   6,
-    'shipper_code':   7,
+_COL = {
+    'tour': 0,
+    'date': 1,
+    'trailer': 2,
+    'to': 3,
+    'shipper_name': 4,
+    'shipper_iso': 5,
+    'shipper_city': 6,
+    'shipper_code': 7,
     'recipient_name': 8,
-    'recipient_iso':  9,
+    'recipient_iso': 9,
     'recipient_city': 10,
     'recipient_code': 11,
-    'vol':            12,
-    'mrn_invoice':    13,
-    'mrn_detail':     14,
-    'value_eur':      15,
-    'value_usd':      16,
-    'hu':             17,
-    'peso_bruto':     18,
-    'peso_neto':      19,
-    'pk':             20,
-    # bx, px, cl, ro se detectan dinámicamente abajo
+    'vol': 12,
+    'mrn_invoice': 13,
+    'mrn_detail': 14,
+    'value_eur': 15,
+    'value_usd': 16,
+    'hu': 17,
+    'peso_bruto': 18,
+    'peso_neto': 19,
+    'pk': 20,
+    'cl': 21,
 }
-
-
-def _detect_col_layout(header_row: tuple) -> dict:
-    """
-    Devuelve el dict completo de índices de columnas para esta hoja.
-    Las primeras 21 columnas son posicionales (idénticas en Kenitra y Tangier).
-    Las restantes (BX, PX, CL, RO) se localizan por nombre de cabecera.
-    """
-    col = dict(_COL_BASE)
-    h = [str(v).strip().upper() if v is not None else '' for v in header_row]
-
-    def find_after(name: str, after: int) -> Optional[int]:
-        for i in range(after + 1, len(h)):
-            if h[i] == name.upper():
-                return i
-        return None
-
-    pk_idx = col['pk']
-    col['bx'] = find_after('BX', pk_idx)
-    col['px'] = find_after('PX', pk_idx)
-    col['cl'] = find_after('CL', pk_idx)
-    col['ro'] = find_after('RO', pk_idx)
-    return col
-
-
-# Compat: muchos sitios del módulo siguen usando _COL como dict global.
-# Lo dejamos con el layout Kenitra como default, pero read_sheet1() y
-# load_entries_from_xlsx() recalculan el layout real con _detect_col_layout().
-_COL = dict(_COL_BASE)
-_COL['cl'] = 21        # default Kenitra; sobreescrito si la fuente es Tangier
 
 
 def _safe_idx(row, idx, default=None):
@@ -695,13 +647,10 @@ def read_sheet1(xlsx_path: str) -> tuple[list[dict], dict]:
     raw_rows = list(ws.iter_rows(values_only=False))
     raw = [tuple(c.value for c in r) for r in raw_rows]
 
-    # Layout real de esta hoja (Kenitra vs Tangier)
-    col = _detect_col_layout(raw[0])
-
     def has_peso_bruto_at(row_idx: int) -> bool:
         if row_idx < 0 or row_idx >= len(raw):
             return False
-        return _safe_idx(raw[row_idx], col['peso_bruto']) is not None
+        return _safe_idx(raw[row_idx], _COL['peso_bruto']) is not None
 
     summary_row_idx = next(
         i for i in range(2, min(6, len(raw))) if has_peso_bruto_at(i)
@@ -709,10 +658,10 @@ def read_sheet1(xlsx_path: str) -> tuple[list[dict], dict]:
 
     s = raw[summary_row_idx]
     summary = {
-        'total_peso_bruto': _safe_idx(s, col['peso_bruto']),
-        'total_peso_neto':  _safe_idx(s, col['peso_neto']),
-        'total_pk':         _safe_idx(s, col['pk']),
-        'total_cl':         _safe_idx(s, col['cl']) if col.get('cl') is not None else None,
+        'total_peso_bruto': _safe_idx(s, _COL['peso_bruto']),
+        'total_peso_neto': _safe_idx(s, _COL['peso_neto']),
+        'total_pk': _safe_idx(s, _COL['pk']),
+        'total_cl': _safe_idx(s, _COL['cl']),
     }
 
     rows = []
@@ -723,10 +672,7 @@ def read_sheet1(xlsx_path: str) -> tuple[list[dict], dict]:
             getattr(getattr(c.fill, 'fgColor', None), 'rgb', None) == 'FFFFFFBB'
             for c in src_row_obj if c.fill
         )
-        row_dict = {
-            k: (_safe_idx(raw_row, idx) if idx is not None else None)
-            for k, idx in col.items()
-        }
+        row_dict = {k: _safe_idx(raw_row, i) for k, i in _COL.items()}
         row_dict['_src_yellow'] = has_yellow
         rows.append(row_dict)
 
