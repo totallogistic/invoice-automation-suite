@@ -560,7 +560,8 @@ def gather_context_text(matches: list[PageMatch], page_texts: dict[int, str], ex
     max_page = max(page_texts) if page_texts else 0
     for m in matches[:3]:
         for p in range(max(1, m.page - extra_window), min(max_page, m.page + extra_window) + 1):
-            page_set.add(p)
+            if p in page_texts:     # tolera dicts con huecos (p.ej. merge multi-DOC)
+                page_set.add(p)
     pages = sorted(page_set)
     raw_text = '\n\n'.join(page_texts[p] for p in pages)
     return raw_text, normalize_token(raw_text), set(normalize_words(raw_text)), pages
@@ -1147,6 +1148,50 @@ def validate_xlsx_against_doc(
     entries = load_entries_from_xlsx(Path(xlsx_path))
     page_texts = extract_pdf_text(Path(doc_path), dpi=dpi)
     report = build_report(entries, page_texts)
+
+    if t1_paths:
+        t1_info = load_t1_summaries(t1_paths)
+        enrich_report_with_t1(entries, report, t1_info)
+    else:
+        enrich_report_with_t1(entries, report, {})
+
+    return report
+
+
+def validate_xlsx_against_docs(
+    xlsx_path: Path,
+    doc_paths: list[Path],
+    dpi: int = 150,
+    t1_paths: Optional[list[Path]] = None,
+) -> dict:
+    """
+    Valida el XLSX contra MÚLTIPLES DOC.pdfs.
+
+    Combina los textos OCR de todos los PDFs en un único mapping {page: text}
+    con numeración consecutiva. Las filas del XLSX se emparejan contra páginas
+    de cualquiera de los DOCs.
+
+    Útil cuando un camión tiene documentación repartida entre varios paquetes
+    (p.ej. Tangier Electrical + Tangier TRIM van en DOCs separados).
+    """
+    if not doc_paths:
+        raise ValueError("doc_paths no puede estar vacío")
+
+    entries = load_entries_from_xlsx(Path(xlsx_path))
+
+    # Combina páginas de todos los DOCs usando numeración consecutiva (sin gaps).
+    # IMPORTANTE: gather_context_text recorre páginas con range(m.page - 1,
+    # m.page + 1) y espera que las claves existan, así que no podemos dejar
+    # huecos en la numeración.
+    merged_page_texts: dict[int, str] = {}
+    next_page = 1
+    for doc_path in doc_paths:
+        doc_texts = extract_pdf_text(Path(doc_path), dpi=dpi)
+        for _, txt in sorted(doc_texts.items()):
+            merged_page_texts[next_page] = txt
+            next_page += 1
+
+    report = build_report(entries, merged_page_texts)
 
     if t1_paths:
         t1_info = load_t1_summaries(t1_paths)
