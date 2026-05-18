@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Formularios — totallogistic</title>
+  </head>
+  <body>
+    <p>Redirigiendo a formularios...</p>
+    <script>
+fetch('/env.json')
+    .then(r => r.json())
+    .then(data => {
+      window.location.replace(`http://${window.location.hostname}:${data.formPort}`);
+    });
+    </script>
+  </body>
+</html>
