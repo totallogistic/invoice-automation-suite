@@ -11,9 +11,6 @@ import shutil
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import List
-import random
-import string
-
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Path as PathParam, Query, Request # pyright: ignore[reportMissingImports]
 from fastapi.responses import JSONResponse, StreamingResponse, FileResponse # pyright: ignore[reportMissingImports]
 
@@ -29,10 +26,15 @@ app = FastAPI(title="Invoice Automation Suite API", version="2.0")
 registry = ToolRegistry.from_yaml(CONFIG_PATH)
 
 
-def generate_batch_id() -> str:
+def generate_batch_id(tool_name: str, inbox_dir: Path) -> str:
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
-    suffix = "".join(random.choice(string.ascii_lowercase + string.digits) for _ in range(4))
-    return f"{timestamp}_{suffix}"
+    base = f"{timestamp}_{tool_name}"
+    candidate = base
+    counter = 2
+    while (inbox_dir / candidate).exists():
+        candidate = f"{base}_{counter}"
+        counter += 1
+    return candidate
 
 
 @app.get("/health")
@@ -199,7 +201,7 @@ async def create_batch(
     if not files:
         raise HTTPException(400, "No files provided")
 
-    batch_id = generate_batch_id()
+    batch_id = generate_batch_id(tool_name, tool.inbox_dir)
     batch_inbox = tool.inbox_dir / batch_id
 
     try:
