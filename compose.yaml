@@ -81,9 +81,10 @@ services:
     depends_on:
       - unified_api
     healthcheck:
-      # nginx:alpine SÍ trae wget (a diferencia de python:3.12-slim).
-      # Test simple: nginx responde al puerto 80.
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/"]
+      # nginx:alpine usa BusyBox wget, que resuelve 'localhost' a IPv6 (::1) por
+      # defecto. Como nginx solo bindea IPv4 (0.0.0.0:80), 'localhost' falla con
+      # "Connection refused". Usar 127.0.0.1 explícitamente.
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1/"]
       interval: 30s
       timeout: 5s
       retries: 3
