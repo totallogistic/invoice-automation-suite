@@ -6,7 +6,13 @@ WORKDIR /app
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     tesseract-ocr \
+    tesseract-ocr-eng \
     tesseract-ocr-spa \
+    tesseract-ocr-fra \
+    tesseract-ocr-deu \
+    tesseract-ocr-ita \
+    poppler-utils \
+    procps \
     libpango-1.0-0 \
     libpangoft2-1.0-0 \
     libharfbuzz0b \

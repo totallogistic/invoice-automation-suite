@@ -382,8 +382,19 @@ def _blocks_to_hs_map(blocks: list[dict]) -> tuple[dict[str, str], dict[str, str
                 for hs in hs_list:
                     shipper_hs_counts[top_shipper][hs] += 1
 
-    # Construir mrn_map: HS más frecuente gana
-    mrn_map = {mrn: c.most_common(1)[0][0] for mrn, c in mrn_hs_counts.items()}
+    # Construir mrn_map.
+    # Regla del cliente: cuando un MRN tiene más de un HS distinto detectado en
+    # su(s) bloque(s), se imputa "9999" (no se elige ninguno por frecuencia).
+    # Si solo hay 1 HS distinto, se asigna ese.
+    mrn_map: dict[str, str] = {}
+    for mrn, counter in mrn_hs_counts.items():
+        if len(counter) == 1:
+            mrn_map[mrn] = next(iter(counter))
+        else:
+            mrn_map[mrn] = '9999'
+            print(f'  ℹ MRN={mrn!r} con {len(counter)} HS distintos '
+                  f'{list(counter)} → 9999',
+                  file=sys.stderr)
 
     # Construir shipper_map con salvaguardas anti-ruido
     shipper_map: dict[str, str] = {}
