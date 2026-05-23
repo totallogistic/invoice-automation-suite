@@ -113,6 +113,16 @@ HS_PATTERNS = [
     # Warennummer en Ausfuhrbegleitdokument alemán, mismo esquema que
     # Nomenclature pero en alemán                            (EX alemán)
     re.compile(r'Waren\s*nummer.{1,1500}?(?<!\d)(?!0\d)(\d{8,10})(?!\d)', re.I | re.DOTALL),
+
+    # Rumano: "Cod de nomenclatură combinată ... 39263000"   (Delfingen RO)
+    # Mismo esquema de ventana que Nomenclature/Warennummer. La clase
+    # [áaăã] cubre las realizaciones más comunes del OCR para la "ă" rumana
+    # (tesseract sin lang=ron suele entregar "a", "á" o "ã").
+    re.compile(
+        r'cod\s*de?\s*nomenclatur[áaăã]\s*combinat[áaăã]'
+        r'.{1,1500}?(?<!\d)(?!0\d)(\d{8,10})(?!\d)',
+        re.I | re.DOTALL,
+    ),
 ]
 
 PARTE_RE = re.compile(r'Parte\s+de\s+Entrada', re.I)
@@ -191,19 +201,52 @@ SHIPPER_KEYWORDS: list[tuple[str, list[str]]] = [
     ('nuova',       ['NUOVA F.NT', 'FABBRICA NONTESSUTI']),
     ('mecal',       ['MECAL']),
     ('hoffmann',    ['HOFFMANN', 'HOFFMANN SUPPLY CHAIN']),
+    # ── Shippers añadidos tras validación lote Kenitra 5424-011 ────────────
+    # Cubren los casos donde OCR detecta HS bien pero el shipper no estaba
+    # en el diccionario, dejando el bloque huérfano y sin recuperar.
+    ('delfingen',     ['DELFINGEN']),
+    ('molex',         ['MOLEX']),
+    ('tti',           ['TTI INC', 'TTI ELECTRONICS']),
+    ('scapa',         ['SCAPA', 'GROUPE SCAPA']),
+    ('lisi',          ['LISI AUTOMOTIVE']),
+    ('iriso',         ['IRISO']),
+    # Raymond: varias grafías porque OCR mete/quita espacios y puntos en el
+    # punto inicial "A." (apellido es "Raymond", marca "A. Raymond").
+    ('raymond',       ['A. RAYMOND', 'A.RAYMOND', 'RAYMOND BAGL', 'RAYMOND A.']),
+    # MTA: nombre genérico (3 letras), riesgo de match fortuito en texto OCR.
+    # Solo aceptar formas con sufijo corporativo explícito.
+    ('mta',           ['MTA S.P.A', 'MTA SPA']),
+    # Lear Vyškov (planta CZ): el OCR pierde la háček con frecuencia → ambas
+    # grafías. "MAURICE WARD" es el agente logístico que aparece en sus DOCs.
+    ('lear_vyskov',   ['LEAR VYSZKOW', 'VYŠKOV', 'VYSKOV', 'MAURICE WARD']),
+    ('schleuniger',   ['SCHLEUNIGER']),
+    ('mecalbi',       ['MECALBI']),
+    ('elastomer',     ['ELASTOMER SOLUTIONS']),
+    ('df_szerszam',   ['SZERSZAMGYARTO']),
 ]
 
 
 def _detect_shipper(text: str) -> str | None:
-    """Detecta el nombre del shipper (key) en el texto OCR, o None."""
+    """
+    Detecta el nombre del shipper (key) en el texto OCR, o None.
+
+    Estrategia: longest-match-wins. Se prefiere el keyword más largo que
+    matchee, no el primero que aparezca en la lista. Esto evita colisiones
+    cuando un keyword es substring de otro (p.ej. 'MECAL' dentro de
+    'MECALBI'). Sin esto, el shipper declarado primero en SHIPPER_KEYWORDS
+    "absorbe" al que tenga un prefijo común y declarado después.
+    """
     upper = text.upper()
+    best_key: str | None = None
+    best_len = 0
     for key, kws in SHIPPER_KEYWORDS:
         for kw in kws:
-            if kw in upper:
-                return key
-    return None
+            if kw in upper and len(kw) > best_len:
+                best_key = key
+                best_len = len(kw)
+    return best_key
 
-def _ocr_pdf(pdf_path: Path, dpi: int = 200, lang: str = 'spa+fra+eng+ita+deu',
+def _ocr_pdf(pdf_path: Path, dpi: int = 200, lang: str = 'spa+fra+eng+ita+deu+ron',
              verbose: bool = False) -> list[dict]:
     """
     OCR todas las páginas y extrae:

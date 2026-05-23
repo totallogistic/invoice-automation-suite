@@ -11,6 +11,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     tesseract-ocr-fra \
     tesseract-ocr-deu \
     tesseract-ocr-ita \
+    tesseract-ocr-ron \
     poppler-utils \
     procps \
     libpango-1.0-0 \
