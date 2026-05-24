@@ -246,7 +246,7 @@ def _detect_shipper(text: str) -> str | None:
                 best_len = len(kw)
     return best_key
 
-def _ocr_pdf(pdf_path: Path, dpi: int = 200, lang: str = 'spa+fra+eng+ita+deu+ron',
+def _ocr_pdf(pdf_path: Path, dpi: int = 200, lang: str = 'spa+fra+eng+ita+deu',
              verbose: bool = False) -> list[dict]:
     """
     OCR todas las páginas y extrae:
