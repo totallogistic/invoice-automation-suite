@@ -27,6 +27,54 @@ tools:
 
     status_dir: /data/lear_cable/status
 
+  # Lear TAC
+  - name: lear_tac
+    enabled: true
+    display_name: "Lear TAC Invoice Extractor"
+    description: "Extracts data from Lear TAC (JLR MLA Wire Harnesses) invoices"
+
+    extractor:
+      type: python
+      path: /apps/lear_tac/extractor/extract_lear_tac_fields.py
+
+    input:
+      formats: [pdf]
+      inbox: /data/lear_tac/inbox
+
+    output:
+      directory: /data/out
+      artifacts:
+        - invoices_extracted.xlsx
+
+    email:
+      subject_template: "[Lear TAC] Batch {batch_id} processed"
+
+    status_dir: /data/lear_tac/status
+
+  # Lear Kenitra
+  - name: lear_kenitra
+    enabled: true
+    display_name: "Lear Kenitra Invoice Extractor"
+    description: "Extracts data from Lear Kenitra (DSxxxxxxx) invoices"
+
+    extractor:
+      type: python
+      path: /apps/lear_kenitra/extractor/extract_lear_kenitra_fields.py
+
+    input:
+      formats: [pdf]
+      inbox: /data/lear_kenitra/inbox
+
+    output:
+      directory: /data/out
+      artifacts:
+        - invoices_extracted.xlsx
+
+    email:
+      subject_template: "[Lear Kenitra] Batch {batch_id} processed"
+
+    status_dir: /data/lear_kenitra/status
+
   # Import Partida
   - name: import_partida
     enabled: true

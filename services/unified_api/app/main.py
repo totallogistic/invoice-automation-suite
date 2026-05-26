@@ -111,6 +111,16 @@ def lear_cable_version():
     path = "/app/apps/lear_cable/extractor/extract_lear_fields.py"
     return {"version": _read_script_version(path), "changelog": _read_script_changelog(path)}
 
+@app.get("/api/lear_tac/version")
+def lear_tac_version():
+    path = "/app/apps/lear_tac/extractor/extract_lear_tac_fields.py"
+    return {"version": _read_script_version(path), "changelog": _read_script_changelog(path)}
+
+@app.get("/api/lear_kenitra/version")
+def lear_kenitra_version():
+    path = "/app/apps/lear_kenitra/extractor/extract_lear_kenitra_fields.py"
+    return {"version": _read_script_version(path), "changelog": _read_script_changelog(path)}
+
 @app.get("/api/import_partida/version")
 def import_partida_version():
     path = "/app/apps/import_partida/extractor/extract_import_partida_fields.py"
