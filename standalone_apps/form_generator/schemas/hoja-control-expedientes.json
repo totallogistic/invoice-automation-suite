@@ -1,0 +1,9 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Hoja Control Expedientes",
+  "description": "Generación y envío al ERP de la hoja de control correspondiente al expediente",
+  "category": "📁 Procesos",
+  "custom_template": "hoja-control-expedientes.html",
+  "type": "object",
+  "properties": {}
+}

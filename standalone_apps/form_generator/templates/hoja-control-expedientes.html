@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hoja Control Expedientes</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #2563a8 0%, #1a4d7e 100%);
+            min-height: 100vh;
+            padding: 2rem 1rem;
+        }
+        .container {
+            max-width: 720px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+        header {
+            background: linear-gradient(135deg, #2563a8 0%, #1a4d7e 100%);
+            color: white;
+            padding: 2rem;
+            text-align: center;
+        }
+        header h1 { font-size: 1.7rem; margin-bottom: 0.4rem; }
+        header p { opacity: 0.85; font-size: 0.9rem; }
+        .back-link {
+            display: inline-block;
+            color: white;
+            text-decoration: none;
+            padding: 0.4rem 0.9rem;
+            background: rgba(255,255,255,0.2);
+            border-radius: 6px;
+            margin-bottom: 1rem;
+            font-size: 0.875rem;
+        }
+
+        .section { padding: 1.75rem 2rem; border-bottom: 1px solid #e5e7eb; }
+        .section h2 {
+            font-size: 0.75rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: #9ca3af;
+            margin-bottom: 1.1rem;
+        }
+        .form-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 1.1rem;
+        }
+        .form-group { display: flex; flex-direction: column; gap: 0.35rem; }
+        .form-group label { font-weight: 600; font-size: 0.85rem; color: #374151; }
+        .form-group input, .form-group select {
+            padding: 0.65rem 0.8rem;
+            font-size: 0.95rem;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            font-family: inherit;
+            background: white;
+        }
+        .form-group input:focus, .form-group select:focus {
+            outline: none;
+            border-color: #2563a8;
+            box-shadow: 0 0 0 3px rgba(37,99,168,0.15);
+        }
+        .form-group .hint {
+            font-size: 0.75rem;
+            color: #6b7280;
+            margin-top: 0.1rem;
+        }
+
+        .actions {
+            padding: 1.5rem 2rem 2rem;
+            display: flex;
+            justify-content: center;
+            gap: 0.75rem;
+        }
+        .btn-docx {
+            padding: 0.95rem 2rem;
+            background: linear-gradient(135deg, #2563a8, #1a4d7e);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.15s, box-shadow 0.15s;
+            font-family: inherit;
+        }
+        .btn-docx:hover { transform: translateY(-2px); box-shadow: 0 6px 16px rgba(37,99,168,0.35); }
+        .btn-docx:disabled {
+            background: #9ca3af;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .message {
+            padding: 1rem 1.5rem;
+            border-radius: 8px;
+            font-weight: 600;
+            display: none;
+            margin: 0 2rem 1rem;
+        }
+        .message.success { background: #d1fae5; color: #065f46; border: 1px solid #6ee7b7; }
+        .message.error   { background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <header>
+        <a href="/" class="back-link">← Volver al inicio</a>
+        <h1>🗂️ Hoja Control Expedientes</h1>
+        <p>Generación y envío al ERP de la hoja de control correspondiente</p>
+    </header>
+
+    <div class="section">
+        <h2>Datos del expediente</h2>
+        <div class="form-grid">
+            <div class="form-group">
+                <label for="sheet">Tipo de hoja *</label>
+                <select id="sheet" required>
+                    <option value="">Seleccionar...</option>
+                    <option value="HOJA CONTROL IMPORT EUR-1">HOJA CONTROL IMPORT EUR-1</option>
+                    <option value="HOJA CONTROL IMPORT FACTURA PRE">HOJA CONTROL IMPORT FACTURA PRE</option>
+                    <option value="HOJA CONTROL IMPORT SIN EUR-1">HOJA CONTROL IMPORT SIN EUR-1</option>
+                    <option value="HOJA CONTROL EXPORT">HOJA CONTROL EXPORT</option>
+                    <option value="HOJA CONTROL EXPORT CON FITO">HOJA CONTROL EXPORT CON FITO</option>
+                    <option value="HOJA CONTROL EN BLANCO" disabled>HOJA CONTROL EN BLANCO (próximamente)</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="usuario">Usuario en Visual Trans *</label>
+                <select id="usuario" required>
+                    <option value="">Seleccionar...</option>
+                    <optgroup label="Personales">
+                        <option value="cbarcia">Claudia Barcia (cbarcia)</option>
+                        <option value="ccubero">Cristina Cubero (ccubero)</option>
+                        <option value="jpino">Jose Pino (jpino)</option>
+                        <option value="lmiglesias">Laura Iglesias (lmiglesias)</option>
+                        <option value="lbecerra">Lucas Becerra (lbecerra)</option>
+                        <option value="mvaro">Manuel Varo (mvaro)</option>
+                        <option value="mfasanaro">Maria Fasanaro (mfasanaro)</option>
+                        <option value="mjgomez">Maria Jose Gomez (mjgomez)</option>
+                        <option value="palmagro">Palma Almagro (palmagro)</option>
+                        <option value="rafael">Rafael Rubiales (rafael)</option>
+                        <option value="rrubiales">Ruben Rubiales (rrubiales)</option>
+                        <option value="spinto">Sergio Pinto (spinto)</option>
+                        <option value="sergior">Sergio Rubiales (sergior)</option>
+                        <option value="sreinado">Sofia Reinado (sreinado)</option>
+                        <option value="vmsepulveda">Victor Manuel Sepulveda (vmsepulveda)</option>
+                    </optgroup>
+                    <optgroup label="Compartidas">
+                        <option value="polivalente">Polivalente</option>
+                        <option value="jblanco">Visual Almacén (jblanco)</option>
+                    </optgroup>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="referencia">Número de expediente *</label>
+                <input type="text" id="referencia" placeholder="Ej: 12345" required autocomplete="off">
+                <span class="hint">Se enviará al ERP como <code>#</code> seguido de este número, sin espacios.</span>
+            </div>
+        </div>
+    </div>
+
+    <div id="message" class="message"></div>
+
+    <div class="actions">
+        <button id="btnEnviar" class="btn-docx" onclick="enviar()">📨 Generar y Enviar</button>
+    </div>
+</div>
+
+<script>
+    function collectData() {
+        return {
+            sheet:      document.getElementById('sheet').value,
+            usuario:    document.getElementById('usuario').value,
+            referencia: document.getElementById('referencia').value.trim(),
+        };
+    }
+
+    function validate(data) {
+        if (!data.sheet)      return 'Selecciona un tipo de hoja';
+        if (!data.usuario)    return 'Selecciona un usuario de Visual Trans';
+        if (!data.referencia) return 'Indica el número de expediente';
+        // Validar que la referencia no tenga espacios ni #, para no romper el parseo del ERP
+        if (/\s/.test(data.referencia)) return 'La referencia no puede contener espacios';
+        if (data.referencia.includes('#')) return 'No incluyas el #, se añade automáticamente';
+        return null;
+    }
+
+    async function enviar() {
+        const data = collectData();
+        const err = validate(data);
+        if (err) { showMsg(err, 'error'); return; }
+
+        const btn = document.getElementById('btnEnviar');
+        btn.disabled = true;
+        showMsg('Generando hoja y enviando email...', 'info');
+
+        try {
+            const res = await fetch('/api/save-hoja-control-expedientes', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data),
+            });
+            const result = await res.json();
+            if (!res.ok) throw new Error(result.detail || result.message || 'Error');
+
+            showMsg(`✅ ${result.message}`, 'success');
+            // Limpiar referencia para permitir otro envío rápido
+            document.getElementById('referencia').value = '';
+            document.getElementById('referencia').focus();
+        } catch(e) {
+            showMsg(`❌ ${e.message}`, 'error');
+        } finally {
+            btn.disabled = false;
+        }
+    }
+
+    function showMsg(text, type) {
+        const el = document.getElementById('message');
+        el.textContent = text;
+        el.className = `message ${type === 'info' ? 'success' : type}`;
+        el.style.opacity = type === 'info' ? '0.6' : '1';
+        el.style.display = 'block';
+        if (type !== 'info') el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+</script>
+</body>
+</html>
