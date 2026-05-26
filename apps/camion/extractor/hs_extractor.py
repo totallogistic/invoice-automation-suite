@@ -69,7 +69,23 @@ MRN_LAX_RE = re.compile(
 # OCR a veces confunde letras (ll→li, ff→f, etc.) por lo que los patrones
 # son tolerantes. Todos capturan 8–10 dígitos seguidos; el HS de 4 dígitos
 # son los primeros 4.
-HS_PATTERNS = [
+#
+# Hay DOS familias de patrones, diferenciadas por nivel de confianza:
+#
+#   STRONG_HS_LABELS — etiqueta directa del HS: el label SOLO precede a HS
+#     ("Tar.doua.: 39263000", "Zollnr/Cust.tariffno.: 60063200", "Commodity
+#     code: 85472000"). El número que sigue ES el HS, sin ambigüedad.
+#     Score base: 10.
+#
+#   WEAK_HS_WINDOWS — header de TABLA cuyo contenido es el HS pero también
+#     puede contener otros números (Nomenclature, Warennummer, Nomenclatura
+#     Combinata, Cod de nomenclatură combinată). El primer número 8-10 dígitos
+#     tras el header puede ser un código de referencia/albarán, no el HS real.
+#     Capturamos TODOS los candidatos en una ventana de 1500 chars y filtramos
+#     por contexto léxico (ANTI_LABEL_RE backward + POSITIVE_FWD_RE forward).
+#     Score base: 5, +5 si POSITIVE_FWD match.
+
+STRONG_HS_LABELS = [
     # Francés: "Tar.doua.: 39263000"                          (ADEX/ITW, Aplix)
     re.compile(r'tar\s*\.?\s*doua\s*\.?\s*:?\s*(\d{8,10})', re.I),
 
@@ -101,29 +117,101 @@ HS_PATTERNS = [
     # "CUSTOM TARIFF: 84669400"                              (Mecal IT)
     # Variante inglesa sin barra ni "rate"
     re.compile(r'custom\s+tariff\s*:?\s*(\d{8,10})', re.I),
+]
 
-    # Nomenclature column in EAD/EX francés: "Nomenclature [18 09]" ...
-    # muchas líneas después ... "58061000 LAPLIX..."         (Aplix EAD)
-    # Ventana amplia (1500 chars) porque entre el label y el primer valor
-    # aparecen todas las cabeceras de columna de la tabla EAD (medida real
-    # en OCR 200 dpi: ~680 chars). El negative lookahead (?!0\d) salta
-    # números de albarán/lote que empiecen por 0X y siguen buscando.
-    re.compile(r'Nomenclature.{1,1500}?(?<!\d)(?!0\d)(\d{8,10})(?!\d)', re.I | re.DOTALL),
+# Headers de TABLA — la ventana de 1500 chars tras el header puede contener
+# números que NO son HS (referencias, albaranes, números de orden). Por eso
+# se aplica filtrado contextual (anti-label backward + positive forward).
+WEAK_HS_WINDOWS = [
+    # Francés EAD/EX: "Nomenclature [18 09]" ... 58061000     (Aplix EAD)
+    re.compile(r'Nomenclature(.{1,1500})', re.I | re.DOTALL),
 
-    # Warennummer en Ausfuhrbegleitdokument alemán, mismo esquema que
-    # Nomenclature pero en alemán                            (EX alemán)
-    re.compile(r'Waren\s*nummer.{1,1500}?(?<!\d)(?!0\d)(\d{8,10})(?!\d)', re.I | re.DOTALL),
+    # Alemán Ausfuhrbegleitdokument
+    re.compile(r'Waren\s*nummer(.{1,1500})', re.I | re.DOTALL),
 
-    # Rumano: "Cod de nomenclatură combinată ... 39263000"   (Delfingen RO)
-    # Mismo esquema de ventana que Nomenclature/Warennummer. La clase
-    # [áaăã] cubre las realizaciones más comunes del OCR para la "ă" rumana
-    # (tesseract sin lang=ron suele entregar "a", "á" o "ã").
+    # Rumano: "Cod de nomenclatură combinată ..."             (Delfingen RO)
+    # Clase [áaăã] cubre realizaciones del OCR para la "ă" sin lang=ron.
     re.compile(
-        r'cod\s*de?\s*nomenclatur[áaăã]\s*combinat[áaăã]'
-        r'.{1,1500}?(?<!\d)(?!0\d)(\d{8,10})(?!\d)',
+        r'cod\s*de?\s*nomenclatur[áaăã]\s*combinat[áaăã](.{1,1500})',
         re.I | re.DOTALL,
     ),
+
+    # Italiano: "Nomenclatura Combinata (8 cifre) [18 09]"    (MTA, otros EAD IT)
+    re.compile(r'Nomenclatura\s*Combinata(.{1,1500})', re.I | re.DOTALL),
 ]
+
+# Número 8-10 dígitos NO precedido por palabra (\w = [A-Za-z0-9_]) ni seguido
+# por dígito. Esto rechaza referencias con prefijo letra pegado tipo
+# "E20589300", pero permite "RE6288EU E20589300" (porque entre espacio y E
+# hay separación) — esos casos los descarta luego ANTI_LABEL_RE.
+HS_NUM_RE = re.compile(r'(?<!\w)(?!0\d)(\d{8,10})(?!\d)')
+
+# Variante con 1 espacio interno: el OCR de MTA pg 108 entrega "853690 10"
+# por errores de kerning. Normalizamos quitando el espacio antes de validar.
+HS_NUM_SPACED_RE = re.compile(r'(?<!\w)(?!0\d)(\d{4,8})\s(\d{1,4})(?!\d)')
+
+# ANTI-LABEL: tokens léxicos que indican "el número que sigue NO es HS".
+# Es propiedad estructural del documento (etiqueta de tipo "número de cosa"),
+# 100% dinámico: NO depende del valor del HS ni de listas de partidas WCO.
+# Se evalúa sobre los ~25 chars previos al candidato dentro de la ventana.
+ANTI_LABEL_RE = re.compile(
+    r'(?:'
+    r'CT\s*\d+\s*|'                                # Molex: "CT 1 587097309..."
+    r'order\s*(?:no|number)?\s*\.?\s*:?\s*|'       # "Order no.: 377294501"
+    r'consignment\s*(?:no|number)?\s*\.?\s*|'      # "Consignment no. 377294501"
+    r'referen[zţt]\w*\s*\w*\s*|'                   # Referenznummer, Referinţă
+    r'UCR\s*[\[\]\d\s]*|'                          # UCR [12 08]
+    r'spediteur\s*-?\s*nr\s*\.?\s*|'
+    r'lieferant\w*\s*-?\s*nr\s*\.?\s*|'
+    r'versender\s*-?\s*\w*\s*|'
+    r'sendungs?\s*[\/]?\s*ladungs?\s*-?\s*\w*\s*|'
+    r'customer\s*(?:material|order)?\s*no\.?\s*|'
+    r'supplier\s*(?:material|order)?\s*no\.?\s*|'
+    r'EORI\s*:?\s*|'
+    r'IBAN\s*\w*\s*|'
+    r'tax\s*number\s*:?\s*|'
+    r'registration\s*number\s*:?\s*|'
+    r'SWIFT\s*:?\s*\w*\s*|'
+    r'CUI\s*:?\s*\w*\s*|'                          # CUI rumano (registro fiscal)
+    r'konto\s*:?\s*|'                              # IBAN/Konto bancario
+    r'fournisseur\s*:?\s*|'
+    r'frachtauftr\w*\s*-?\s*\w*\s*|'
+    r'autorisation\s+\w+\s+|'
+    r'ROREX\w*\s*|'                                # Autorizaciones RO/EX
+    r'N\d{3}\s*[—\-\/]\s*|'                        # Códigos documento aduanal N380, N864
+    r'20\d{2}\s*-\s*[A-Z]{2}\s*-\s*|'              # 2026-IT-... refs MRN-like
+    r'\d{1,2}[\./]\d{1,2}[\./]20\d{2}\s*[\/—\-]\s*'  # Fechas DD.MM.YYYY /
+    r')',
+    re.I,
+)
+
+# POSITIVE-FORWARD: tokens que CONFIRMAN que el número precedente es HS.
+# Aparecen inmediatamente después: % de TVA, código país ISO-2 EU, "VAT".
+_COUNTRY_ISO2 = (
+    r'(?:DE|FR|IT|ES|AT|CZ|PT|NL|BE|RO|HU|SK|PL|GB|IE|DK|SE|FI|EE|LV|LT|'
+    r'SI|HR|BG|GR|MT|CY|LU|CH|NO)'
+)
+POSITIVE_FWD_RE = re.compile(
+    r'^\s*(?:'
+    r'\d{1,2}\s*[,\.]\s*\d{1,2}\s*%|'              # 0,00% TVA
+    + _COUNTRY_ISO2 + r'\b|'                        # IT, DE, etc. como país
+    r'-\s*' + _COUNTRY_ISO2 + r'\b|'                # " - RO -> ..."
+    r'EU\s+VAT|'
+    r'VAT\b'
+    r')',
+    re.I,
+)
+
+# JUNK-FORWARD: si el número está inmediatamente seguido (en ≤15 chars sin
+# newline) por un identificador alfanumérico con 3+ letras mayúsculas, es muy
+# probable que sea parte de un part-number / referencia que el OCR partió por
+# mitad. Ej: "37729450 1WCCC001" — el "37729450" parece HS válido pero realmente
+# es "377294501WCCC001" partido por OCR en dos líneas.
+#
+# Discriminación vs POSITIVE_FWD_RE: los códigos país ISO-2 (IT, DE, FR, ...)
+# son SOLO 2 letras, no matchean [A-Z]{3,}. Los part-numbers tienen 3+ letras
+# (WCCC, REEU, MIDI, etc.) o letras + dígitos mezclados.
+JUNK_FWD_RE = re.compile(r'^\s{0,3}\d{0,4}[A-Z]{3,}', re.I)
 
 PARTE_RE = re.compile(r'Parte\s+de\s+Entrada', re.I)
 
@@ -165,13 +253,20 @@ def _rules_signature() -> str:
     # en el archivo). Si por alguna razón no están disponibles, falla con
     # un hash conocido para no bloquear el módulo.
     g = globals()
-    patterns = g.get('HS_PATTERNS', [])
+    strong   = g.get('STRONG_HS_LABELS', [])
+    weak     = g.get('WEAK_HS_WINDOWS', [])
+    anti     = g.get('ANTI_LABEL_RE', None)
+    pos_fwd  = g.get('POSITIVE_FWD_RE', None)
+    junk_fwd = g.get('JUNK_FWD_RE', None)
     shippers = g.get('SHIPPER_KEYWORDS', [])
 
     h = hashlib.md5()
-    for p in patterns:
+    for p in (*strong, *weak):
         h.update(p.pattern.encode('utf-8'))
         h.update(str(p.flags).encode('utf-8'))
+    for p in (anti, pos_fwd, junk_fwd):
+        if p is not None:
+            h.update(p.pattern.encode('utf-8'))
     for key, kws in shippers:
         h.update(key.encode('utf-8'))
         for kw in kws:
@@ -246,7 +341,7 @@ def _detect_shipper(text: str) -> str | None:
                 best_len = len(kw)
     return best_key
 
-def _ocr_pdf(pdf_path: Path, dpi: int = 200, lang: str = 'spa+fra+eng+ita+deu',
+def _ocr_pdf(pdf_path: Path, dpi: int = 200, lang: str = 'spa+fra+eng+ita+deu+ron',
              verbose: bool = False) -> list[dict]:
     """
     OCR todas las páginas y extrae:
@@ -293,14 +388,72 @@ def _ocr_pdf(pdf_path: Path, dpi: int = 200, lang: str = 'spa+fra+eng+ita+deu',
                 text, re.I))
         )
 
-        hs_raw: list[str] = []
-        for pat in HS_PATTERNS:
+        hs_raw: list[tuple[str, int, bool]] = []   # (hs8_or_10, score, is_strong)
+
+        # Pase 1 — labels fuertes: el número que sigue ES HS sin ambigüedad.
+        for pat in STRONG_HS_LABELS:
             for m in pat.finditer(text):
-                hs_raw.append(m.group(1))
+                hs_raw.append((m.group(1), 10, True))
+
+        # Pase 2 — headers de tabla con ventana + filtro contextual.
+        # Para cada candidato número 8-10 dígitos dentro de la ventana:
+        #   - Si la "celda lógica" inmediatamente previa (≤25 chars, tras
+        #     último \n o |) contiene un anti-label → DESCARTAR
+        #   - Si los ≤25 chars siguientes contienen un positive-fwd → +5 score
+        # Limitar el back a la "celda" evita falsos positivos cuando hay un
+        # anti-label irrelevante en alguna línea anterior dentro de la ventana
+        # (ej. "CT 1 0005019980\n\n4,550\n\n39269097" — el "CT 1" no se refiere
+        # al 39269097 sino al número de bulto en la línea previa).
+        def _adjacent_back(window: str, pos: int) -> str:
+            raw = window[max(0, pos - 25):pos]
+            # Quedarnos solo con la última celda: tras el último \n o |
+            return re.split(r'[\n\|]', raw)[-1]
+
+        for wpat in WEAK_HS_WINDOWS:
+            for wm in wpat.finditer(text):
+                window = wm.group(1)
+                # Candidatos sin espacio interno
+                for nm in HS_NUM_RE.finditer(window):
+                    num   = nm.group(1)
+                    back  = _adjacent_back(window, nm.start())
+                    fwd   = window[nm.end():nm.end() + 25]
+                    if ANTI_LABEL_RE.search(back):
+                        continue
+                    if JUNK_FWD_RE.match(fwd):
+                        continue
+                    score = 5 + (5 if POSITIVE_FWD_RE.match(fwd) else 0)
+                    hs_raw.append((num, score, False))
+                # Candidatos con 1 espacio interno (OCR mangled, ej. "853690 10")
+                for sm in HS_NUM_SPACED_RE.finditer(window):
+                    clean = sm.group(1) + sm.group(2)
+                    if not (8 <= len(clean) <= 10):
+                        continue
+                    back = _adjacent_back(window, sm.start())
+                    fwd  = window[sm.end():sm.end() + 25]
+                    if ANTI_LABEL_RE.search(back):
+                        continue
+                    if JUNK_FWD_RE.match(fwd):
+                        continue
+                    score = 5 + (5 if POSITIVE_FWD_RE.match(fwd) else 0)
+                    hs_raw.append((clean, score, False))
+
         # Sanity check: en el sistema HS no existe el capítulo 00. Cualquier
         # número de 8 dígitos que empiece por "00" es ruido OCR (típicamente
         # números de albarán o lote captados por error).
-        hs4 = sorted({code[:4] for code in hs_raw if not code.startswith('00')})
+        # Acumulamos score por hs4 dentro de la página (un mismo hs4 capturado
+        # por varios patrones suma sus scores). Además trackeamos qué hs4 tienen
+        # al menos una contribución STRONG (label directo, no ambiguo).
+        hs_cands:        dict[str, int]  = {}
+        hs_strong_seen:  set[str]        = set()
+        for code, score, is_strong in hs_raw:
+            if code.startswith('00'):
+                continue
+            hs4 = code[:4]
+            hs_cands[hs4] = hs_cands.get(hs4, 0) + score
+            if is_strong:
+                hs_strong_seen.add(hs4)
+        # Vista plana retrocompatible para el log verbose y otros consumidores
+        hs4 = sorted(hs_cands.keys())
 
         shipper = _detect_shipper(text)
 
@@ -310,6 +463,8 @@ def _ocr_pdf(pdf_path: Path, dpi: int = 200, lang: str = 'spa+fra+eng+ita+deu',
             'has_mrn_hint': has_mrn_hint,
             'mrns': mrns,
             'hs4': hs4,
+            'hs_cands': hs_cands,         # {hs4: score_total_pagina}
+            'hs_strong': hs_strong_seen,  # set de hs4 con al menos 1 STRONG match
             'shipper': shipper,
         })
 
@@ -357,14 +512,21 @@ def _group_into_blocks(pages_info: list[dict]) -> list[dict]:
         if opens_block:
             if current is not None:
                 blocks.append(current)
-            current = {'pages': [], 'mrns': [], 'hs4': []}
+            current = {'pages': [], 'mrns': [], 'hs4': [], 'hs_cands': {},
+                       'hs_strong': set()}
 
         if current is None:
-            current = {'pages': [], 'mrns': [], 'hs4': []}
+            current = {'pages': [], 'mrns': [], 'hs4': [], 'hs_cands': {},
+                       'hs_strong': set()}
 
         current['pages'].append(info['page'])
         current['mrns'].extend(info['mrns'])
         current['hs4'].extend(info['hs4'])
+        # Acumular scores: sumamos por hs4 a lo largo de las páginas del bloque
+        for hs4, sc in info.get('hs_cands', {}).items():
+            current['hs_cands'][hs4] = current['hs_cands'].get(hs4, 0) + sc
+        # Set de hs4 con al menos una contribución STRONG en el bloque
+        current['hs_strong'] |= info.get('hs_strong', set())
         if info.get('shipper'):
             current.setdefault('shippers', []).append(info['shipper'])
 
@@ -375,6 +537,40 @@ def _group_into_blocks(pages_info: list[dict]) -> list[dict]:
         blocks.append(current)
 
     return blocks
+
+
+def _resolve_block_hs(hs_cands: dict[str, int],
+                      hs_strong: set[str] | None = None) -> str | None:
+    """
+    Dado el diccionario {hs4: score_total} de un bloque, decide el HS final:
+
+      - Si ≥2 HS4 distintos tienen al menos UNA contribución STRONG (label
+        directo, no header de tabla) → multi-HS legítimo → '9999'. Esta regla
+        sobrescribe el ratio porque dos labels directos en el mismo bloque
+        son evidencia explícita de mercancía mixta (ej. Scapa: caucho 4005
+        + papel adhesivo 4811, ambos con "Commodity Code").
+      - Si solo hay 1 hs4 con score > 0 → ese.
+      - Si el top tiene score > 2× el del segundo → top gana ("dominancia clara").
+      - Si no hay dominancia → multi-HS → '9999'.
+      - Si no hay ningún candidato → None.
+
+    El ratio 2× distingue:
+      - HS real + ruido OCR (3926:35 vs 2901:15 → top wins)
+      - dos HS por WEAK con scores comparables (8536:15 vs 8547:15 → 9999)
+    """
+    if not hs_cands:
+        return None
+    hs_strong = hs_strong or set()
+    if len(hs_strong) >= 2:
+        return '9999'
+    ranked = sorted(hs_cands.items(), key=lambda kv: kv[1], reverse=True)
+    top_hs, top_sc = ranked[0]
+    if len(ranked) == 1:
+        return top_hs
+    _, second_sc = ranked[1]
+    if top_sc > 2 * second_sc:
+        return top_hs
+    return '9999'
 
 
 def _blocks_to_hs_map(blocks: list[dict]) -> tuple[dict[str, str], dict[str, str]]:
@@ -388,78 +584,82 @@ def _blocks_to_hs_map(blocks: list[dict]) -> tuple[dict[str, str], dict[str, str
       - Si el bloque tiene 1 MRN + HS → asociar al MRN.
       - Si tiene N MRNs + HS → asociar a cada uno (marca ambigüedad en stderr).
       - Si tiene 0 MRNs pero SÍ shipper detectado + HS → volcar al shipper_map.
-      - HS más frecuente dentro del bloque gana.
+      - HS por bloque se resuelve con _resolve_block_hs (scoring + ratio 2×).
 
     Anti-falsos-positivos en shipper_map:
-      - Solo se promueve un shipper→HS si el HS aparece al menos MIN_SHIPPER_HITS
-        veces en el bloque (2 por defecto). Un solo HS aislado puede ser metadata
+      - Solo se promueve un shipper→HS si el bloque resuelve a un HS != 9999
+        con score >= MIN_SHIPPER_SCORE. Un solo HS aislado puede ser metadata
         de otra factura (p.ej. aptiv mencionando el HS de ADEX en cabecera).
-      - Si hay empate entre varios HS, se descarta el match (ambiguo).
     """
     from collections import Counter, defaultdict
 
-    MIN_SHIPPER_HITS = 2   # cuántas veces debe aparecer un HS para confiar en él
+    MIN_SHIPPER_SCORE = 10   # score mínimo total para confiar en shipper-match
 
-    mrn_hs_counts:     dict[str, Counter] = defaultdict(Counter)
-    shipper_hs_counts: dict[str, Counter] = defaultdict(Counter)
+    # Para cada MRN, acumulamos scores por hs4 a través de TODOS los bloques que
+    # lo contienen (suma de evidencia). También acumulamos el set de hs4 con al
+    # menos una contribución STRONG.
+    mrn_score:     dict[str, dict[str, int]]     = defaultdict(lambda: defaultdict(int))
+    mrn_strong:    dict[str, set[str]]           = defaultdict(set)
+    shipper_score: dict[str, dict[str, int]]     = defaultdict(lambda: defaultdict(int))
+    shipper_strong:dict[str, set[str]]           = defaultdict(set)
 
     for block in blocks:
-        mrns    = sorted(set(block['mrns']))
-        hs_list = block['hs4']
-        if not hs_list:
+        mrns      = sorted(set(block['mrns']))
+        hs_cands  = block.get('hs_cands', {})
+        hs_strong = block.get('hs_strong', set())
+        if not hs_cands:
             continue
 
         if mrns:
             for mrn in mrns:
-                for hs in hs_list:
-                    mrn_hs_counts[mrn][hs] += 1
+                for hs4, sc in hs_cands.items():
+                    mrn_score[mrn][hs4] += sc
+                mrn_strong[mrn] |= hs_strong
             if len(mrns) > 1:
                 print(f'  ⚠ Bloque páginas {block["pages"]} con {len(mrns)} MRNs '
-                      f'({mrns}) — HS {hs_list} asociados a todos',
+                      f'({mrns}) — HS cands {dict(hs_cands)} asociados a todos',
                       file=sys.stderr)
         else:
             # Bloque huérfano: sin MRN legible. Usar shipper como fallback.
             shippers = block.get('shippers', [])
             if shippers:
                 top_shipper = Counter(shippers).most_common(1)[0][0]
-                for hs in hs_list:
-                    shipper_hs_counts[top_shipper][hs] += 1
+                for hs4, sc in hs_cands.items():
+                    shipper_score[top_shipper][hs4] += sc
+                shipper_strong[top_shipper] |= hs_strong
 
-    # Construir mrn_map.
-    # Regla del cliente: cuando un MRN tiene más de un HS distinto detectado en
-    # su(s) bloque(s), se imputa "9999" (no se elige ninguno por frecuencia).
-    # Si solo hay 1 HS distinto, se asigna ese.
+    # Construir mrn_map aplicando ratio 2× a los scores acumulados
     mrn_map: dict[str, str] = {}
-    for mrn, counter in mrn_hs_counts.items():
-        if len(counter) == 1:
-            mrn_map[mrn] = next(iter(counter))
-        else:
-            mrn_map[mrn] = '9999'
-            print(f'  ℹ MRN={mrn!r} con {len(counter)} HS distintos '
-                  f'{list(counter)} → 9999',
+    for mrn, score_dict in mrn_score.items():
+        resolved = _resolve_block_hs(dict(score_dict), mrn_strong.get(mrn))
+        if resolved is None:
+            continue
+        mrn_map[mrn] = resolved
+        if resolved == '9999':
+            print(f'  ℹ MRN={mrn!r} con HS ambiguos {dict(score_dict)} → 9999',
                   file=sys.stderr)
 
     # Construir shipper_map con salvaguardas anti-ruido
     shipper_map: dict[str, str] = {}
-    for ship, counter in shipper_hs_counts.items():
-        top_list = counter.most_common(2)
-        top_hs, top_hits = top_list[0]
-
-        # Salvaguarda 1: frecuencia mínima (evita HS aislados que son metadata ajena)
-        if top_hits < MIN_SHIPPER_HITS:
-            print(f'  ⊘ shipper={ship!r} descartado: HS {top_hs} solo aparece {top_hits} vez '
-                  f'(umbral MIN_SHIPPER_HITS={MIN_SHIPPER_HITS})',
+    for ship, score_dict in shipper_score.items():
+        resolved = _resolve_block_hs(dict(score_dict), shipper_strong.get(ship))
+        if resolved is None or resolved == '9999':
+            print(f'  ⊘ shipper={ship!r} descartado: HS ambiguo o vacío '
+                  f'(scores {dict(score_dict)})',
                   file=sys.stderr)
             continue
 
-        # Salvaguarda 2: si hay empate en primer lugar, es ambiguo → descartar
-        if len(top_list) > 1 and top_list[0][1] == top_list[1][1]:
-            print(f'  ⊘ shipper={ship!r} descartado: empate entre {top_list[0]} y {top_list[1]}',
+        # Salvaguarda: el HS dominante debe tener score mínimo. Filtra
+        # menciones aisladas (p.ej. un HS suelto en metadata de otra factura).
+        top_score = score_dict[resolved]
+        if top_score < MIN_SHIPPER_SCORE:
+            print(f'  ⊘ shipper={ship!r} descartado: HS {resolved} con score {top_score} '
+                  f'< MIN_SHIPPER_SCORE={MIN_SHIPPER_SCORE}',
                   file=sys.stderr)
             continue
 
-        shipper_map[ship] = top_hs
-        print(f'  ℹ shipper={ship!r} → HS {top_hs} ({top_hits} ocurrencias en bloque huérfano)',
+        shipper_map[ship] = resolved
+        print(f'  ℹ shipper={ship!r} → HS {resolved} (score {top_score} en bloque huérfano)',
               file=sys.stderr)
 
     return mrn_map, shipper_map
@@ -469,9 +669,9 @@ def _blocks_to_hs_map(blocks: list[dict]) -> tuple[dict[str, str], dict[str, str
 # API pública
 # ─────────────────────────────────────────────────────────────────────────────
 
-# Cambio de forma en v2 → versiona la caché para invalidar automáticamente
-# resultados de versiones anteriores del extractor.
-_CACHE_VERSION = 2
+# Cambio de forma en v3 → versiona la caché para invalidar automáticamente
+# resultados de versiones anteriores del extractor (v2 → v3: scoring + ratio2x).
+_CACHE_VERSION = 3
 
 
 def extract_hs_from_pdf(pdf_path: str | Path, dpi: int = 200,
