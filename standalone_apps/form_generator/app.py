@@ -2128,7 +2128,7 @@ async def save_hoja_control_expedientes(request: Request):
     wb.save(out_path)
 
     # ── 5. Enviar email ───────────────────────────────────────────────
-    subject = f"{sheet} - #{referencia}"
+    subject = f"#EX{referencia}#"
     body = (
         f"Adjunto hoja de control correspondiente al expediente #{referencia}.\n"
         f"\n"
