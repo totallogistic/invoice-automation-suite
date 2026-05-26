@@ -35,6 +35,35 @@ def generate_batch_id() -> str:
     return f"{timestamp}_{suffix}"
 
 
+def _cleanup_orphan_inbox(batch_inbox: Path) -> None:
+    """
+    Borra una carpeta de batch si quedó huérfana tras un fallo de validación.
+
+    Una carpeta se considera huérfana si:
+      - No existe (no hay nada que limpiar).
+      - Está vacía.
+      - Solo contiene markers internos (archivos cuyo nombre empieza por '_'),
+        sin archivos de datos reales del cliente.
+
+    Si hay archivos de datos (XLSX/PDF/CSV), NO se borra para preservar
+    evidencia de uploads parciales (útil para diagnóstico).
+    """
+    if not batch_inbox.exists():
+        return
+    try:
+        # Listar archivos NO-marker (los marker empiezan por '_')
+        data_files = [
+            f for f in batch_inbox.iterdir()
+            if f.is_file() and not f.name.startswith("_")
+        ]
+        if not data_files:
+            shutil.rmtree(batch_inbox, ignore_errors=True)
+    except Exception:
+        # Si algo falla durante el cleanup, lo ignoramos:
+        # mejor dejar la carpeta huérfana que romper el response error original.
+        pass
+
+
 @app.get("/health")
 def health():
     return {"ok": True, "tools": registry.list_tools(), "data_root": str(DATA_ROOT)}
@@ -80,6 +109,16 @@ def lear_rabat_version():
 @app.get("/api/lear_cable/version")
 def lear_cable_version():
     path = "/app/apps/lear_cable/extractor/extract_lear_fields.py"
+    return {"version": _read_script_version(path), "changelog": _read_script_changelog(path)}
+
+@app.get("/api/lear_tac/version")
+def lear_tac_version():
+    path = "/app/apps/lear_tac/extractor/extract_lear_tac_fields.py"
+    return {"version": _read_script_version(path), "changelog": _read_script_changelog(path)}
+
+@app.get("/api/lear_kenitra/version")
+def lear_kenitra_version():
+    path = "/app/apps/lear_kenitra/extractor/extract_lear_kenitra_fields.py"
     return {"version": _read_script_version(path), "changelog": _read_script_changelog(path)}
 
 @app.get("/api/import_partida/version")
@@ -270,10 +309,13 @@ async def create_batch(
         }
 
     except HTTPException:
+        # Limpiar carpeta huérfana si no contiene archivos útiles
+        # (validación falló antes de escribir contenido — solo markers como _SKIP_*).
+        _cleanup_orphan_inbox(batch_inbox)
         raise
     except Exception as e:
         if batch_inbox.exists():
-            shutil.rmtree(batch_inbox)
+            shutil.rmtree(batch_inbox, ignore_errors=True)
         raise HTTPException(500, f"Error: {str(e)}")
 
 

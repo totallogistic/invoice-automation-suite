@@ -2019,6 +2019,143 @@ async def _save_entrega_epis_original(request: Request, generate_docx: bool = Fa
 
     return JSONResponse(response)
 
+# ═══════════════════════════════════════════════════════════════════════
+# Hoja Control Expedientes
+# ═══════════════════════════════════════════════════════════════════════
+# Master xlsx con las 6 hojas pre-configuradas.
+HOJAS_CONTROL_MASTER = Path(__file__).parent / "templates" / "hojas_control" / "HOJAS_CONTROL_EXPEDIENTES.xlsx"
+
+# Hojas válidas (la "EN BLANCO" se gestionará en fase 2 como formulario editable).
+HOJAS_CONTROL_VALIDAS = {
+    "HOJA CONTROL IMPORT EUR-1",
+    "HOJA CONTROL IMPORT FACTURA PRE",
+    "HOJA CONTROL IMPORT SIN EUR-1",
+    "HOJA CONTROL EXPORT",
+    "HOJA CONTROL EXPORT CON FITO",
+}
+
+
+def _send_hoja_control_email(to_email: str, subject: str, body_text: str, xlsx_path: Path) -> bool:
+    """Envía el xlsx generado al destinatario configurado. Devuelve True/False."""
+    if not SMTP_HOST or not SMTP_USER or not SMTP_PASS:
+        print("⚠️ [hoja-control] SMTP no configurado, no se envía email")
+        return False
+
+    try:
+        msg = MIMEMultipart()
+        msg['From'] = MAIL_FROM or SMTP_USER
+        msg['To'] = to_email
+        msg['Subject'] = subject
+        msg.attach(MIMEText(body_text, 'plain', 'utf-8'))
+
+        with open(xlsx_path, 'rb') as f:
+            attach = MIMEBase('application',
+                              'vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+            attach.set_payload(f.read())
+            encoders.encode_base64(attach)
+            attach.add_header('Content-Disposition',
+                              f'attachment; filename="{xlsx_path.name}"')
+            msg.attach(attach)
+
+        if SMTP_PORT == 465:
+            with smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT) as server:
+                server.login(SMTP_USER, SMTP_PASS)
+                server.send_message(msg)
+        else:
+            with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as server:
+                server.starttls()
+                server.login(SMTP_USER, SMTP_PASS)
+                server.send_message(msg)
+
+        print(f"✅ [hoja-control] Email enviado a {to_email} — {subject}")
+        return True
+    except Exception as e:
+        print(f"❌ [hoja-control] Error enviando email: {e}")
+        return False
+
+
+@app.post("/api/save-hoja-control-expedientes")
+async def save_hoja_control_expedientes(request: Request):
+    """
+    Genera la hoja de control correspondiente a un expediente y la envía al ERP.
+
+    Body JSON:
+      { "sheet": "HOJA CONTROL IMPORT FACTURA PRE",
+        "usuario": "cbarcia",
+        "referencia": "12345" }
+
+    Flujo:
+      1. Carga el master xlsx
+      2. Deja únicamente la hoja seleccionada (preservando formato, merges, X's)
+      3. Sobrescribe C70 con la fecha de hoy y F70 con el usuario VT
+      4. Guarda en EXCEL_STORAGE_DIR como  {SHEET}_{REF}_{YYYYMMDD}.xlsx
+      5. Envía email a MAIL_TO_HOJA_CONTROL_EXPEDIENTES con asunto "{SHEET} - #{REF}"
+    """
+    data       = await request.json()
+    sheet      = (data.get('sheet')      or '').strip()
+    usuario    = (data.get('usuario')    or '').strip()
+    referencia = (data.get('referencia') or '').strip()
+
+    if sheet not in HOJAS_CONTROL_VALIDAS:
+        raise HTTPException(400, f"Tipo de hoja no válido: {sheet!r}")
+    if not usuario:
+        raise HTTPException(400, "El campo 'usuario' es obligatorio")
+    if not referencia:
+        raise HTTPException(400, "El campo 'referencia' es obligatorio")
+    if any(c.isspace() for c in referencia) or '#' in referencia:
+        raise HTTPException(400, "La referencia no puede contener espacios ni '#'")
+
+    if not HOJAS_CONTROL_MASTER.exists():
+        raise HTTPException(500, f"Master xlsx no encontrado en {HOJAS_CONTROL_MASTER}")
+
+    # ── 1+2. Cargar y filtrar a una sola hoja ─────────────────────────
+    wb = load_workbook(HOJAS_CONTROL_MASTER)
+    for name in list(wb.sheetnames):
+        if name != sheet:
+            del wb[name]
+    ws = wb[sheet]
+
+    # ── 3. Escribir fecha y usuario (sobrescriben los labels en C70/F70) ──
+    today_str = datetime.now().strftime('%d/%m/%Y')
+    ws['C70'] = today_str
+    ws['F70'] = usuario
+
+    # ── 4. Guardar con naming acordado ────────────────────────────────
+    today_compact = datetime.now().strftime('%Y%m%d')
+    safe_sheet = sheet.replace(' ', '_').replace('/', '-')
+    out_name = f"{safe_sheet}_{referencia}_{today_compact}.xlsx"
+    out_path = EXCEL_STORAGE_DIR / out_name
+    wb.save(out_path)
+
+    # ── 5. Enviar email ───────────────────────────────────────────────
+    subject = f"#EX{referencia}#"
+    body = (
+        f"Adjunto hoja de control correspondiente al expediente #{referencia}.\n"
+        f"\n"
+        f"Tipo: {sheet}\n"
+        f"Usuario: {usuario}\n"
+        f"Fecha: {today_str}\n"
+        f"\n"
+        f"Mensaje generado automáticamente por el sistema de formularios de Totallogistic."
+    )
+
+    email_to = os.getenv("MAIL_TO_HOJA_CONTROL_EXPEDIENTES", "").strip() or os.getenv("MAIL_TO", "").strip()
+    email_sent = False
+    if email_to:
+        email_sent = _send_hoja_control_email(email_to, subject, body, out_path)
+
+    return JSONResponse({
+        "success": True,
+        "message": (
+            f"Hoja generada y enviada a {email_to}" if email_sent
+            else f"Hoja generada ({out_name}) — email NO enviado (revisa configuración)"
+        ),
+        "excel_file": out_name,
+        "subject": subject,
+        "email_sent": email_sent,
+    })
+
+
 if __name__ == "__main__":
     print("=" * 60)
     print("🚀 JSON Schema Form Generator")

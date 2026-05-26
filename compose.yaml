@@ -23,10 +23,13 @@ services:
     ports:
       - "${UNIFIED_API_PORT:-8000}:8000"  
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8000/health"]
+      # python3 está siempre disponible en python:3.12-slim, wget NO.
+      # Hace GET a /health (endpoint que existe en main.py) y comprueba status=200.
+      test: ["CMD", "python3", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health', timeout=3).status == 200 else 1)"]
       interval: 30s
-      timeout: 10s
+      timeout: 5s
       retries: 3
+      start_period: 10s
 
   unified_processor:
     build:
@@ -44,6 +47,8 @@ services:
       - MAIL_FROM=${MAIL_FROM}
       - MAIL_TO=${MAIL_TO}
       - MAIL_TO_LEAR_CABLE=${MAIL_TO_LEAR_CABLE:-}
+      - MAIL_TO_LEAR_TAC=${MAIL_TO_LEAR_TAC:-}
+      - MAIL_TO_LEAR_KENITRA=${MAIL_TO_LEAR_KENITRA:-}
       - MAIL_TO_LEAR_RABAT=${MAIL_TO_LEAR_RABAT:-}
       - MAIL_TO_CUADRE_ASIENTOS=${MAIL_TO_CUADRE_ASIENTOS:-}
       - MAIL_TO_IMPORT_PARTIDA=${MAIL_TO_IMPORT_PARTIDA:-}
@@ -78,7 +83,11 @@ services:
     depends_on:
       - unified_api
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/"]
+      # nginx:alpine usa BusyBox wget, que resuelve 'localhost' a IPv6 (::1) por
+      # defecto. Como nginx solo bindea IPv4 (0.0.0.0:80), 'localhost' falla con
+      # "Connection refused". Usar 127.0.0.1 explícitamente.
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1/"]
       interval: 30s
-      timeout: 10s
+      timeout: 5s
       retries: 3
+      start_period: 5s

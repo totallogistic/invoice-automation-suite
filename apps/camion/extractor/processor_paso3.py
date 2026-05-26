@@ -8,7 +8,7 @@ y produce:
   1. Hoja PASO_3 en el XLSX:
         4 columnas: MRN (sin "EX:") | HS code | Bultos unif. | Peso Bruto
         - Solo filas cuyo MRN/Invoice empieza por "EX:".
-        - Bultos unificados = primer valor no-nulo entre PK, BX, PX, CL, RO.
+        - Bultos unificados = SUMA de PK + BX + PX + CL + RO.
         - Peso Bruto redondeado half-up.
         - HS code rellenado desde el dict {MRN: HS} pasado como argumento;
           cadena vacía si no hay match.
@@ -74,20 +74,32 @@ def _strip_ex_prefix(mrn: str) -> str:
 
 def _unified_bultos(row: dict) -> Optional[int]:
     """
-    Toma el primer valor no-nulo entre PK, BX, PX, CL, RO.
-    Cada fila DAE tiene bultos en sólo UNA de esas columnas.
+    Suma todos los tipos de bulto de la fila (PK + BX + PX + CL + RO).
+
+    Una fila DAE puede tener bultos repartidos en múltiples columnas
+    (ej. 1 BX + 5 PX = 6 unidades totales). Anteriormente solo se leía
+    la primera columna no-vacía, lo cual fallaba silenciosamente cuando
+    había más de un tipo de bulto en la misma línea.
+
+    Returns:
+        Suma total de bultos como int, o None si todas las columnas están vacías.
     """
+    total = 0
+    found = False
     for key in ('pk', 'bx', 'px', 'cl', 'ro'):
         v = row.get(key)
-        if v is not None and v != '':
+        if v is None or v == '':
+            continue
+        try:
+            total += int(v)
+            found = True
+        except (TypeError, ValueError):
             try:
-                return int(v)
+                total += int(float(v))
+                found = True
             except (TypeError, ValueError):
-                try:
-                    return int(float(v))
-                except (TypeError, ValueError):
-                    pass
-    return None
+                pass
+    return total if found else None
 
 
 def build_paso3_rows(source_rows: list[dict],
