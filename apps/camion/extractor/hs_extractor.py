@@ -117,6 +117,14 @@ STRONG_HS_LABELS = [
     # "CUSTOM TARIFF: 84669400"                              (Mecal IT)
     # Variante inglesa sin barra ni "rate"
     re.compile(r'custom\s+tariff\s*:?\s*(\d{8,10})', re.I),
+
+    # "HS CODE: 4821109000" / "HS-Code : 39269097"           (Micros ES, Raymond DE)
+    # Label genérico universal, usado por proveedores de varias jurisdicciones.
+    re.compile(r'HS[\s\-]*code\s*:?\s*(\d{8,10})', re.I),
+
+    # "Tariff Code: 84199085"                                (Mecalbi PT)
+    # Variante portuguesa/inglesa sin "Customs" delante.
+    re.compile(r'tariff\s*code\s*:?\s*(\d{8,10})', re.I),
 ]
 
 # Headers de TABLA — la ventana de 1500 chars tras el header puede contener
