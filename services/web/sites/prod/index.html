@@ -161,6 +161,10 @@
           🚢 BL Extractor
          <span class="tool-badge badge-operativo">Operativo</span>
         </a>
+        <a href="#" id="hoja-control-link" target="_blank" class="external">
+          🗂️ Hoja Control Expedientes
+          <span class="tool-badge badge-operativo">Operativo</span>
+        </a>
       </div>
 
 
@@ -207,6 +211,7 @@ fetch('/env.json')
       const formUrl = `http://${window.location.hostname}:${data.formPort}`;
       document.getElementById('form-generator-link').href = formUrl;
       document.getElementById('bl-viewer-link').href = `${formUrl}/bl`;
+      document.getElementById('hoja-control-link').href = `${formUrl}/form/hoja-control-expedientes`;
     });
     </script>
   </body>

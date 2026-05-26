@@ -179,6 +179,18 @@
 </div>
 
 <script>
+    // Si la URL trae ?sheet=..., preselecciona ese tipo en el desplegable.
+    // Permite que los enlaces directos del index funcionen sin que el usuario
+    // tenga que volver a elegir el tipo. Sigue siendo editable.
+    (function preselectFromQuery() {
+        const params = new URLSearchParams(window.location.search);
+        const sheet  = params.get('sheet');
+        if (!sheet) return;
+        const select = document.getElementById('sheet');
+        const opt = Array.from(select.options).find(o => o.value === sheet && !o.disabled);
+        if (opt) select.value = sheet;
+    })();
+
     function collectData() {
         return {
             sheet:      document.getElementById('sheet').value,
