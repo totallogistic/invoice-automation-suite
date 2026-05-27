@@ -101,6 +101,12 @@ def _read_script_changelog(path: str) -> str:
 
 # ── Version endpoints ─────────────────────────────────────────────────────────
 
+@app.get("/api/intrastat/version")
+def intrastat_version():
+    # La versión / changelog viven en el script real, no en el wrapper.
+    path = "/app/apps/intrastat/extractor/intrastat_generator.py"
+    return {"version": _read_script_version(path), "changelog": _read_script_changelog(path)}
+
 @app.get("/api/lear_rabat/version")
 def lear_rabat_version():
     path = "/app/apps/lear_rabat/extractor/extract_lear_rabat.py"

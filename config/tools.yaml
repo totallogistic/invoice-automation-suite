@@ -352,3 +352,31 @@ tools:
       subject_template: "[Export Visual] Batch {batch_id} - CSV listo"
 
     status_dir: /data/export_visual/status
+
+  # Intrastat — Generador CSV/TXT para AEAT
+  - name: intrastat
+    enabled: true
+    display_name: "Intrastat — Generador CSV AEAT"
+    description: >
+      Convierte el archivo Excel exportado del programa "Visual" (una hoja, 8
+      columnas del DUA) en el CSV plano separado por ";" que admite la AEAT.
+      Replica byte a byte la lógica del modelo Excel del cliente (hojas
+      "pegar archivo visual" y "intrastat archivo prueba").
+
+    extractor:
+      type: python
+      path: /apps/intrastat/extractor/wrapper.py
+
+    input:
+      formats: [xlsx, ods, csv]
+      inbox: /data/intrastat/inbox
+
+    output:
+      directory: /data/out
+      artifacts:
+        - "intrastat_*.csv"
+
+    email:
+      subject_template: "[Intrastat] Batch {batch_id} — CSV AEAT listo"
+
+    status_dir: /data/intrastat/status
