@@ -1,18 +1,77 @@
 #!/usr/bin/env python3
 """
 caratula_dhl.py — Generador de Carátulas DHL · DDG51 Base Naval Rota
+====================================================================
 Total Logistic Services, S.L.
 
-Uso:
-  python caratula_dhl.py <carpeta>
-  python caratula_dhl.py <carpeta> --output ./salida
-  python caratula_dhl.py <carpeta> --dry-run
+Uso (modo unified stack — file watcher / API):
+    python3 caratula_dhl.py file1.pdf file2.pdf ... -o /output_dir
+
+Uso (standalone — carpeta de lote):
+    python3 caratula_dhl.py /ruta/al/lote
+    python3 caratula_dhl.py /ruta/al/lote --output /salida
+    python3 caratula_dhl.py /ruta/al/lote --dry-run
 
 La plantilla debe estar en el mismo directorio que el script:
-  caratula_template.pdf   ← tu modelo modificado con los placeholders naranjas
+    caratula_template.pdf   ← modelo con los placeholders naranjas
+
+Por cada Factura TLS (NNNNCADNN[NN]) detectada en el lote se genera un
+Caratula_DHL_<claves>.pdf que une carátula + factura + cotización + albarán
++ seguro + certificado + invoice proveedor + packing list + labels + resto
+en el orden de prioridad de CATEGORIES.
+"""
+from __future__ import annotations
+
+SCRIPT_VERSION = "2026-05-27.v1"
+
+SCRIPT_CHANGELOG = """
+## 2026-05-27.v1
+
+### Lógica general
+Genera una carátula DHL DDG51 (programa Navantia · Base Naval Rota) por
+cada Factura TLS detectada en un lote de PDFs, y la entrega fusionada con
+toda la documentación asociada (factura, cotización, albarán, seguro,
+certificado, invoice del proveedor, packing list, labels, doc. Navantia)
+en el orden estándar de envío a DHL.
+
+### Entradas
+- Conjunto de PDFs en un lote (un lote = un embarque).
+- Los PDFs se clasifican por nombre de fichero:
+  · `NNNNCADNNNN.pdf`           → Factura TLS
+  · `NNNN-NNNN.pdf`             → Cotización
+  · `HELV*.pdf`                 → Seguro
+  · `TLSNAV*.pdf`               → Albarán
+  · `LABELS*.pdf` / `LABEL*.pdf`→ Labels DHL
+  · `E-*.pdf`                   → Packing list proveedor
+  · `INV-*.pdf`                 → Invoice proveedor
+  · `Certificado_*.pdf`         → Certificado
+  · `<n> NAVANTIA*.pdf`         → Doc. Navantia
+  · `Caratula_DHL_*.pdf`        → Carátula previa (se ignora)
+
+### Generación de carátula
+- Plantilla PDF embebida (`caratula_template.pdf`): se eliminan las
+  anotaciones FreeText y se hace overlay del nuevo valor (rect blanco que
+  borra el placeholder + texto Helvetica 10.5 en negro) sobre los rows del
+  formulario.
+- Fallback ReportLab si la plantilla no está disponible.
+
+### Extracción del PDF de factura
+- Embarque nº, Tipo, Suministrador, Pedido suministrador, Pedido transporte,
+  Nº factura → regex sobre el texto extraído con pdfplumber.
+- Tipo: `MARITIMO` / `AEREO` por el texto del PDF; `PAQUETERIA` cuando hay
+  labels DHL en el lote.
+
+### Salida
+Un fichero por cada Factura TLS:
+  · `Caratula_DHL_<keyA>_<keyB>.pdf` si la factura tiene 2 claves
+  · `Caratula_DHL_<key>_<5_últimos_pedidoSum>.pdf` en otro caso
 """
 
-import os, sys, re, logging, argparse
+import os
+import sys
+import re
+import logging
+import argparse
 from pathlib import Path
 from io import BytesIO
 
@@ -23,8 +82,11 @@ from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.colors import white, HexColor
 
-logging.basicConfig(level=logging.INFO, format="%(message)s",
-                    handlers=[logging.StreamHandler(sys.stdout)])
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(message)s",
+    handlers=[logging.StreamHandler(sys.stdout)],
+)
 log = logging.getLogger(__name__)
 
 A4_W, A4_H = A4   # 595.28 × 841.89 pt
@@ -35,12 +97,11 @@ TEMPLATE_PDF = SCRIPT_DIR / "caratula_template.pdf"
 # FILL TEMPLATE — coordenadas extraídas del modelo original
 # ══════════════════════════════════════════════════════════════════════════════
 
-# Inicio X de todos los valores (medido con pdfplumber del modelo)
-VALUE_X   = 188.80
+VALUE_X   = 188.80   # inicio X de todos los valores
 FONT_SIZE = 10.5
-DESCENDER = 2.1     # offset baseline Arial 10.5pt
+DESCENDER = 2.1      # offset baseline Arial 10.5pt
 
-# (pdfplumber_top, pdfplumber_bottom, data_key)  — extraídos del modelo
+# (pdfplumber_top, pdfplumber_bottom, data_key)
 FIELD_ROWS = [
     (388.72, 399.22, "embarque"),
     (408.42, 418.92, "tipo"),
@@ -256,29 +317,57 @@ def merge_pdfs(parts: list[tuple[int, bytes, str]]) -> bytes:
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# PROCESO PRINCIPAL
+# RECOPILACIÓN Y PROCESO
 # ══════════════════════════════════════════════════════════════════════════════
 
-def process_folder(folder: Path, output_dir: Path):
+def collect_pdfs(paths: list[Path]) -> list[Path]:
+    """
+    Acepta una mezcla de ficheros y/o carpetas y devuelve la lista de PDFs
+    encontrados, sin duplicados (case-insensitive sobre el nombre).
+    """
     seen: set[str] = set()
     pdf_files: list[Path] = []
-    for p in sorted(folder.iterdir()):
-        if p.suffix.lower() == ".pdf" and p.name.lower() not in seen:
-            seen.add(p.name.lower()); pdf_files.append(p)
 
+    def _add(p: Path):
+        if p.suffix.lower() == ".pdf" and p.name.lower() not in seen:
+            seen.add(p.name.lower())
+            pdf_files.append(p)
+
+    for path in paths:
+        if path.is_dir():
+            for p in sorted(path.iterdir()):
+                if p.is_file():
+                    _add(p)
+        elif path.is_file():
+            _add(path)
+        else:
+            log.warning(f"  ⚠  Ignorado (no es fichero ni carpeta): {path}")
+
+    return pdf_files
+
+
+def process_pdfs(pdf_files: list[Path], output_dir: Path):
+    """
+    Procesa una lista de PDFs (un lote) y genera las carátulas correspondientes.
+    """
     if not pdf_files:
-        log.error("No se encontraron archivos PDF."); sys.exit(1)
+        log.error("No se encontraron archivos PDF.")
+        sys.exit(1)
+
+    output_dir.mkdir(parents=True, exist_ok=True)
 
     log.info("\n┌─ Clasificación " + "─"*50)
     categorized: dict[str, list[Path]] = {}
     for p in pdf_files:
-        cat = categorize(p); categorized.setdefault(cat, []).append(p)
+        cat = categorize(p)
+        categorized.setdefault(cat, []).append(p)
         log.info(f"│  [{cat_label(cat):25s}]  {p.name}")
     log.info("└" + "─"*66)
 
     facturas = categorized.get("factura", [])
     if not facturas:
-        log.error("No se encontró ninguna Factura TLS."); sys.exit(1)
+        log.error("No se encontró ninguna Factura TLS.")
+        sys.exit(1)
 
     has_labels = bool(categorized.get("labels"))
     all_fac_keys = {f: extract_factura_keys(f) for f in facturas}
@@ -287,13 +376,16 @@ def process_folder(folder: Path, output_dir: Path):
     log.info(f"\n  Facturas : {len(facturas)}  |  Labels: {has_labels}  |  Claves: {sorted(all_keys_set)}")
     log.info(f"  Plantilla: {'✓ '+TEMPLATE_PDF.name if TEMPLATE_PDF.exists() else '✗ no encontrada (fallback ReportLab)'}")
 
+    generated: list[Path] = []
+
     for fac_path in sorted(facturas):
         log.info(f"\n{'═'*66}")
         log.info(f"  Factura: {fac_path.name}")
         try:
             data = extract_invoice_data(fac_path, folder_has_labels=has_labels)
         except Exception as e:
-            log.error(f"  ✗ Error leyendo PDF: {e}"); continue
+            log.error(f"  ✗ Error leyendo PDF: {e}")
+            continue
 
         for k, v in data.items():
             log.info(f"    {k:<25} = {v}")
@@ -315,7 +407,8 @@ def process_folder(folder: Path, output_dir: Path):
                 if len(all_keys_set) <= 1 or (fac_key and specific_to(p, fac_key, all_keys_set)):
                     parts.append((cat_priority(cat), p.read_bytes(), p.name))
 
-        for cat in ("cotizacion","navantia_doc","seguro","certificado","albaran","labels","unknown"):
+        for cat in ("cotizacion", "navantia_doc", "seguro", "certificado",
+                    "albaran", "labels", "unknown"):
             for p in categorized.get(cat, []):
                 parts.append((cat_priority(cat), p.read_bytes(), p.name))
 
@@ -328,9 +421,11 @@ def process_folder(folder: Path, output_dir: Path):
         out_path = output_dir / out_name
         out_path.write_bytes(final)
         log.info(f"  ✓ {out_path.name}  ({len(final)//1024} KB)")
+        generated.append(out_path)
 
     log.info(f"\n{'═'*66}")
-    log.info(f"  ✓ Completado → {output_dir}")
+    log.info(f"  ✓ Completado → {output_dir}  ({len(generated)} fichero(s))")
+    return generated
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -342,39 +437,66 @@ def main():
         prog="caratula_dhl",
         description="Generador de Carátulas DHL — DDG51 Base Naval Rota",
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
+        epilog=f"""
 Ejemplos:
-  python caratula_dhl.py ./lote_2994
-  python caratula_dhl.py ./lote_2994 --output ./output
-  python caratula_dhl.py ./lote_2994 --dry-run
 
-La plantilla PDF debe estar en: """ + str(TEMPLATE_PDF)
+  # Unified stack (file watcher / API)
+  caratula_dhl.py file1.pdf file2.pdf ... -o /salida
+
+  # Standalone
+  caratula_dhl.py ./lote_2994
+  caratula_dhl.py ./lote_2994 --output ./salida
+  caratula_dhl.py ./lote_2994 --dry-run
+
+La plantilla PDF debe estar en: {TEMPLATE_PDF}
+""",
     )
-    parser.add_argument("folder", nargs="?", help="Carpeta con los PDFs del lote")
-    parser.add_argument("-o","--output", help="Carpeta de salida (por defecto: misma carpeta)")
-    parser.add_argument("--dry-run", action="store_true", help="Solo clasificar, sin generar")
+    parser.add_argument("paths", nargs="+",
+                        help="PDFs y/o carpeta(s) con los PDFs del lote")
+    parser.add_argument("-o", "--output", default=None,
+                        help="Carpeta de salida (por defecto: misma carpeta del primer path)")
+    parser.add_argument("--dry-run", action="store_true",
+                        help="Solo clasificar, sin generar")
+    parser.add_argument("--version", action="version",
+                        version=f"%(prog)s {SCRIPT_VERSION}")
     args = parser.parse_args()
 
-    if not args.folder:
-        parser.print_help(); sys.exit(1)
+    input_paths = [Path(p).resolve() for p in args.paths]
 
-    folder = Path(args.folder).resolve()
-    if not folder.is_dir():
-        log.error(f"Carpeta no encontrada: {folder}"); sys.exit(1)
+    # Validación: todos los paths existen
+    missing = [p for p in input_paths if not p.exists()]
+    if missing:
+        for p in missing:
+            log.error(f"No existe: {p}")
+        sys.exit(1)
 
-    output_dir = Path(args.output).resolve() if args.output else folder
+    # Determinar carpeta de salida por defecto:
+    #   - Si --output → ese
+    #   - Si solo se pasó una carpeta → esa carpeta
+    #   - En modo unified stack (lista de ficheros) → padre del primer fichero
+    if args.output:
+        output_dir = Path(args.output).resolve()
+    elif len(input_paths) == 1 and input_paths[0].is_dir():
+        output_dir = input_paths[0]
+    else:
+        output_dir = input_paths[0].parent
+
     output_dir.mkdir(parents=True, exist_ok=True)
-    log.info(f"  Entrada : {folder}\n  Salida  : {output_dir}")
+    log.info(f"  Entrada : {[str(p) for p in input_paths]}")
+    log.info(f"  Salida  : {output_dir}")
+
+    pdf_files = collect_pdfs(input_paths)
 
     if args.dry_run:
         log.info("\n[DRY RUN]\n")
-        for p in sorted(folder.iterdir()):
-            if p.suffix.lower() != ".pdf": continue
-            cat = categorize(p); keys = extract_factura_keys(p) if cat=="factura" else []
+        for p in pdf_files:
+            cat = categorize(p)
+            keys = extract_factura_keys(p) if cat == "factura" else []
             log.info(f"  [{cat_label(cat):25s}]  {p.name}  {keys or ''}")
         return
 
-    process_folder(folder, output_dir)
+    process_pdfs(pdf_files, output_dir)
+
 
 if __name__ == "__main__":
     main()
