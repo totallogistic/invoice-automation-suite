@@ -101,6 +101,11 @@ def _read_script_changelog(path: str) -> str:
 
 # ── Version endpoints ─────────────────────────────────────────────────────────
 
+@app.get("/api/caratula_dhl/version")
+def caratula_dhl_version():
+    path = "/app/apps/caratula_dhl/extractor/caratula_dhl.py"
+    return {"version": _read_script_version(path), "changelog": _read_script_changelog(path)}
+
 @app.get("/api/intrastat/version")
 def intrastat_version():
     # La versión / changelog viven en el script real, no en el wrapper.

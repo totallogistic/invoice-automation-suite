@@ -380,3 +380,32 @@ tools:
       subject_template: "[Intrastat] Batch {batch_id} — CSV AEAT listo"
 
     status_dir: /data/intrastat/status
+
+  # Carátula DHL — Navantia DDG51 Base Naval Rota
+  - name: caratula_dhl
+    enabled: true
+    display_name: "Carátula DHL — Navantia DDG51"
+    description: >
+      Genera la carátula DHL para envíos del programa DDG51 Base Naval Rota.
+      A partir de un lote de PDFs (factura TLS, cotización, albarán, seguro,
+      certificado, invoice proveedor, packing list, labels, doc. Navantia),
+      genera un Caratula_DHL_<claves>.pdf por cada factura con todos los
+      documentos fusionados en el orden estándar de envío.
+
+    extractor:
+      type: python
+      path: /apps/caratula_dhl/extractor/caratula_dhl.py
+
+    input:
+      formats: [pdf]
+      inbox: /data/caratula_dhl/inbox
+
+    output:
+      directory: /data/out
+      artifacts:
+        - "Caratula_DHL_*.pdf"
+
+    email:
+      subject_template: "[Carátula DHL] Batch {batch_id} - Carátulas listas"
+
+    status_dir: /data/caratula_dhl/status

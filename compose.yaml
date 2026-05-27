@@ -61,6 +61,7 @@ services:
       - BL_DATA_ROOT=/data/bl
       - MAIL_TO_EXPORT_VISUAL=${MAIL_TO_EXPORT_VISUAL:-}
       - MAIL_TO_INTRASTAT=${MAIL_TO_INTRASTAT:-}
+      - MAIL_TO_CARATULA_DHL=${MAIL_TO_CARATULA_DHL:-}
     volumes:
       - ${DATA_ROOT:-/data}:/data
       - ./config:/config:ro
