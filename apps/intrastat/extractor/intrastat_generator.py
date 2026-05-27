@@ -28,6 +28,7 @@ USO:
     python intrastat_generator.py <archivo_visual.xlsx>  [-o salida.csv]  [-n NIF]
 """
 
+from __future__ import annotations
 SCRIPT_VERSION = "2026-05-27.v1"
 SCRIPT_CHANGELOG = """
 ## 2026-05-27.v1
@@ -50,8 +51,6 @@ Replica byte a byte la salida del modelo Excel del cliente.
 ### Salida
 CSV separado por `;`, CRLF, UTF-8 sin BOM, sin terminador final.
 """
-
-from __future__ import annotations
 
 import argparse
 import sys
