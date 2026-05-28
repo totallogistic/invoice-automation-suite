@@ -33,11 +33,16 @@ MESES = {
 }
 
 # Mapeo empresa → iniciales  (orden: más específico primero)
+# Cada entrada: (patron_regex, iniciales, sufijo_forma_juridica_regex_opcional)
 EMPRESAS = [
     (r"TOTAL\s+LOGISTIC\s+SERVICES", "TLS"),
     (r"TOTAL\s+LOGISTIC",            "TLS"),
     (r"TOTAL\s+ENGINEERING",         "TE"),
+    (r"ASOC(?:IACI[ÓO]N)?\.\s+MELILLA\s+INTEGRA", "ASOC"),
 ]
+
+# Sufijos jurídicos a eliminar al extraer el nombre del trabajador
+_SUFIJOS_JURIDICOS = r"(?:\s+S\.?\s*L\.?|\s+S\.?\s*A\.?|\s+S\.?\s*L\.?\s*U\.?)?"
 
 
 def colapsar_espaciado(texto: str) -> str:
@@ -79,14 +84,15 @@ def extraer_datos_pagina(texto: str) -> tuple:
     if m_nombre:
         nombre = "_".join(m_nombre.group(1).strip().split())
     else:
-        # Formato TLS: "TOTAL LOGISTIC SERVICES S.L. APELLIDO NOMBRE"
-        # Eliminamos el nombre de la empresa y tomamos lo que queda
+        # Formato TLS/AMI: "EMPRESA [S.L.] APELLIDO NOMBRE"
+        # Eliminamos el nombre de la empresa + sufijo jurídico opcional
         nombre_raw = primera_linea
         for patron, _ in EMPRESAS:
             nombre_raw = re.sub(
-                patron + r"\s+S\.?\s*L\.?\s*", "", nombre_raw, flags=re.IGNORECASE
+                patron + _SUFIJOS_JURIDICOS, "", nombre_raw, flags=re.IGNORECASE
             ).strip()
-        # Limpiamos posibles restos de puntuación y cogemos solo letras/espacios
+        # Eliminar puntos y comas residuales al inicio
+        nombre_raw = re.sub(r"^[\s.,]+", "", nombre_raw)
         m_resto = re.match(r"([A-ZÁÉÍÓÚÜÑ][A-ZÁÉÍÓÚÜÑ ]+)", nombre_raw)
         if m_resto:
             nombre = "_".join(m_resto.group(1).strip().split())
