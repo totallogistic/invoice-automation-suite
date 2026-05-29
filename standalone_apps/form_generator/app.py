@@ -86,7 +86,7 @@ def send_email_with_json(to_email: str, subject: str, schema_name: str, data: di
     Send email with JSON attachment.
     Returns True if successful, False otherwise.
     """
-    if not SMTP_HOST or not SMTP_USER or not SMTP_PASS:
+    if not SMTP_HOST:
         print("⚠️ Email not configured, skipping...")
         return False
     
@@ -167,13 +167,15 @@ def send_email_with_json(to_email: str, subject: str, schema_name: str, data: di
         if SMTP_PORT == 465:
             # SSL directo para puerto 465
             with smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT) as server:
-                server.login(SMTP_USER, SMTP_PASS)
+                if SMTP_USER:
+                    server.login(SMTP_USER, SMTP_PASS)
                 server.send_message(msg)
         else:
             # STARTTLS para puerto 587
             with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as server:
-                server.starttls()
-                server.login(SMTP_USER, SMTP_PASS)
+                if SMTP_USER:
+                    server.starttls()
+                    server.login(SMTP_USER, SMTP_PASS)
                 server.send_message(msg)
         
         print(f"✅ Email sent to {to_email}")
@@ -2037,7 +2039,7 @@ HOJAS_CONTROL_VALIDAS = {
 
 def _send_hoja_control_email(to_email: str, subject: str, body_text: str, xlsx_path: Path) -> bool:
     """Envía el xlsx generado al destinatario configurado. Devuelve True/False."""
-    if not SMTP_HOST or not SMTP_USER or not SMTP_PASS:
+    if not SMTP_HOST:
         print("⚠️ [hoja-control] SMTP no configurado, no se envía email")
         return False
 
@@ -2059,12 +2061,14 @@ def _send_hoja_control_email(to_email: str, subject: str, body_text: str, xlsx_p
 
         if SMTP_PORT == 465:
             with smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT) as server:
-                server.login(SMTP_USER, SMTP_PASS)
+                if SMTP_USER:
+                    server.login(SMTP_USER, SMTP_PASS)
                 server.send_message(msg)
         else:
             with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as server:
-                server.starttls()
-                server.login(SMTP_USER, SMTP_PASS)
+                if SMTP_USER:
+                    server.starttls()
+                    server.login(SMTP_USER, SMTP_PASS)
                 server.send_message(msg)
 
         print(f"✅ [hoja-control] Email enviado a {to_email} — {subject}")

@@ -78,7 +78,7 @@ class EmailService:
             )
         
         return msg
-    
+
     def _send_message(self, msg: EmailMessage, recipients: List[str]):
         """Send via SMTP."""
         ctx = ssl.create_default_context()
@@ -90,7 +90,8 @@ class EmailService:
                 timeout=self.config.timeout,
                 context=ctx
             ) as smtp:
-                smtp.login(self.config.user, self.config.password)
+                if self.config.user:                              # ← NUEVO
+                    smtp.login(self.config.user, self.config.password)
                 smtp.send_message(msg, from_addr=self.config.mail_from, to_addrs=recipients)
         else:
             with smtplib.SMTP(
@@ -99,11 +100,12 @@ class EmailService:
                 timeout=self.config.timeout
             ) as smtp:
                 smtp.ehlo()
-                smtp.starttls(context=ctx)
-                smtp.ehlo()
-                smtp.login(self.config.user, self.config.password)
+                if self.config.user:                              # ← NUEVO (envuelve starttls + login)
+                    smtp.starttls(context=ctx)
+                    smtp.ehlo()
+                    smtp.login(self.config.user, self.config.password)
                 smtp.send_message(msg, from_addr=self.config.mail_from, to_addrs=recipients)
-    
+        
     @staticmethod
     def _get_mime_type(path: Path) -> tuple:
         """Get MIME type for file."""
