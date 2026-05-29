@@ -331,17 +331,23 @@
         cursor: pointer;
         flex-shrink: 0;
       }
+      .contact-item .contact-info {
+        display: flex;
+        flex-direction: column;
+        flex: 1;
+        min-width: 0;
+        gap: 1px;
+      }
       .contact-item .contact-name {
         font-size: 0.88rem;
         color: #374151;
         font-weight: 500;
-        flex-shrink: 0;
-        min-width: 200px;
+        line-height: 1.3;
       }
       .contact-item .contact-email {
-        font-size: 0.80rem;
+        font-size: 0.78rem;
         color: #6b7280;
-        flex: 1;
+        line-height: 1.3;
       }
       .contact-item.always-on {
         background: #eff6ff;
@@ -478,7 +484,7 @@
         <div class="subject-wrap">
           <span class="subject-prefix">FACTURA TRANSPORTE PEDIDO&nbsp;</span>
           <input id="subjectSuffix" type="text"
-                 placeholder=""
+                 placeholder="7000109530 - CMAV - ROOSEVELT"
                  autocomplete="off" />
         </div>
         <div class="subject-preview" style="margin-top:5px">
@@ -579,23 +585,23 @@
 
       // ── Email contact data ──────────────────────────────────────────
       const TO_CONTACTS = [
-        { email: "adecco.lczajkowskim@navantia.es", name: "  Lucia Czajkowski Muñoz" },
-        { email: "femartinez@navantia.es",           name: "  Félix Martínez Montero" },
-        { email: "sii.jmunoz@navantia.es",           name: "  Jose Manuel Muñoz Orihuela" },
-        { email: "sii.jlobo@navantia.es",            name: "  Juan Antonio Lobo Gómez" },
-        { email: "sii.mmolina@navantia.es",          name: "  Molina Guijeño, Maria del Rosario" },
-        { email: "sii.mrivero@navantia.es",          name: "  Rivero Rondan, Maria Jose" },
-        { email: "sii.msanchez@navantia.es",         name: "  Sanchez González de Quevedo, Maria" },
-        { email: "jfernandezfe@navantia.es",         name: "  Fernandez Fernandez, Julian" },
+        { email: "adecco.lczajkowskim@navantia.es", name: "Lucia Czajkowski Muñoz" },
+        { email: "femartinez@navantia.es",           name: "Félix Martínez Montero" },
+        { email: "sii.jmunoz@navantia.es",           name: "Jose Manuel Muñoz Orihuela" },
+        { email: "sii.jlobo@navantia.es",            name: "Juan Antonio Lobo Gómez" },
+        { email: "sii.mmolina@navantia.es",          name: "Molina Guijeño, Maria del Rosario" },
+        { email: "sii.mrivero@navantia.es",          name: "Rivero Rondan, Maria Jose" },
+        { email: "sii.msanchez@navantia.es",         name: "Sanchez González de Quevedo, Maria" },
+        { email: "jfernandezfe@navantia.es",         name: "Fernandez Fernandez, Julian" },
       ];
 
       const CC_CONTACTS = [
-        { email: "fjcabello@navantia.es",        name: "  Javier García Cabello", always: true },
-        { email: "navantiarota@totallogistic.es", name: "  Navantia Rota TLS",    always: true },
+        { email: "fjcabello@navantia.es",        name: "Javier García Cabello", always: true },
+        { email: "navantiarota@totallogistic.es", name: "Navantia Rota TLS",    always: true },
       ];
 
       const BCC_CONTACTS = [
-        { email: "sofiareinado@totallogistic.es", name: "  Sofía Reinado Carrión", always: true },
+        { email: "sofiareinado@totallogistic.es", name: "Sofía Reinado Carrión", always: true },
       ];
 
       // ── Render contact grids ────────────────────────────────────────
@@ -613,6 +619,9 @@
           cb.checked = !!c.always;
           if (c.always) cb.disabled = true;
 
+          const infoDiv = document.createElement("div");
+          infoDiv.className = "contact-info";
+
           const nameSpan = document.createElement("span");
           nameSpan.className = "contact-name";
           nameSpan.textContent = c.name;
@@ -621,9 +630,10 @@
           emailSpan.className = "contact-email";
           emailSpan.textContent = c.email;
 
+          infoDiv.appendChild(nameSpan);
+          infoDiv.appendChild(emailSpan);
           label.appendChild(cb);
-          label.appendChild(nameSpan);
-          label.appendChild(emailSpan);
+          label.appendChild(infoDiv);
 
           if (c.always) {
             const tag = document.createElement("span");
