@@ -2078,19 +2078,8 @@ def _send_hoja_control_email(to_email: str, subject: str, body_text: str, attach
 @app.post("/api/save-hoja-control-expedientes")
 async def save_hoja_control_expedientes(request: Request):
     """
-    Genera la hoja de control correspondiente a un expediente y la envía al ERP.
-
-    Body JSON:
-      { "sheet": "HOJA CONTROL IMPORT FACTURA PRE",
-        "usuario": "cbarcia",
-        "referencia": "12345" }
-
-    Flujo:
-      1. Carga el master xlsx
-      2. Deja únicamente la hoja seleccionada (preservando formato, merges, X's)
-      3. Sobrescribe C70 con la fecha de hoy y F70 con el usuario VT
-      4. Guarda en EXCEL_STORAGE_DIR como  {SHEET}_{REF}_{YYYYMMDD}.xlsx
-      5. Envía email a MAIL_TO_HOJA_CONTROL_EXPEDIENTES con asunto "{SHEET} - #{REF}"
+    Genera la hoja de control en xlsx, la convierte a PDF y envía el PDF
+    al destinatario configurado. Ambos ficheros quedan en EXCEL_STORAGE_DIR.
     """
     data       = await request.json()
     sheet      = (data.get('sheet')      or '').strip()
@@ -2121,14 +2110,38 @@ async def save_hoja_control_expedientes(request: Request):
     ws['C70'] = today_str
     ws['F70'] = usuario
 
-    # ── 4. Guardar con naming acordado ────────────────────────────────
+    # ── 4. Ajustar page setup para que el PDF salga en una sola página ──
+    ws.page_setup.orientation = ws.ORIENTATION_LANDSCAPE
+    ws.page_setup.paperSize   = ws.PAPERSIZE_A4
+    ws.page_setup.fitToWidth  = 1
+    ws.page_setup.fitToHeight = 1
+    ws.sheet_properties.pageSetUpPr.fitToPage = True
+    ws.print_options.horizontalCentered = True
+
+    # ── 5. Guardar xlsx ───────────────────────────────────────────────
     today_compact = datetime.now().strftime('%Y%m%d')
     safe_sheet = sheet.replace(' ', '_').replace('/', '-')
     out_name = f"{safe_sheet}_{referencia}_{today_compact}.xlsx"
     out_path = EXCEL_STORAGE_DIR / out_name
     wb.save(out_path)
 
-    # ── 5. Enviar email ───────────────────────────────────────────────
+    # ── 6. Convertir a PDF con LibreOffice ────────────────────────────
+    try:
+        subprocess.run(
+            ['soffice', '--headless', '--convert-to', 'pdf',
+             '--outdir', str(EXCEL_STORAGE_DIR), str(out_path)],
+            capture_output=True, text=True, timeout=60, check=True
+        )
+    except subprocess.CalledProcessError as e:
+        raise HTTPException(500, f"Error convirtiendo a PDF: {e.stderr or e.stdout}")
+    except subprocess.TimeoutExpired:
+        raise HTTPException(504, "LibreOffice tardó más de 60s convirtiendo a PDF")
+
+    pdf_path = out_path.with_suffix('.pdf')
+    if not pdf_path.exists():
+        raise HTTPException(500, f"PDF no generado en {pdf_path}")
+
+    # ── 7. Enviar email con el PDF ────────────────────────────────────
     subject = f"#EX{referencia}#"
     body = (
         f"Adjunto hoja de control correspondiente al expediente #{referencia}.\n"
@@ -2143,19 +2156,19 @@ async def save_hoja_control_expedientes(request: Request):
     email_to = os.getenv("MAIL_TO_HOJA_CONTROL_EXPEDIENTES", "").strip() or os.getenv("MAIL_TO", "").strip()
     email_sent = False
     if email_to:
-        email_sent = _send_hoja_control_email(email_to, subject, body, out_path)
+        email_sent = _send_hoja_control_email(email_to, subject, body, pdf_path)
 
     return JSONResponse({
         "success": True,
         "message": (
-            f"Hoja generada y enviada a {email_to}" if email_sent
-            else f"Hoja generada ({out_name}) — email NO enviado (revisa configuración)"
+            f"Hoja generada (xlsx + PDF) y enviada a {email_to}" if email_sent
+            else f"Hoja generada ({pdf_path.name}) — email NO enviado (revisa configuración)"
         ),
         "excel_file": out_name,
-        "subject": subject,
+        "pdf_file":   pdf_path.name,
+        "subject":    subject,
         "email_sent": email_sent,
     })
-
 
 if __name__ == "__main__":
     print("=" * 60)
