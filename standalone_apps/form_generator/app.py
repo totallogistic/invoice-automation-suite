@@ -2115,10 +2115,10 @@ async def save_hoja_control_expedientes(request: Request):
     ws['F70'] = usuario
 
     # ── 4. Ajustar page setup para que el PDF salga en una sola página ──
-    ws.page_setup.orientation = ws.ORIENTATION_LANDSCAPE
+    ws.page_setup.orientation = ws.ORIENTATION_PORTRAIT
     ws.page_setup.paperSize   = ws.PAPERSIZE_A4
     ws.page_setup.fitToWidth  = 1
-    ws.page_setup.fitToHeight = 1
+    ws.page_setup.fitToHeight = 0      # ← antes era 1; 0 = sin tope vertical
     ws.sheet_properties.pageSetUpPr.fitToPage = True
     ws.print_options.horizontalCentered = True
 
