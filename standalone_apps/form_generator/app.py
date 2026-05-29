@@ -2037,9 +2037,9 @@ HOJAS_CONTROL_VALIDAS = {
 }
 
 
-def _send_hoja_control_email(to_email: str, subject: str, body_text: str, xlsx_path: Path) -> bool:
-    """Envía el xlsx generado al destinatario configurado. Devuelve True/False."""
-    if not SMTP_HOST:
+def _send_hoja_control_email(to_email: str, subject: str, body_text: str, attach_path: Path) -> bool:
+    """Envía el adjunto (PDF) al destinatario configurado. Devuelve True/False."""
+    if not SMTP_HOST or not SMTP_USER or not SMTP_PASS:
         print("⚠️ [hoja-control] SMTP no configurado, no se envía email")
         return False
 
@@ -2050,25 +2050,22 @@ def _send_hoja_control_email(to_email: str, subject: str, body_text: str, xlsx_p
         msg['Subject'] = subject
         msg.attach(MIMEText(body_text, 'plain', 'utf-8'))
 
-        with open(xlsx_path, 'rb') as f:
-            attach = MIMEBase('application',
-                              'vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+        with open(attach_path, 'rb') as f:
+            attach = MIMEBase('application', 'pdf')
             attach.set_payload(f.read())
             encoders.encode_base64(attach)
             attach.add_header('Content-Disposition',
-                              f'attachment; filename="{xlsx_path.name}"')
+                              f'attachment; filename="{attach_path.name}"')
             msg.attach(attach)
 
         if SMTP_PORT == 465:
             with smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT) as server:
-                if SMTP_USER:
-                    server.login(SMTP_USER, SMTP_PASS)
+                server.login(SMTP_USER, SMTP_PASS)
                 server.send_message(msg)
         else:
             with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as server:
-                if SMTP_USER:
-                    server.starttls()
-                    server.login(SMTP_USER, SMTP_PASS)
+                server.starttls()
+                server.login(SMTP_USER, SMTP_PASS)
                 server.send_message(msg)
 
         print(f"✅ [hoja-control] Email enviado a {to_email} — {subject}")
