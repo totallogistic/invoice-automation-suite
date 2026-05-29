@@ -2146,7 +2146,7 @@ async def save_hoja_control_expedientes(request: Request):
         raise HTTPException(500, f"PDF no generado en {pdf_path}")
 
     # ── 7. Enviar email con el PDF ────────────────────────────────────
-    subject = f"#TEST{referencia}#"
+    subject = f"#EX{referencia}#"
     body = (
         f"Adjunto hoja de control correspondiente al expediente #{referencia}.\n"
         f"\n"

@@ -70,18 +70,25 @@ def _detect_columns(header_row: tuple) -> dict:
         return None
 
     pb_idx = find('PESO BRUTO')
-    pk_idx = find('PK', (pb_idx or 17) + 1)
+    # Buscar todas las columnas de bultos a partir del header de Peso Bruto.
+    # Esto soporta:
+    #   - Kenitra (PK + CL, sin BX/PX/RO)
+    #   - Tangier (PK + BX + PX + CL + RO)
+    #   - AdientTRIM (PX + CL + RO, sin PK/BX)  ← anteriormente mal interpretado
+    #   - Cualquier combinación futura: cada columna se busca por nombre, sin asumir
+    #     orden ni presencia de PK.
+    bultos_search_start = (pb_idx or 17) + 1
 
     return {
-        'shipper_name': 4,                                      # posicional, igual en ambos formatos
+        'shipper_name': 4,                                      # posicional, igual en todos los formatos
         'mrn_invoice':  find('MRN / INVOICE') or 13,
         'peso_bruto':   pb_idx if pb_idx is not None else 18,
         'peso_neto':    (pb_idx + 1) if pb_idx is not None else 19,
-        'pk':           pk_idx if pk_idx is not None else 20,
-        'bx':           find('BX', (pk_idx or 20) + 1),         # None en Kenitra
-        'px':           find('PX', (pk_idx or 20) + 1),         # None en Kenitra
-        'cl':           find('CL', (pk_idx or 20) + 1),
-        'ro':           find('RO', (pk_idx or 20) + 1),         # None en Kenitra
+        'pk':           find('PK', bultos_search_start),        # None si formato no tiene PK
+        'bx':           find('BX', bultos_search_start),        # None si formato no tiene BX
+        'px':           find('PX', bultos_search_start),        # None si formato no tiene PX
+        'cl':           find('CL', bultos_search_start),        # None si formato no tiene CL
+        'ro':           find('RO', bultos_search_start),        # None si formato no tiene RO
     }
 
 
