@@ -2038,15 +2038,16 @@ HOJAS_CONTROL_VALIDAS = {
 
 
 def _send_hoja_control_email(to_email: str, subject: str, body_text: str, attach_path: Path) -> bool:
-    """Envía el adjunto (PDF) al destinatario configurado. Devuelve True/False."""
-    if not SMTP_HOST or not SMTP_USER or not SMTP_PASS:
-        print("⚠️ [hoja-control] SMTP no configurado, no se envía email")
+    """Envía el adjunto (PDF) al destinatario configurado. Devuelve True/False.
+    Soporta tanto SMTP autenticado (SSL/TLS) como relay local sin auth."""
+    if not SMTP_HOST:
+        print("⚠️ [hoja-control] SMTP_HOST no configurado, no se envía email")
         return False
 
     try:
         msg = MIMEMultipart()
-        msg['From'] = MAIL_FROM or SMTP_USER
-        msg['To'] = to_email
+        msg['From'] = MAIL_FROM or SMTP_USER or "procesos@totallogistic.es"
+        msg['To']   = to_email
         msg['Subject'] = subject
         msg.attach(MIMEText(body_text, 'plain', 'utf-8'))
 
@@ -2060,12 +2061,15 @@ def _send_hoja_control_email(to_email: str, subject: str, body_text: str, attach
 
         if SMTP_PORT == 465:
             with smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT) as server:
-                server.login(SMTP_USER, SMTP_PASS)
+                if SMTP_USER and SMTP_PASS:
+                    server.login(SMTP_USER, SMTP_PASS)
                 server.send_message(msg)
         else:
             with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as server:
-                server.starttls()
-                server.login(SMTP_USER, SMTP_PASS)
+                # STARTTLS solo si el server lo anuncia y tenemos credenciales
+                if SMTP_USER and SMTP_PASS:
+                    server.starttls()
+                    server.login(SMTP_USER, SMTP_PASS)
                 server.send_message(msg)
 
         print(f"✅ [hoja-control] Email enviado a {to_email} — {subject}")
