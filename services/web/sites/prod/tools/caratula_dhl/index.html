@@ -313,15 +313,15 @@
         overflow-y: auto;
       }
       .contact-item {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        padding: 6px 10px;
+        display: grid;
+        grid-template-columns: 18px 1fr;
+        align-items: start;
+        gap: 8px;
+        padding: 7px 10px;
         border-radius: 5px;
         cursor: pointer;
         transition: background 0.15s;
         user-select: none;
-        min-height: 36px;
       }
       .contact-item:hover { background: #eff6ff; }
       .contact-item input[type="checkbox"] {
@@ -329,14 +329,13 @@
         height: 15px;
         accent-color: #2563a8;
         cursor: pointer;
-        flex-shrink: 0;
+        margin-top: 2px;
       }
       .contact-item .contact-info {
         display: flex;
         flex-direction: column;
-        flex: 1;
         min-width: 0;
-        gap: 1px;
+        gap: 2px;
       }
       .contact-item .contact-name {
         font-size: 0.88rem;
@@ -354,6 +353,10 @@
         border: 1px solid #bfdbfe;
       }
       .contact-item.always-on input { opacity: 0.6; }
+      /* when always-tag is present, extend grid to 3 cols */
+      .contact-item.always-on {
+        grid-template-columns: 18px 1fr auto;
+      }
       .always-tag {
         font-size: 0.7rem;
         background: #dbeafe;
