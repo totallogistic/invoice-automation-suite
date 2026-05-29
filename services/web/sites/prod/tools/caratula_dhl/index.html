@@ -236,6 +236,213 @@
         font-weight: 500;
       }
       .back-link:hover { text-decoration: underline; }
+
+      /* ── Email config section ── */
+      .email-section { margin: 0; }
+      .email-section h3 {
+        font-size: 1rem;
+        font-weight: 600;
+        color: #1a4d7e;
+        margin-bottom: 16px;
+        padding-bottom: 10px;
+        border-bottom: 2px solid #e5e7eb;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .email-field { margin-bottom: 18px; }
+      .email-field label {
+        display: block;
+        font-size: 0.85rem;
+        font-weight: 600;
+        color: #374151;
+        margin-bottom: 6px;
+        letter-spacing: 0.3px;
+        text-transform: uppercase;
+      }
+      .subject-wrap {
+        display: flex;
+        align-items: center;
+        gap: 0;
+        border: 1px solid #d1d5db;
+        border-radius: 6px;
+        overflow: hidden;
+        background: white;
+        transition: border-color 0.2s;
+      }
+      .subject-wrap:focus-within {
+        border-color: #2563a8;
+        box-shadow: 0 0 0 3px rgba(37,99,168,0.1);
+      }
+      .subject-prefix {
+        background: #f3f4f6;
+        color: #6b7280;
+        padding: 9px 10px;
+        font-size: 0.88rem;
+        white-space: nowrap;
+        border-right: 1px solid #d1d5db;
+        font-weight: 500;
+        flex-shrink: 0;
+      }
+      .subject-wrap input {
+        flex: 1;
+        border: none;
+        padding: 9px 12px;
+        font-size: 0.92rem;
+        outline: none;
+        background: white;
+        min-width: 0;
+      }
+      .subject-preview {
+        margin-top: 5px;
+        font-size: 0.8rem;
+        color: #6b7280;
+      }
+      .subject-preview strong { color: #374151; }
+
+      /* Contact checkboxes */
+      .contact-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+        gap: 6px;
+        border: 1px solid #e5e7eb;
+        border-radius: 6px;
+        padding: 10px;
+        background: #fafafa;
+        max-height: 200px;
+        overflow-y: auto;
+      }
+      .contact-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 5px 8px;
+        border-radius: 5px;
+        cursor: pointer;
+        transition: background 0.15s;
+        user-select: none;
+      }
+      .contact-item:hover { background: #eff6ff; }
+      .contact-item input[type="checkbox"] {
+        width: 15px;
+        height: 15px;
+        accent-color: #2563a8;
+        cursor: pointer;
+        flex-shrink: 0;
+      }
+      .contact-item .contact-name {
+        font-size: 0.88rem;
+        color: #374151;
+        font-weight: 500;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .contact-item .contact-email {
+        font-size: 0.78rem;
+        color: #6b7280;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        flex: 1;
+      }
+      .contact-item.always-on {
+        background: #eff6ff;
+        border: 1px solid #bfdbfe;
+      }
+      .contact-item.always-on input { opacity: 0.6; }
+      .always-tag {
+        font-size: 0.7rem;
+        background: #dbeafe;
+        color: #1d4ed8;
+        padding: 1px 5px;
+        border-radius: 3px;
+        font-weight: 600;
+        flex-shrink: 0;
+      }
+
+      /* Custom email add row */
+      .custom-add {
+        display: flex;
+        gap: 8px;
+        margin-top: 8px;
+        align-items: center;
+      }
+      .custom-add input {
+        flex: 1;
+        padding: 7px 10px;
+        border: 1px solid #d1d5db;
+        border-radius: 5px;
+        font-size: 0.88rem;
+        outline: none;
+        transition: border-color 0.2s;
+      }
+      .custom-add input:focus {
+        border-color: #2563a8;
+        box-shadow: 0 0 0 3px rgba(37,99,168,0.1);
+      }
+      .btn-add {
+        padding: 7px 14px;
+        background: #f3f4f6;
+        color: #374151;
+        border: 1px solid #d1d5db;
+        border-radius: 5px;
+        font-size: 0.85rem;
+        font-weight: 500;
+        cursor: pointer;
+        white-space: nowrap;
+        transition: background 0.15s;
+      }
+      .btn-add:hover { background: #e5e7eb; }
+
+      .custom-tags {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-top: 6px;
+      }
+      .custom-tag {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        background: #dbeafe;
+        color: #1e40af;
+        border: 1px solid #bfdbfe;
+        padding: 3px 8px;
+        border-radius: 4px;
+        font-size: 0.82rem;
+      }
+      .custom-tag button {
+        background: none;
+        border: none;
+        color: #93c5fd;
+        cursor: pointer;
+        padding: 0;
+        font-size: 0.95rem;
+        line-height: 1;
+        transition: color 0.15s;
+      }
+      .custom-tag button:hover { color: #1e40af; background: none; }
+
+      .env-note {
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+        background: #f0fdf4;
+        border: 1px solid #bbf7d0;
+        border-radius: 6px;
+        padding: 10px 12px;
+        font-size: 0.82rem;
+        color: #166534;
+        margin-top: 6px;
+      }
+      .env-note code {
+        font-family: ui-monospace, Menlo, Consolas, monospace;
+        background: #dcfce7;
+        padding: 1px 4px;
+        border-radius: 3px;
+        font-size: 0.8rem;
+      }
     </style>
   </head>
   <body>
@@ -257,12 +464,74 @@
     <div class="card">
       <div class="row">
         <input id="zip" type="file" accept=".pdf,.zip,application/pdf,application/zip" multiple />
-        <button id="btnUpload">Subir Lote</button>
         <span id="uploadMsg" class="muted"></span>
       </div>
       <p class="muted" style="margin:10px 0 0">
         Endpoint: <span class="mono">POST /api/caratula_dhl/batches</span>
       </p>
+    </div>
+
+    <!-- ── EMAIL CONFIG ─────────────────────────────────────────────── -->
+    <div class="card email-section">
+      <h3>✉️ Configuración del Email</h3>
+
+      <!-- ASUNTO -->
+      <div class="email-field">
+        <label>Asunto</label>
+        <div class="subject-wrap">
+          <span class="subject-prefix">FACTURA TRANSPORTE PEDIDO&nbsp;</span>
+          <input id="subjectSuffix" type="text"
+                 placeholder="7000109530 - CMAV - ROOSEVELT"
+                 autocomplete="off" />
+        </div>
+        <div class="subject-preview" style="margin-top:5px">
+          Vista previa: <strong id="subjectPreview">FACTURA TRANSPORTE PEDIDO …</strong>
+        </div>
+      </div>
+
+      <!-- PARA -->
+      <div class="email-field">
+        <label>Para</label>
+        <div class="contact-grid" id="toGrid"></div>
+        <div class="custom-add">
+          <input id="customToInput" type="email" placeholder="otro@navantia.es" />
+          <button type="button" class="btn-add" id="addToBtn">+ Añadir</button>
+        </div>
+        <div class="custom-tags" id="customToTags"></div>
+      </div>
+
+      <!-- CC -->
+      <div class="email-field">
+        <label>CC</label>
+        <div class="contact-grid" id="ccGrid"></div>
+        <div class="custom-add">
+          <input id="customCcInput" type="email" placeholder="otro@ejemplo.com" />
+          <button type="button" class="btn-add" id="addCcBtn">+ Añadir</button>
+        </div>
+        <div class="custom-tags" id="customCcTags"></div>
+      </div>
+
+      <!-- CCO -->
+      <div class="email-field" style="margin-bottom:0">
+        <label>CCO (Copia Oculta)</label>
+        <div class="contact-grid" id="bccGrid"></div>
+        <div class="custom-add">
+          <input id="customBccInput" type="email" placeholder="otro@ejemplo.com" />
+          <button type="button" class="btn-add" id="addBccBtn">+ Añadir</button>
+        </div>
+        <div class="custom-tags" id="customBccTags"></div>
+        <div class="env-note" style="margin-top:12px">
+          ℹ️ Además de los destinatarios seleccionados, el servidor añade siempre
+          la dirección configurada en <code>MAIL_TO_CARATULA_DHL</code>
+          (copia de respaldo del entorno del servidor).
+        </div>
+      </div>
+    </div>
+
+    <div style="margin:-8px 0 24px">
+      <button id="btnUpload" style="padding:12px 28px;font-size:1rem;font-weight:600">
+        📤 Subir Lote y Enviar
+      </button>
     </div>
 
     <div id="statusCard" class="card" style="display:none">
@@ -310,6 +579,141 @@
       const $ = (id) => document.getElementById(id);
 
       let pollTimer = null;
+
+      // ── Email contact data ──────────────────────────────────────────
+      const TO_CONTACTS = [
+        { email: "adecco.lczajkowskim@navantia.es", name: "Lucia Czajkowski Muñoz" },
+        { email: "femartinez@navantia.es",           name: "Félix Martínez Montero" },
+        { email: "sii.jmunoz@navantia.es",           name: "Jose Manuel Muñoz Orihuela" },
+        { email: "sii.jlobo@navantia.es",            name: "Juan Antonio Lobo Gómez" },
+        { email: "sii.mmolina@navantia.es",          name: "Molina Guijeño, Maria del Rosario" },
+        { email: "sii.mrivero@navantia.es",          name: "Rivero Rondan, Maria Jose" },
+        { email: "sii.msanchez@navantia.es",         name: "Sanchez González de Quevedo, Maria" },
+        { email: "jfernandezfe@navantia.es",         name: "Fernandez Fernandez, Julian" },
+      ];
+
+      const CC_CONTACTS = [
+        { email: "fjcabello@navantia.es",        name: "Javier García Cabello", always: true },
+        { email: "navantiarota@totallogistic.es", name: "Navantia Rota TLS",    always: true },
+      ];
+
+      const BCC_CONTACTS = [
+        { email: "sofiareinado@totallogistic.es", name: "Sofía Reinado Carrión", always: true },
+      ];
+
+      // ── Render contact grids ────────────────────────────────────────
+      function renderContactGrid(gridId, contacts) {
+        const grid = $(gridId);
+        grid.innerHTML = "";
+        contacts.forEach(c => {
+          const label = document.createElement("label");
+          label.className = "contact-item" + (c.always ? " always-on" : "");
+          label.title = c.email;
+
+          const cb = document.createElement("input");
+          cb.type = "checkbox";
+          cb.value = c.email;
+          cb.checked = !!c.always;
+          if (c.always) cb.disabled = true;
+
+          const nameSpan = document.createElement("span");
+          nameSpan.className = "contact-name";
+          nameSpan.textContent = c.name;
+
+          const emailSpan = document.createElement("span");
+          emailSpan.className = "contact-email";
+          emailSpan.textContent = c.email;
+
+          label.appendChild(cb);
+          label.appendChild(nameSpan);
+          label.appendChild(emailSpan);
+
+          if (c.always) {
+            const tag = document.createElement("span");
+            tag.className = "always-tag";
+            tag.textContent = "siempre";
+            label.appendChild(tag);
+          }
+
+          grid.appendChild(label);
+        });
+      }
+
+      // ── Custom email tags ───────────────────────────────────────────
+      const customEmails = { to: [], cc: [], bcc: [] };
+
+      function renderTags(key) {
+        const tagsDiv = $(`custom${key.charAt(0).toUpperCase()+key.slice(1)}Tags`);
+        tagsDiv.innerHTML = "";
+        customEmails[key].forEach((em, i) => {
+          const span = document.createElement("span");
+          span.className = "custom-tag";
+          span.innerHTML = `${em} <button type="button" title="Quitar" data-key="${key}" data-i="${i}">✕</button>`;
+          tagsDiv.appendChild(span);
+        });
+      }
+
+      function addCustomEmail(key, inputId) {
+        const input = $(inputId);
+        const val = input.value.trim().toLowerCase();
+        if (!val) return;
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val)) {
+          input.style.borderColor = "#dc2626";
+          setTimeout(() => input.style.borderColor = "", 1500);
+          return;
+        }
+        if (!customEmails[key].includes(val)) {
+          customEmails[key].push(val);
+          renderTags(key);
+        }
+        input.value = "";
+      }
+
+      document.addEventListener("click", (e) => {
+        if (e.target.dataset.key && e.target.dataset.i !== undefined) {
+          const key = e.target.dataset.key;
+          const i = parseInt(e.target.dataset.i, 10);
+          customEmails[key].splice(i, 1);
+          renderTags(key);
+        }
+      });
+
+      // ── Collect all emails for a field ─────────────────────────────
+      function collectEmails(gridId, contactList, customKey) {
+        const checks = $(gridId).querySelectorAll("input[type=checkbox]");
+        const fromGrid = Array.from(checks)
+          .filter(cb => cb.checked)
+          .map(cb => cb.value);
+        return [...new Set([...fromGrid, ...customEmails[customKey]])];
+      }
+
+      // ── Subject preview ─────────────────────────────────────────────
+      function updateSubjectPreview() {
+        const suffix = ($("subjectSuffix").value || "").trim();
+        $("subjectPreview").textContent =
+          suffix ? `FACTURA TRANSPORTE PEDIDO ${suffix}` : "FACTURA TRANSPORTE PEDIDO …";
+      }
+
+      // ── Init on load ────────────────────────────────────────────────
+      renderContactGrid("toGrid",  TO_CONTACTS);
+      renderContactGrid("ccGrid",  CC_CONTACTS);
+      renderContactGrid("bccGrid", BCC_CONTACTS);
+
+      $("subjectSuffix").addEventListener("input", updateSubjectPreview);
+
+      $("addToBtn").addEventListener("click",  () => addCustomEmail("to",  "customToInput"));
+      $("addCcBtn").addEventListener("click",  () => addCustomEmail("cc",  "customCcInput"));
+      $("addBccBtn").addEventListener("click", () => addCustomEmail("bcc", "customBccInput"));
+
+      ["customToInput","customCcInput","customBccInput"].forEach(id => {
+        $(id).addEventListener("keydown", (e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            const map = { customToInput:"to", customCcInput:"cc", customBccInput:"bcc" };
+            addCustomEmail(map[id], id);
+          }
+        });
+      });
 
       function setUploadMsg(text, isErr=false) {
         $("uploadMsg").textContent = text || "";
@@ -497,11 +901,23 @@
         $("finalNote").innerHTML = "";
         stopPolling();
 
+        // Collect email config
+        const emailTo  = collectEmails("toGrid",  TO_CONTACTS,  "to");
+        const emailCc  = collectEmails("ccGrid",  CC_CONTACTS,  "cc");
+        const emailBcc = collectEmails("bccGrid", BCC_CONTACTS, "bcc");
+        const subject  = ("FACTURA TRANSPORTE PEDIDO " + ($("subjectSuffix").value || "")).trim();
+
         try {
           const fd = new FormData();
           selectedFiles.forEach(file => {
             fd.append("files", file, file.name);
           });
+
+          // Email metadata
+          fd.append("email_subject", subject);
+          fd.append("email_to",      emailTo.join(","));
+          fd.append("email_cc",      emailCc.join(","));
+          fd.append("email_bcc",     emailBcc.join(","));
 
           const r = await fetch("/api/caratula_dhl/batches", { method: "POST", body: fd });
           if (!r.ok) {
