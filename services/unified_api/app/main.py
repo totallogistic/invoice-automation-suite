@@ -74,6 +74,14 @@ def _read_script_changelog(path: str) -> str:
 
 # ── Version endpoints ─────────────────────────────────────────────────────────
 
+@app.get("/api/merge_pdf/version")
+def merge_pdf_version():
+    path = "/app/apps/merge_pdf/extractor/merge_pdf.py"
+    return {
+        "version": _read_script_version(path),
+        "changelog": _read_script_changelog(path),
+    }
+
 @app.get("/api/lear_rabat/version")
 def lear_rabat_version():
     path = "/app/apps/lear_rabat/extractor/extract_lear_rabat.py"
@@ -491,3 +499,35 @@ async def bl_sync():
         raise
     except Exception as e:
         raise HTTPException(500, str(e))
+
+
+@app.get("/api/merge_pdf/rules")
+def merge_pdf_rules():
+    """Devuelve las reglas por defecto (default_rules.json) para precargar la UI."""
+    path = "/app/apps/merge_pdf/extractor/default_rules.json"
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="default_rules.json no encontrado")
+    # No exponemos el campo _comment a la UI
+    data.pop("_comment", None)
+    return JSONResponse(data)
+
+
+@app.get("/api/merge_pdf/batches/{batch_id}/download")
+def merge_pdf_download(batch_id: str = PathParam(...)):
+    """Descarga directa del PDF consolidado del batch."""
+    out_pdf = os.path.join(DATA_ROOT, "merge_pdf", "out", batch_id, "merged.pdf")
+    if not os.path.isfile(out_pdf):
+        # algunos setups dejan el output directamente en out/ sin subcarpeta batch
+        alt = os.path.join(DATA_ROOT, "merge_pdf", "out", "merged.pdf")
+        if os.path.isfile(alt):
+            out_pdf = alt
+        else:
+            raise HTTPException(status_code=404, detail="merged.pdf no encontrado para este batch")
+    return FileResponse(
+        out_pdf,
+        media_type="application/pdf",
+        filename=f"merged_{batch_id}.pdf",
+    )
