@@ -11,9 +11,6 @@ import shutil
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import List
-import random
-import string
-
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Path as PathParam, Query, Request # pyright: ignore[reportMissingImports]
 from fastapi.responses import JSONResponse, StreamingResponse, FileResponse # pyright: ignore[reportMissingImports]
 
@@ -29,39 +26,15 @@ app = FastAPI(title="Invoice Automation Suite API", version="2.0")
 registry = ToolRegistry.from_yaml(CONFIG_PATH)
 
 
-def generate_batch_id() -> str:
+def generate_batch_id(tool_name: str, inbox_dir: Path) -> str:
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
-    suffix = "".join(random.choice(string.ascii_lowercase + string.digits) for _ in range(4))
-    return f"{timestamp}_{suffix}"
-
-
-def _cleanup_orphan_inbox(batch_inbox: Path) -> None:
-    """
-    Borra una carpeta de batch si quedó huérfana tras un fallo de validación.
-
-    Una carpeta se considera huérfana si:
-      - No existe (no hay nada que limpiar).
-      - Está vacía.
-      - Solo contiene markers internos (archivos cuyo nombre empieza por '_'),
-        sin archivos de datos reales del cliente.
-
-    Si hay archivos de datos (XLSX/PDF/CSV), NO se borra para preservar
-    evidencia de uploads parciales (útil para diagnóstico).
-    """
-    if not batch_inbox.exists():
-        return
-    try:
-        # Listar archivos NO-marker (los marker empiezan por '_')
-        data_files = [
-            f for f in batch_inbox.iterdir()
-            if f.is_file() and not f.name.startswith("_")
-        ]
-        if not data_files:
-            shutil.rmtree(batch_inbox, ignore_errors=True)
-    except Exception:
-        # Si algo falla durante el cleanup, lo ignoramos:
-        # mejor dejar la carpeta huérfana que romper el response error original.
-        pass
+    base = f"{timestamp}_{tool_name}"
+    candidate = base
+    counter = 2
+    while (inbox_dir / candidate).exists():
+        candidate = f"{base}_{counter}"
+        counter += 1
+    return candidate
 
 
 @app.get("/health")
@@ -101,16 +74,13 @@ def _read_script_changelog(path: str) -> str:
 
 # ── Version endpoints ─────────────────────────────────────────────────────────
 
-@app.get("/api/caratula_dhl/version")
-def caratula_dhl_version():
-    path = "/app/apps/caratula_dhl/extractor/caratula_dhl.py"
-    return {"version": _read_script_version(path), "changelog": _read_script_changelog(path)}
-
-@app.get("/api/intrastat/version")
-def intrastat_version():
-    # La versión / changelog viven en el script real, no en el wrapper.
-    path = "/app/apps/intrastat/extractor/intrastat_generator.py"
-    return {"version": _read_script_version(path), "changelog": _read_script_changelog(path)}
+@app.get("/api/merge_pdf/version")
+def merge_pdf_version():
+    path = "/app/apps/merge_pdf/extractor/merge_pdf.py"
+    return {
+        "version": _read_script_version(path),
+        "changelog": _read_script_changelog(path),
+    }
 
 @app.get("/api/lear_rabat/version")
 def lear_rabat_version():
@@ -120,16 +90,6 @@ def lear_rabat_version():
 @app.get("/api/lear_cable/version")
 def lear_cable_version():
     path = "/app/apps/lear_cable/extractor/extract_lear_fields.py"
-    return {"version": _read_script_version(path), "changelog": _read_script_changelog(path)}
-
-@app.get("/api/lear_tac/version")
-def lear_tac_version():
-    path = "/app/apps/lear_tac/extractor/extract_lear_tac_fields.py"
-    return {"version": _read_script_version(path), "changelog": _read_script_changelog(path)}
-
-@app.get("/api/lear_kenitra/version")
-def lear_kenitra_version():
-    path = "/app/apps/lear_kenitra/extractor/extract_lear_kenitra_fields.py"
     return {"version": _read_script_version(path), "changelog": _read_script_changelog(path)}
 
 @app.get("/api/import_partida/version")
@@ -239,7 +199,12 @@ async def create_batch(
     files: List[UploadFile] = File(...),
     skip_validation: str = Form("0"),
     run_dae:         str = Form("1"),
-    cliente: str = Form("aldi"),
+    cliente:         str = Form("aldi"),
+    # caratula_dhl: destinatarios de email desde la UI
+    email_subject:   str = Form(""),
+    email_to:        str = Form(""),
+    email_cc:        str = Form(""),
+    email_bcc:       str = Form(""),
 ):
     """Create new batch."""
     tool = registry.get_tool(tool_name)
@@ -249,7 +214,7 @@ async def create_batch(
     if not files:
         raise HTTPException(400, "No files provided")
 
-    batch_id = generate_batch_id()
+    batch_id = generate_batch_id(tool_name, tool.inbox_dir)
     batch_inbox = tool.inbox_dir / batch_id
 
     try:
@@ -277,6 +242,17 @@ async def create_batch(
         if tool_name == "export_visual":
             cliente_val = str(cliente).strip() or "aldi"
             (batch_inbox / "_CLIENTE.txt").write_text(cliente_val, encoding="utf-8")
+
+        # caratula_dhl: persistir destinatarios de email para que el processor los use
+        if tool_name == "caratula_dhl":
+            if email_subject.strip():
+                (batch_inbox / "_EMAIL_SUBJECT.txt").write_text(email_subject.strip(), encoding="utf-8")
+            if email_to.strip():
+                (batch_inbox / "_EMAIL_TO.txt").write_text(email_to.strip(), encoding="utf-8")
+            if email_cc.strip():
+                (batch_inbox / "_EMAIL_CC.txt").write_text(email_cc.strip(), encoding="utf-8")
+            if email_bcc.strip():
+                (batch_inbox / "_EMAIL_BCC.txt").write_text(email_bcc.strip(), encoding="utf-8")
         file_count = 0
         for upload_file in files:
             content = await upload_file.read()
@@ -320,13 +296,10 @@ async def create_batch(
         }
 
     except HTTPException:
-        # Limpiar carpeta huérfana si no contiene archivos útiles
-        # (validación falló antes de escribir contenido — solo markers como _SKIP_*).
-        _cleanup_orphan_inbox(batch_inbox)
         raise
     except Exception as e:
         if batch_inbox.exists():
-            shutil.rmtree(batch_inbox, ignore_errors=True)
+            shutil.rmtree(batch_inbox)
         raise HTTPException(500, f"Error: {str(e)}")
 
 
@@ -542,3 +515,35 @@ async def bl_sync():
         raise
     except Exception as e:
         raise HTTPException(500, str(e))
+
+
+@app.get("/api/merge_pdf/rules")
+def merge_pdf_rules():
+    """Devuelve las reglas por defecto (default_rules.json) para precargar la UI."""
+    path = "/app/apps/merge_pdf/extractor/default_rules.json"
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="default_rules.json no encontrado")
+    # No exponemos el campo _comment a la UI
+    data.pop("_comment", None)
+    return JSONResponse(data)
+
+
+@app.get("/api/merge_pdf/batches/{batch_id}/download")
+def merge_pdf_download(batch_id: str = PathParam(...)):
+    """Descarga directa del PDF consolidado del batch."""
+    out_pdf = os.path.join(DATA_ROOT, "merge_pdf", "out", batch_id, "merged.pdf")
+    if not os.path.isfile(out_pdf):
+        # algunos setups dejan el output directamente en out/ sin subcarpeta batch
+        alt = os.path.join(DATA_ROOT, "merge_pdf", "out", "merged.pdf")
+        if os.path.isfile(alt):
+            out_pdf = alt
+        else:
+            raise HTTPException(status_code=404, detail="merged.pdf no encontrado para este batch")
+    return FileResponse(
+        out_pdf,
+        media_type="application/pdf",
+        filename=f"merged_{batch_id}.pdf",
+    )
