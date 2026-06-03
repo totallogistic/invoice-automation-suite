@@ -298,3 +298,14 @@ tools:
       # destinatario en MAIL_TO_MERGE_PDF (ver compose.yaml / .env)
 
     status_dir: /data/merge_pdf/status
+
+# ─────────────────────────────────────────────────────────────────────────
+# Formularios servidos por form_generator (fuera de Docker, en el host).
+# Cada entrada es opcional: si no aparece un form aquí o no tiene output_dir,
+# el endpoint cae al default EXCEL_STORAGE_DIR del propio form_generator.
+# Los paths son absolutos del HOST (form_generator no monta volúmenes).
+# ─────────────────────────────────────────────────────────────────────────
+forms:
+  - name: hoja_control_expedientes
+    enabled: true
+    output_dir: /data/ias_prod/data/out/hoja_control
