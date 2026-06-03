@@ -199,7 +199,12 @@ async def create_batch(
     files: List[UploadFile] = File(...),
     skip_validation: str = Form("0"),
     run_dae:         str = Form("1"),
-    cliente: str = Form("aldi"),
+    cliente:         str = Form("aldi"),
+    # caratula_dhl: destinatarios de email desde la UI
+    email_subject:   str = Form(""),
+    email_to:        str = Form(""),
+    email_cc:        str = Form(""),
+    email_bcc:       str = Form(""),
 ):
     """Create new batch."""
     tool = registry.get_tool(tool_name)
@@ -237,6 +242,17 @@ async def create_batch(
         if tool_name == "export_visual":
             cliente_val = str(cliente).strip() or "aldi"
             (batch_inbox / "_CLIENTE.txt").write_text(cliente_val, encoding="utf-8")
+
+        # caratula_dhl: persistir destinatarios de email para que el processor los use
+        if tool_name == "caratula_dhl":
+            if email_subject.strip():
+                (batch_inbox / "_EMAIL_SUBJECT.txt").write_text(email_subject.strip(), encoding="utf-8")
+            if email_to.strip():
+                (batch_inbox / "_EMAIL_TO.txt").write_text(email_to.strip(), encoding="utf-8")
+            if email_cc.strip():
+                (batch_inbox / "_EMAIL_CC.txt").write_text(email_cc.strip(), encoding="utf-8")
+            if email_bcc.strip():
+                (batch_inbox / "_EMAIL_BCC.txt").write_text(email_bcc.strip(), encoding="utf-8")
         file_count = 0
         for upload_file in files:
             content = await upload_file.read()

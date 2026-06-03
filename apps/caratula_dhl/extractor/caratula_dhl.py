@@ -253,21 +253,36 @@ def cat_priority(k): return CATEGORIES.get(k,("?",99,True))[1]
 
 def categorize(path: Path) -> str:
     stem = path.stem.strip()
-    if re.match(r"^Caratula[\s_]DHL",  stem, re.I): return "caratula_exist"
-    if re.match(r"^\d{4}CAD\d{2,4}",   stem, re.I): return "factura"
-    if re.match(r"^HELV\b",             stem, re.I): return "seguro"
-    if re.match(r"^TLSNAV",             stem, re.I): return "albaran"
-    if re.match(r"^LABELS?[\s\d]",      stem, re.I): return "labels"
-    if re.match(r"^E-[A-Z0-9]",         stem, re.I): return "packing_list"
-    if re.match(r"^INV-",               stem, re.I): return "invoice_supplier"
-    if re.match(r"^Certificado[_\s]",   stem, re.I): return "certificado"
-    if re.match(r"^\d+\s+NAVANTIA",     stem, re.I): return "navantia_doc"
-    if re.match(r"^\d+\s*[-–]\s*\d+",  stem):        return "cotizacion"
+    if re.match(r"^Caratula[\s_]DHL",          stem, re.I): return "caratula_exist"
+    # Factura TLS: acepta prefijos como "FACT " antes del número
+    # Ej: "1741CAD24 - 2994.pdf"  /  "FACT 1188CAD26 - PO TOTAL ...pdf"
+    if re.search(r"\b\d{4}CAD\d{2,4}\b",       stem, re.I): return "factura"
+    if re.match(r"^HELV\b",                     stem, re.I): return "seguro"
+    if re.match(r"^TLSNAV",                     stem, re.I): return "albaran"
+    if re.match(r"^LABELS?[\s\d]",              stem, re.I): return "labels"
+    if re.match(r"^E-[A-Z0-9]",                 stem, re.I): return "packing_list"
+    if re.match(r"^INV-",                        stem, re.I): return "invoice_supplier"
+    if re.match(r"^Certificado[_\s]",            stem, re.I): return "certificado"
+    if re.match(r"^\d+\s+NAVANTIA",             stem, re.I): return "navantia_doc"
+    if re.match(r"^\d+\s*[-\u2013]\s*\d+",   stem):       return "cotizacion"
     return "unknown"
 
+
 def extract_factura_keys(path: Path) -> list[str]:
-    parts = re.split(r"\s*[-–]\s*", path.stem, maxsplit=1)
-    return re.findall(r"\b\d{4}\b", parts[1]) if len(parts) > 1 else []
+    """
+    Extrae claves de embarque de 4 dígitos del nombre de la factura.
+    Ejemplos:
+      "1741CAD24 - 2994.pdf"                         -> ['2994']
+      "1916CAD23 - 2022 2156.pdf"                    -> ['2022', '2156']
+      "FACT 1188CAD26 - PO TOTAL 7000110945 ....pdf" -> []  (sin clave en nombre)
+    """
+    parts = re.split(r"\s*[-\u2013]\s*", path.stem, maxsplit=1)
+    if len(parts) > 1:
+        keys = re.findall(r"\b\d{4}\b", parts[1])
+        if keys:
+            return keys
+    return []
+
 
 def specific_to(path: Path, key: str, all_keys: set) -> bool:
     matched = [k for k in all_keys if re.search(r"\b"+re.escape(k)+r"\b", path.stem)]
@@ -392,11 +407,20 @@ def process_pdfs(pdf_files: list[Path], output_dir: Path):
 
         fac_keys = all_fac_keys[fac_path]
         fac_key  = fac_keys[-1] if fac_keys else ""
+
+        # Para el nombre del archivo de salida:
+        #   · Si hay ≥2 claves en el nombre (ej. lote multi-factura) → unirlas
+        #   · Si hay 1 clave (embarque corto en el nombre)           → clave + last5 pedido
+        #   · Si no hay clave en el nombre (ej. "FACT 1188CAD26...")  → embarque del PDF + last5 pedido
+        last5 = (data.get("pedidoSuministrador") or "")[-5:] or "00000"
         if len(fac_keys) >= 2:
             out_name = "Caratula_DHL_" + "_".join(fac_keys) + ".pdf"
-        else:
-            last5 = (data.get("pedidoSuministrador") or "")[-5:] or "00000"
+        elif fac_key:
             out_name = f"Caratula_DHL_{fac_key}_{last5}.pdf"
+        else:
+            # Sin clave en nombre: usar embarque extraído del PDF
+            embarque = (data.get("embarque") or "").replace(" ", "")
+            out_name = f"Caratula_DHL_{embarque}_{last5}.pdf" if embarque else f"Caratula_DHL_{last5}.pdf"
 
         parts: list[tuple[int, bytes, str]] = []
         parts.append((1, create_cover_page(data), "CARÁTULA"))
