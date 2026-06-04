@@ -560,10 +560,13 @@ class UnifiedProcessor:
         Si tool.email_mail_from está definido en tools.yaml, lo usa como remitente;
         si no, usa el EmailService global (MAIL_FROM del entorno)."""
         override_from = getattr(tool, "email_mail_from", None)
+        logger.info(f"[{tool.name}] mail_from override → yaml='{override_from}' | global='{self.email_config.mail_from}'")
         if override_from:
             from dataclasses import replace as _dc_replace
             custom_config = _dc_replace(self.email_config, mail_from=override_from)
+            logger.info(f"[{tool.name}] Usando mail_from override: {override_from}")
             return EmailService(custom_config)
+        logger.warning(f"[{tool.name}] Sin override mail_from, usando global: {self.email_config.mail_from}")
         return self.email_service
 
     def _get_recipients(self, tool_name: str) -> List[str]:
