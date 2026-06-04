@@ -235,6 +235,50 @@ def _create_cover_reportlab(data: dict) -> bytes:
 # CATEGORÍAS
 # ══════════════════════════════════════════════════════════════════════════════
 
+# Prioridades de ensamblado por TIPO DE ENVÍO
+# PAQUETERIA = envío courier DHL con labels (orden original del programa)
+# TERRESTRE  = camión/transporte terrestre (sin cotización ni labels)
+# MARITIMO   = envío marítimo
+# AEREO      = envío aéreo
+SHIPMENT_PRIORITIES = {
+    "PAQUETERIA": {
+        "factura": 2, "cotizacion": 3, "navantia_doc": 35,
+        "seguro": 4, "certificado": 45, "albaran": 5, "labels": 6,
+        "a7": 46, "hbl": 47, "hawb": 48,
+        "invoice_supplier": 7, "packing_list": 8, "unknown": 90,
+    },
+    "TERRESTRE": {
+        # Factura → HELV → TLSNAV → Invoice → Packing (sin cotización, sin labels)
+        "factura": 1, "seguro": 2, "albaran": 3,
+        "invoice_supplier": 4, "packing_list": 5,
+        "cotizacion": 91, "labels": 92, "certificado": 93,
+        "navantia_doc": 94, "a7": 95, "hbl": 99, "hawb": 99, "unknown": 90,
+    },
+    "MARITIMO": {
+        # Factura → HELV → TLSNAV → A7 → HBL → Invoice → Packing
+        "factura": 1, "seguro": 2, "albaran": 3, "a7": 4,
+        "hbl": 5, "invoice_supplier": 6, "packing_list": 7,
+        "cotizacion": 8, "certificado": 9, "navantia_doc": 10, "labels": 11,
+        "hawb": 99, "unknown": 90,
+    },
+    "AEREO": {
+        # Factura → HELV → TLSNAV → A7 → HAWB → Invoice → Packing
+        "factura": 1, "seguro": 2, "albaran": 3, "a7": 4,
+        "hawb": 5, "invoice_supplier": 6, "packing_list": 7,
+        "cotizacion": 8, "certificado": 9, "navantia_doc": 10, "labels": 11,
+        "hbl": 99, "unknown": 90,
+    },
+}
+
+# Texto a mostrar en el campo "Tipo de embarque" de la carátula
+TIPO_DISPLAY = {
+    "PAQUETERIA": "PAQUETERIA",
+    "TERRESTRE":  "TERRESTRE",
+    "MARITIMO":   "MARÍTIMO",
+    "AEREO":      "AÉREO",
+}
+
+
 CATEGORIES = {
     "factura":          ("Factura TLS",               2,   False),
     "cotizacion":       ("Cotización",                3,   True),
@@ -243,6 +287,9 @@ CATEGORIES = {
     "certificado":      ("Certificado",               45,  True),
     "albaran":          ("Albarán",                   5,   True),
     "labels":           ("Labels",                    6,   True),
+    "a7":               ("Doc. A7",                   46,  True),
+    "hbl":              ("HBL (Marítimo)",             47,  True),
+    "hawb":             ("HAWB (Aéreo)",               48,  True),
     "invoice_supplier": ("Invoice Proveedor",         7,   False),
     "packing_list":     ("Packing List",              8,   False),
     "caratula_exist":   ("Carátula (existente)",      99,  False),
@@ -264,6 +311,10 @@ def categorize(path: Path) -> str:
     if re.match(r"^INV-",                        stem, re.I): return "invoice_supplier"
     if re.match(r"^Certificado[_\s]",            stem, re.I): return "certificado"
     if re.match(r"^\d+\s+NAVANTIA",             stem, re.I): return "navantia_doc"
+    # Documentos marítimos / aéreos
+    if re.match(r"^A7[\s_\-]",                  stem, re.I): return "a7"
+    if re.match(r"^HBL[\s_\-]",                 stem, re.I): return "hbl"
+    if re.match(r"^HAWB[\s_\-]",                stem, re.I): return "hawb"
     if re.match(r"^\d+\s*[-\u2013]\s*\d+",   stem):       return "cotizacion"
     return "unknown"
 
@@ -385,11 +436,30 @@ def process_pdfs(pdf_files: list[Path], output_dir: Path):
         sys.exit(1)
 
     has_labels = bool(categorized.get("labels"))
+
+    # El directorio de entrada (donde están los flag files _SHIPMENT_TYPE.txt etc.)
+    folder = pdf_files[0].parent if pdf_files else output_dir
+
+    # Tipo de envío → prioridades de ensamblado
+    stype_file = folder / "_SHIPMENT_TYPE.txt"
+    shipment_type = stype_file.read_text(encoding="utf-8").strip().upper() if stype_file.exists() else "TERRESTRE"
+    priorities = SHIPMENT_PRIORITIES.get(shipment_type, SHIPMENT_PRIORITIES["TERRESTRE"])
+
+    def get_priority(cat: str) -> int:
+        return priorities.get(cat, CATEGORIES.get(cat, ("?", 90, True))[1])
+
+    # Texto que aparecerá en la carátula (con tildes donde corresponde)
+    tipo_display = TIPO_DISPLAY.get(shipment_type, shipment_type)
+    log.info(f"  Tipo envío : {shipment_type} → carátula: {tipo_display}")
+
     all_fac_keys = {f: extract_factura_keys(f) for f in facturas}
     all_keys_set = {k for keys in all_fac_keys.values() for k in keys}
 
     log.info(f"\n  Facturas : {len(facturas)}  |  Labels: {has_labels}  |  Claves: {sorted(all_keys_set)}")
     log.info(f"  Plantilla: {'✓ '+TEMPLATE_PDF.name if TEMPLATE_PDF.exists() else '✗ no encontrada (fallback ReportLab)'}")
+
+    # Metadatos de email acumulados de todas las facturas del lote
+    email_meta: dict = {"pedidos": [], "facturas": [], "suministradores": [], "shipment_type": shipment_type}
 
     generated: list[Path] = []
 
@@ -405,23 +475,30 @@ def process_pdfs(pdf_files: list[Path], output_dir: Path):
         for k, v in data.items():
             log.info(f"    {k:<25} = {v}")
 
+        # Sobreescribir "tipo" con el valor del selector UI (con tilde si aplica)
+        data["tipo"] = tipo_display
+
+        # Acumular metadatos de email
+        for field, meta_key in [("pedidoTransporte","pedidos"),("factura","facturas"),("suministrador","suministradores")]:
+            val = data.get(field, "")
+            if val and val not in email_meta[meta_key]:
+                email_meta[meta_key].append(val)
+
         fac_keys = all_fac_keys[fac_path]
         fac_key  = fac_keys[-1] if fac_keys else ""
 
-        # Para el nombre del archivo de salida:
-        #   · Si hay ≥2 claves en el nombre (ej. lote multi-factura) → unirlas
-        #   · Si hay 1 clave (embarque corto en el nombre)           → clave + last5 pedido
-        #   · Si no hay clave en el nombre (ej. "FACT 1188CAD26...")  → embarque del PDF + last5 pedido
-        last5 = (data.get("pedidoSuministrador") or "")[-5:] or "00000"
-        if len(fac_keys) >= 2:
-            out_name = "Caratula_DHL_" + "_".join(fac_keys) + ".pdf"
-        elif fac_key:
-            out_name = f"Caratula_DHL_{fac_key}_{last5}.pdf"
-        else:
-            # Sin clave en nombre: usar embarque extraído del PDF
-            embarque = (data.get("embarque") or "").replace(" ", "")
-            out_name = f"Caratula_DHL_{embarque}_{last5}.pdf" if embarque else f"Caratula_DHL_{last5}.pdf"
+        # Nombre del PDF de salida: {factura}_{pedidoTransporte}_{suministrador}_{pedidoSuministrador}
+        def _clean(v: str) -> str:
+            """Normaliza valor para nombre de fichero."""
+            import re as _re
+            return _re.sub(r'[^A-Za-z0-9]', '', (v or "").strip().upper()) or "X"
 
+        out_name = (
+            f"{_clean(data.get('factura'))}"
+            f"_{_clean(data.get('pedidoTransporte'))}"
+            f"_{_clean(data.get('suministrador'))}"
+            f"_{_clean(data.get('pedidoSuministrador'))}.pdf"
+        )
         parts: list[tuple[int, bytes, str]] = []
         parts.append((1, create_cover_page(data), "CARÁTULA"))
         parts.append((2, fac_path.read_bytes(), fac_path.name))
@@ -429,12 +506,12 @@ def process_pdfs(pdf_files: list[Path], output_dir: Path):
         for cat in ("invoice_supplier", "packing_list"):
             for p in categorized.get(cat, []):
                 if len(all_keys_set) <= 1 or (fac_key and specific_to(p, fac_key, all_keys_set)):
-                    parts.append((cat_priority(cat), p.read_bytes(), p.name))
+                    parts.append((get_priority(cat), p.read_bytes(), p.name))
 
         for cat in ("cotizacion", "navantia_doc", "seguro", "certificado",
-                    "albaran", "labels", "unknown"):
+                    "albaran", "labels", "a7", "hbl", "hawb", "unknown"):
             for p in categorized.get(cat, []):
-                parts.append((cat_priority(cat), p.read_bytes(), p.name))
+                parts.append((get_priority(cat), p.read_bytes(), p.name))
 
         parts.sort(key=lambda x: x[0])
         log.info("    Orden:")
@@ -446,6 +523,15 @@ def process_pdfs(pdf_files: list[Path], output_dir: Path):
         out_path.write_bytes(final)
         log.info(f"  ✓ {out_path.name}  ({len(final)//1024} KB)")
         generated.append(out_path)
+
+    # Escribir metadatos de email para que el processor los use en el asunto
+    try:
+        import json as _json
+        meta_path = output_dir / "_email_meta.json"
+        meta_path.write_text(_json.dumps(email_meta, ensure_ascii=False, indent=2), encoding="utf-8")
+        log.info(f"  email_meta → {meta_path}")
+    except Exception as e:
+        log.warning(f"  No se pudo escribir _email_meta.json: {e}")
 
     log.info(f"\n{'═'*66}")
     log.info(f"  ✓ Completado → {output_dir}  ({len(generated)} fichero(s))")

@@ -33,50 +33,84 @@ class EmailService:
         to: List[str],
         subject: str,
         body: str,
-        attachments: List[Path] = None
+        attachments: List[Path] = None,
+        inline_images: List[Path] = None,
     ) -> bool:
-        """Send email with attachments. Returns True if successful."""
+        """Send email with attachments. Returns True if successful.
+
+        Si body comienza con <html o <!DOCTYPE se envía como text/html.
+        inline_images: lista de ficheros imagen que se embeben como CID inline.
+        El CID de cada imagen es el nombre del fichero sin extensión
+        (e.g. logo.gif → cid:logo en el HTML).
+        """
         if not to:
             logger.warning("No recipients, skipping email")
             return False
-        
+
         try:
-            msg = self._build_message(to, subject, body, attachments or [])
+            msg = self._build_message(
+                to, subject, body,
+                attachments or [],
+                inline_images or [],
+            )
             self._send_message(msg, to)
             logger.info(f"Email sent to {len(to)} recipients")
             return True
         except Exception as e:
             logger.error(f"Failed to send email: {e}")
             return False
-    
+
     def _build_message(
         self,
         to: List[str],
         subject: str,
         body: str,
-        attachments: List[Path]
+        attachments: List[Path],
+        inline_images: List[Path] = None,
     ) -> EmailMessage:
-        """Build email message."""
+        """Build email message (HTML o texto plano según el cuerpo)."""
         msg = EmailMessage()
         msg["From"] = self.config.mail_from
         msg["To"] = ", ".join(to)
         msg["Subject"] = subject
-        msg.set_content(body)
-        
+
+        is_html = body.strip().lower().startswith(("<html", "<!doctype"))
+
+        if is_html:
+            msg.set_content(body, subtype="html")
+            # Añadir imágenes inline (CID = nombre sin extensión)
+            for img in (inline_images or []):
+                if not img.exists():
+                    logger.warning(f"Inline image not found: {img}")
+                    continue
+                data = img.read_bytes()
+                subtype = img.suffix.lstrip(".").lower() or "octet-stream"
+                cid = img.stem          # logo.gif → cid "logo"
+                msg.add_related(
+                    data,
+                    maintype="image",
+                    subtype=subtype,
+                    cid=f"<{cid}>",
+                    disposition="inline",
+                )
+                logger.debug(f"Inline image added: cid:{cid} ({img.name})")
+        else:
+            msg.set_content(body)
+
         for path in attachments:
             if not path.exists():
                 logger.warning(f"Attachment not found: {path}")
                 continue
-            
+
             data = path.read_bytes()
             maintype, subtype = self._get_mime_type(path)
             msg.add_attachment(
                 data,
                 maintype=maintype,
                 subtype=subtype,
-                filename=path.name
+                filename=path.name,
             )
-        
+
         return msg
 
     def _send_message(self, msg: EmailMessage, recipients: List[str]):

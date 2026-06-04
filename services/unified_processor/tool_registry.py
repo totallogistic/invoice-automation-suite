@@ -42,6 +42,7 @@ class ToolConfig:
     croton_import_mode: bool = False
     bl_mode: bool = False
     export_visual_mode: bool = False
+    email_mail_from: Optional[str] = None   # override MAIL_FROM global para esta tool
 
 class ToolRegistry:
     """Registry of all available tools."""
@@ -93,6 +94,7 @@ class ToolRegistry:
                 croton_import_mode=tool_data.get("extractor", {}).get("croton_import_mode", False),
                 bl_mode=tool_data.get("extractor", {}).get("bl_mode", False),
                 export_visual_mode=tool_data.get("extractor", {}).get("export_visual_mode", False),
+                email_mail_from=tool_data.get("email", {}).get("mail_from") or None,
             )
             
             # Ensure directories exist

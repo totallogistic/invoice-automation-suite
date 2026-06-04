@@ -20,6 +20,7 @@ class ToolConfig:
     output_artifacts: List[str]
     extractor_path: Path
     email_subject_template: str
+    email_mail_from: Optional[str] = None   # override MAIL_FROM global para esta tool
     max_file_size_mb: int = 200
     enabled: bool = True
 
@@ -66,6 +67,7 @@ class ToolRegistry:
                     "subject_template",
                     f"[{tool_name}] Batch {{batch_id}} processed"
                 ),
+                email_mail_from=tool_data.get("email", {}).get("mail_from") or None,
                 max_file_size_mb=tool_data.get("max_file_size_mb", 200),
                 enabled=True
             )

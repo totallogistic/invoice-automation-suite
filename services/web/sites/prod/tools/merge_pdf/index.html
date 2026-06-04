@@ -1,0 +1,424 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Totallogistic Tools — Consolidar PDF</title>
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+        background: #f5f5f5;
+        min-height: 100vh;
+        color: #1f2937;
+      }
+      header {
+        background: linear-gradient(135deg, #1a4d7e 0%, #2563a8 100%);
+        color: white;
+        padding: 1.5rem;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        position: relative;
+      }
+      header h1 { font-size: 1.5rem; font-weight: 600; letter-spacing: -0.5px; }
+      .env-badge {
+        position: absolute; top: 1rem; right: 1.5rem;
+        background: rgba(220, 53, 69, 0.95); color: white;
+        padding: 0.375rem 0.75rem; border-radius: 4px;
+        font-size: 0.75rem; font-weight: 600; letter-spacing: 0.5px;
+      }
+      .version-badge {
+        display: inline-block; background: rgba(255,255,255,0.18);
+        color: rgba(255,255,255,0.85);
+        padding: 0.25rem 0.6rem; border-radius: 4px;
+        font-size: 0.75rem; font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+        margin-left: 0.75rem; vertical-align: middle; cursor: pointer;
+        transition: background 0.2s;
+      }
+      .version-badge:hover { background: rgba(255,255,255,0.30); color: white; }
+
+      main { max-width: 880px; margin: 0 auto; padding: 1.75rem 1.5rem 3rem; }
+      .intro { color: #4b5563; margin-bottom: 1.5rem; line-height: 1.55; }
+      .mono { font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace; font-size: 0.85em; }
+
+      .card {
+        background: white; border: 1px solid #e5e7eb; border-radius: 10px;
+        padding: 1.25rem 1.35rem; margin-bottom: 1.25rem;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+      }
+      .card h2 { font-size: 1.05rem; margin-bottom: 0.9rem; color: #111827; display:flex; align-items:center; gap:.5rem;}
+      .card h2 .sub { font-weight: 400; font-size: .8rem; color:#6b7280; }
+
+      /* Rules table */
+      table.rules { width: 100%; border-collapse: collapse; }
+      table.rules th {
+        text-align: left; font-size: 0.72rem; text-transform: uppercase;
+        letter-spacing: 0.5px; color: #6b7280; padding: 0.4rem 0.5rem;
+        border-bottom: 2px solid #eef0f3;
+      }
+      table.rules td { padding: 0.35rem 0.5rem; border-bottom: 1px solid #f1f3f5; vertical-align: middle; }
+      table.rules input[type=text], table.rules input[type=number] {
+        width: 100%; padding: 0.45rem 0.6rem; border: 1px solid #d1d5db;
+        border-radius: 6px; font-size: 0.9rem;
+      }
+      table.rules input[type=number] { width: 90px; }
+      td.order-col { width: 110px; }
+      td.act-col { width: 44px; text-align: center; }
+      .btn-icon {
+        background: #fef2f2; color: #dc2626; border: 1px solid #fecaca;
+        width: 30px; height: 30px; border-radius: 6px; cursor: pointer;
+        font-size: 1rem; line-height: 1; display:inline-flex; align-items:center; justify-content:center;
+      }
+      .btn-icon:hover { background: #fee2e2; }
+
+      .rules-actions { display: flex; gap: 0.6rem; margin-top: 0.9rem; flex-wrap: wrap; align-items:center;}
+      button {
+        font-family: inherit; font-size: 0.9rem; cursor: pointer;
+        border-radius: 7px; padding: 0.55rem 1rem; border: 1px solid transparent;
+        transition: background 0.15s, border 0.15s;
+      }
+      .btn-secondary { background: #fff; border: 1px solid #d1d5db; color: #374151; }
+      .btn-secondary:hover { background: #f9fafb; }
+      .btn-primary { background: #2563a8; color: white; }
+      .btn-primary:hover { background: #1f5494; }
+      .btn-primary:disabled { background: #9db8d6; cursor: not-allowed; }
+      .pill {
+        margin-left:auto; font-size:.75rem; color:#6b7280;
+        background:#f3f4f6; border:1px solid #e5e7eb; border-radius:999px; padding:.25rem .7rem;
+      }
+
+      .opts { display:flex; gap:1.4rem; flex-wrap:wrap; margin-top:.9rem; font-size:.85rem; color:#4b5563; }
+      .opts label { display:flex; gap:.4rem; align-items:center; cursor:pointer; }
+
+      input[type=file] {
+        display: block; width: 100%; padding: 0.7rem; border: 1px dashed #c3ccd8;
+        border-radius: 8px; background: #fafbfc; font-size: 0.9rem;
+      }
+      .hint { display:block; font-size: 0.78rem; color: #9ca3af; margin-top: 0.4rem; }
+      .row { display: flex; align-items: center; gap: 0.8rem; flex-wrap: wrap; }
+      .muted { color: #6b7280; font-size: 0.85rem; }
+      .err { color: #dc2626; }
+
+      /* Status */
+      #statusCard { display: none; }
+      progress { width: 100%; height: 10px; border-radius: 6px; }
+      .kv { display: grid; grid-template-columns: 120px 1fr; gap: 6px 12px; margin-top: 12px; font-size: 0.9rem; }
+      .badge {
+        display:inline-block; padding:.2rem .6rem; border-radius:999px;
+        font-size:.75rem; background:#eef2f7; color:#374151;
+      }
+
+      /* Download banner */
+      .download-banner {
+        display:none; align-items:center; gap:1rem; margin-top:1rem;
+        background:#ecfdf5; border:1px solid #a7f3d0; border-radius:10px; padding:1rem 1.2rem;
+      }
+      .download-banner.show { display:flex; }
+      .dl-icon { font-size:1.8rem; }
+      .dl-info { display:flex; flex-direction:column; }
+      .dl-info strong { color:#065f46; }
+      .dl-info span { font-size:.82rem; color:#047857; }
+      .download-banner button { margin-left:auto; background:#059669; color:#fff; }
+      .download-banner button:hover { background:#047857; }
+
+      .back-link { color:#2563a8; text-decoration:none; font-size:.9rem; }
+      .back-link:hover { text-decoration:underline; }
+
+      .preview-list { margin-top:1rem; font-size:.85rem; }
+      .preview-list ol { margin:0; padding-left:1.4rem; }
+      .preview-list li { padding:.15rem 0; }
+      .preview-list .nomatch { color:#b45309; }
+      .preview-list .tag { font-size:.72rem; color:#6b7280; }
+
+      /* Changelog modal */
+      .modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.55); z-index:50; }
+      .modal-overlay.show { display:flex; align-items:center; justify-content:center; padding:1rem; }
+      .modal { background:#fff; border-radius:12px; max-width:560px; width:100%; max-height:80vh; overflow:auto; }
+      .modal-header { display:flex; justify-content:space-between; align-items:center; padding:1rem 1.25rem; border-bottom:1px solid #eee; }
+      .modal-close { background:none; border:none; font-size:1.1rem; cursor:pointer; color:#6b7280; }
+      .modal-body { padding:1.25rem; font-size:.9rem; line-height:1.5; white-space:pre-wrap; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Consolidar PDF <span class="version-badge" id="scriptVersion">…</span></h1>
+      <div class="env-badge" id="envBadge">PROD</div>
+    </header>
+
+    <main>
+      <p class="intro">
+        Sube varios PDFs y se consolidan en uno solo (<span class="mono">merged.pdf</span>)
+        siguiendo las <strong>reglas de orden</strong>: cada regla casa una cadena contra el
+        nombre del fichero y le asigna una posición. Los ficheros que no casen ninguna regla
+        van al final, ordenados alfabéticamente. Las reglas por defecto se cargan abajo y
+        puedes ajustarlas para este envío.
+      </p>
+
+      <!-- ── Reglas ── -->
+      <div class="card">
+        <h2>Reglas de orden <span class="sub">cadena → posición</span></h2>
+        <table class="rules">
+          <thead>
+            <tr><th>Cadena a buscar en el nombre</th><th class="order-col">Orden</th><th class="act-col"></th></tr>
+          </thead>
+          <tbody id="rulesBody"></tbody>
+        </table>
+        <div class="rules-actions">
+          <button class="btn-secondary" id="btnAddRule">+ Añadir regla</button>
+          <button class="btn-secondary" id="btnResetRules">↺ Restaurar por defecto</button>
+          <span class="pill" id="rulesOrigin">reglas por defecto</span>
+        </div>
+        <div class="opts">
+          <label><input type="checkbox" id="optCase" /> Distinguir mayúsculas/minúsculas</label>
+          <label><input type="checkbox" id="optRegex" /> Tratar la cadena como expresión regular</label>
+        </div>
+      </div>
+
+      <!-- ── Subida ── -->
+      <div class="card">
+        <h2>Archivos PDF</h2>
+        <input id="fileInput" type="file" accept=".pdf,application/pdf" multiple />
+        <span class="hint">Selecciona dos o más PDFs. Endpoint: <span class="mono">POST /api/merge_pdf/batches</span></span>
+        <div id="preview" class="preview-list"></div>
+        <div class="row" style="margin-top:1rem">
+          <button class="btn-primary" id="btnUpload" disabled>Consolidar PDF</button>
+          <span id="uploadMsg" class="muted"></span>
+        </div>
+      </div>
+
+      <!-- ── Estado ── -->
+      <div id="statusCard" class="card">
+        <h2>Procesando…</h2>
+        <div class="row" style="justify-content:space-between">
+          <div><div class="muted">Batch</div><div class="mono" id="batchId">—</div></div>
+          <div><span class="badge" id="state">—</span> <span class="badge" id="stage">—</span></div>
+        </div>
+        <div style="margin:12px 0">
+          <progress id="bar" value="0" max="100"></progress>
+          <div class="muted" id="pct" style="margin-top:6px">0%</div>
+        </div>
+        <div class="kv">
+          <div class="muted">Mensaje</div><div id="message">—</div>
+          <div class="muted">Actualizado</div><div class="mono" id="updated">—</div>
+        </div>
+        <div class="download-banner" id="downloadBanner">
+          <div class="dl-icon">📄</div>
+          <div class="dl-info">
+            <strong>PDF consolidado listo</strong>
+            <span>También se ha enviado por email al destinatario configurado.</span>
+          </div>
+          <button id="btnDownload">⬇ Descargar PDF</button>
+        </div>
+        <div id="finalNote" style="margin-top:12px"></div>
+      </div>
+
+      <p><a href="/" class="back-link">← Volver</a></p>
+    </main>
+
+    <!-- Changelog modal -->
+    <div class="modal-overlay" id="changelogOverlay">
+      <div class="modal">
+        <div class="modal-header">
+          <h2>Changelog — <span id="modalVersion">…</span></h2>
+          <button class="modal-close" id="modalClose" title="Cerrar">✕</button>
+        </div>
+        <div class="modal-body" id="modalBody">Cargando…</div>
+      </div>
+    </div>
+
+    <script>
+      const API = "/api/merge_pdf";
+      const $ = id => document.getElementById(id);
+      let pollTimer = null, currentBatchId = null, selectedFiles = [];
+      let defaultRules = null;
+
+      /* ── Env badge ── */
+      fetch("/env.json", { cache: "no-store" })
+        .then(r => r.ok ? r.json() : null)
+        .then(d => { if (d && d.env) { $("envBadge").textContent = d.env.toUpperCase(); } })
+        .catch(() => {});
+
+      /* ── Version + changelog ── */
+      fetch(`${API}/version`, { cache: "no-store" })
+        .then(r => r.ok ? r.json() : Promise.reject())
+        .then(d => {
+          const v = d.version || "?";
+          $("scriptVersion").textContent = v;
+          $("scriptVersion").addEventListener("click", () => {
+            $("modalVersion").textContent = v;
+            $("modalBody").textContent = d.changelog || "Sin changelog.";
+            $("changelogOverlay").classList.add("show");
+          });
+        })
+        .catch(() => { $("scriptVersion").textContent = "?"; });
+      $("modalClose").addEventListener("click", () => $("changelogOverlay").classList.remove("show"));
+      $("changelogOverlay").addEventListener("click", e => {
+        if (e.target === $("changelogOverlay")) $("changelogOverlay").classList.remove("show");
+      });
+
+      /* ── Reglas: render / add / remove / reset ── */
+      function ruleRow(match = "", order = "") {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td><input type="text" class="r-match" placeholder="p.ej. caratula" value="${match.replace(/"/g, "&quot;")}"></td>
+          <td class="order-col"><input type="number" class="r-order" min="1" step="1" value="${order}"></td>
+          <td class="act-col"><button class="btn-icon" title="Eliminar">✕</button></td>`;
+        tr.querySelector(".btn-icon").addEventListener("click", () => tr.remove());
+        return tr;
+      }
+      function renderRules(rules) {
+        const body = $("rulesBody");
+        body.innerHTML = "";
+        (rules || []).forEach(r => body.appendChild(ruleRow(r.match, r.order)));
+        if (!rules || !rules.length) body.appendChild(ruleRow());
+      }
+      function collectRules() {
+        const rules = [];
+        $("rulesBody").querySelectorAll("tr").forEach(tr => {
+          const match = tr.querySelector(".r-match").value.trim();
+          const order = parseInt(tr.querySelector(".r-order").value, 10);
+          if (match && Number.isFinite(order)) rules.push({ match, order });
+        });
+        return {
+          match_mode: $("optRegex").checked ? "regex" : "substring",
+          case_sensitive: $("optCase").checked,
+          rules
+        };
+      }
+
+      $("btnAddRule").addEventListener("click", () => $("rulesBody").appendChild(ruleRow()));
+      $("btnResetRules").addEventListener("click", () => {
+        if (defaultRules) {
+          renderRules(defaultRules.rules);
+          $("optCase").checked = !!defaultRules.case_sensitive;
+          $("optRegex").checked = defaultRules.match_mode === "regex";
+          $("rulesOrigin").textContent = "reglas por defecto";
+        }
+      });
+
+      /* Carga reglas por defecto desde el endpoint (cae a embebidas si falla) */
+      fetch(`${API}/rules`, { cache: "no-store" })
+        .then(r => r.ok ? r.json() : Promise.reject())
+        .then(d => { defaultRules = d; renderRules(d.rules);
+                     $("optCase").checked = !!d.case_sensitive;
+                     $("optRegex").checked = d.match_mode === "regex"; })
+        .catch(() => {
+          defaultRules = { match_mode: "substring", case_sensitive: false, rules: [
+            { match: "caratula", order: 1 }, { match: "CAD", order: 2 },
+            { match: "cotiz", order: 3 }, { match: "HELV", order: 4 },
+            { match: "TLSNAV", order: 5 }, { match: "LABELS", order: 6 },
+            { match: "INV", order: 7 }, { match: "PACKING", order: 8 }
+          ]};
+          renderRules(defaultRules.rules);
+        });
+
+      /* ── Preview local del orden (sin subir) ── */
+      function matchOrder(name, cfg) {
+        let best = null;
+        const n = cfg.case_sensitive ? name : name.toLowerCase();
+        for (const r of cfg.rules) {
+          let hit = false;
+          if (cfg.match_mode === "regex") {
+            try { hit = new RegExp(r.match, cfg.case_sensitive ? "" : "i").test(name); }
+            catch { hit = false; }
+          } else {
+            const pat = cfg.case_sensitive ? r.match : r.match.toLowerCase();
+            hit = n.includes(pat);
+          }
+          if (hit && (best === null || r.order < best)) best = r.order;
+        }
+        return best;
+      }
+      function renderPreview() {
+        const box = $("preview");
+        if (!selectedFiles.length) { box.innerHTML = ""; return; }
+        const cfg = collectRules();
+        const items = selectedFiles.map(f => ({ name: f.name, order: matchOrder(f.name, cfg) }));
+        const matched = items.filter(i => i.order !== null).sort((a, b) => a.order - b.order || a.name.localeCompare(b.name));
+        const unmatched = items.filter(i => i.order === null).sort((a, b) => a.name.localeCompare(b.name));
+        const seq = [...matched, ...unmatched];
+        box.innerHTML = "<strong>Orden previsto:</strong><ol>" + seq.map(i =>
+          i.order !== null
+            ? `<li>${i.name} <span class="tag">· regla #${i.order}</span></li>`
+            : `<li class="nomatch">${i.name} <span class="tag">· sin match (al final)</span></li>`
+        ).join("") + "</ol>";
+      }
+
+      ["btnAddRule","btnResetRules"].forEach(id => $(id).addEventListener("click", () => setTimeout(renderPreview, 0)));
+      $("rulesBody").addEventListener("input", renderPreview);
+      $("optCase").addEventListener("change", renderPreview);
+      $("optRegex").addEventListener("change", renderPreview);
+
+      /* ── Selección de ficheros ── */
+      $("fileInput").addEventListener("change", e => {
+        selectedFiles = Array.from(e.target.files || []);
+        $("btnUpload").disabled = selectedFiles.length < 1;
+        $("uploadMsg").textContent = selectedFiles.length
+          ? `${selectedFiles.length} PDF(s) seleccionados` : "";
+        renderPreview();
+      });
+
+      /* ── Helpers de estado ── */
+      function setUploadMsg(t, err = false) {
+        $("uploadMsg").textContent = t || "";
+        $("uploadMsg").className = err ? "err" : "muted";
+      }
+      function stopPolling() { if (pollTimer) { clearInterval(pollTimer); pollTimer = null; } }
+
+      async function poll(batchId) {
+        try {
+          const r = await fetch(`${API}/batches/${batchId}/status`, { cache: "no-store" });
+          if (!r.ok) return;
+          const s = await r.json();
+          $("state").textContent = s.state || "—";
+          $("stage").textContent = s.stage || "—";
+          $("message").textContent = s.message || "—";
+          $("updated").textContent = s.updated_at || "—";
+          const pct = s.progress != null ? s.progress : (s.state === "done" ? 100 : 0);
+          $("bar").value = pct; $("pct").textContent = pct + "%";
+          if (s.state === "done") {
+            stopPolling();
+            $("downloadBanner").classList.add("show");
+            $("btnDownload").onclick = () =>
+              window.location.href = `${API}/batches/${batchId}/download`;
+          } else if (s.state === "error") {
+            stopPolling();
+            $("finalNote").innerHTML = `<span class="err">Error: ${s.message || "fallo en el proceso"}</span>`;
+          }
+        } catch (_) {}
+      }
+
+      /* ── Subida ── */
+      $("btnUpload").addEventListener("click", async () => {
+        if (!selectedFiles.length) return setUploadMsg("Selecciona al menos un PDF.", true);
+        const cfg = collectRules();
+        if (!cfg.rules.length) return setUploadMsg("Define al menos una regla o restaura las por defecto.", true);
+
+        setUploadMsg("Subiendo…");
+        $("statusCard").style.display = "block";
+        $("downloadBanner").classList.remove("show");
+        $("finalNote").innerHTML = "";
+        stopPolling();
+
+        try {
+          const fd = new FormData();
+          selectedFiles.forEach(f => fd.append("files", f, f.name));
+          // Las reglas viajan como un fichero rules.json dentro del batch
+          const rulesBlob = new Blob([JSON.stringify(cfg, null, 2)], { type: "application/json" });
+          fd.append("files", rulesBlob, "rules.json");
+
+          const r = await fetch(`${API}/batches`, { method: "POST", body: fd });
+          if (!r.ok) throw new Error(`Upload HTTP ${r.status}: ${await r.text()}`);
+          const data = await r.json();
+          currentBatchId = data.batch_id;
+          $("batchId").textContent = currentBatchId;
+          setUploadMsg(`OK. Batch ${currentBatchId} (${selectedFiles.length} PDF).`);
+          await poll(currentBatchId);
+          pollTimer = setInterval(() => poll(currentBatchId), 1500);
+        } catch (e) {
+          setUploadMsg(e.message, true);
+          $("statusCard").style.display = "none";
+        }
+      });
+    </script>
+  </body>
+</html>

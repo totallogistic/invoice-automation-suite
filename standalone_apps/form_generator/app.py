@@ -9,6 +9,7 @@ Usage:
 Then open: http://localhost:8200
 """
 
+import yaml
 import json
 import json as _json
 from pathlib import Path
@@ -80,6 +81,43 @@ templates = Jinja2Templates(directory=TEMPLATES_DIR)
 from app_extintores import router_extintores
 from app_epis_v2 import save_entrega_epis_v2
 app.include_router(router_extintores)
+
+# ─────────────────────────────────────────────────────────────────────────
+# Resolución de output_dir por formulario desde tools.yaml
+# ─────────────────────────────────────────────────────────────────────────
+def _load_forms_config() -> dict:
+    """Lee la sección 'forms' de tools.yaml. Devuelve {form_name: {output_dir, enabled, ...}}.
+    Si el fichero o la sección no existen, devuelve {} y todos los forms usarán EXCEL_STORAGE_DIR."""
+    config_path = Path(os.getenv(
+        "FORMS_CONFIG",
+        Path(__file__).parent.parent.parent / "config" / "tools.yaml"
+    ))
+    if not config_path.exists():
+        print(f"⚠️ [forms-config] No existe {config_path}, todos los forms usarán EXCEL_STORAGE_DIR")
+        return {}
+    try:
+        with open(config_path) as f:
+            data = yaml.safe_load(f) or {}
+        forms = data.get("forms", []) or []
+        cfg = {f["name"]: f for f in forms if isinstance(f, dict) and "name" in f}
+        print(f"✅ [forms-config] {len(cfg)} formularios configurados desde {config_path}")
+        return cfg
+    except Exception as e:
+        print(f"❌ [forms-config] Error leyendo {config_path}: {e} — todos los forms usarán EXCEL_STORAGE_DIR")
+        return {}
+
+FORMS_CONFIG = _load_forms_config()
+
+
+def get_form_output_dir(form_name: str) -> Path:
+    """Devuelve el output_dir del formulario si está declarado en tools.yaml,
+    si no devuelve EXCEL_STORAGE_DIR. Crea el directorio si no existe."""
+    cfg = FORMS_CONFIG.get(form_name, {})
+    out = cfg.get("output_dir")
+    path = Path(out) if out else EXCEL_STORAGE_DIR
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
 
 def send_email_with_json(to_email: str, subject: str, schema_name: str, data: dict, json_path: str):
     """
@@ -2026,6 +2064,7 @@ async def _save_entrega_epis_original(request: Request, generate_docx: bool = Fa
 # ═══════════════════════════════════════════════════════════════════════
 # Master xlsx con las 6 hojas pre-configuradas.
 HOJAS_CONTROL_MASTER = Path(__file__).parent / "templates" / "hojas_control" / "HOJAS_CONTROL_EXPEDIENTES.xlsx"
+# Directorio de salida unificado con los tools del stack
 
 # Hojas válidas (la "EN BLANCO" se gestionará en fase 2 como formulario editable).
 HOJAS_CONTROL_VALIDAS = {
@@ -2126,14 +2165,15 @@ async def save_hoja_control_expedientes(request: Request):
     today_compact = datetime.now().strftime('%Y%m%d')
     safe_sheet = sheet.replace(' ', '_').replace('/', '-')
     out_name = f"{safe_sheet}_{referencia}_{today_compact}.xlsx"
-    out_path = EXCEL_STORAGE_DIR / out_name
+    output_dir = get_form_output_dir("hoja_control_expedientes")
+    out_path   = output_dir / out_name
     wb.save(out_path)
 
     # ── 6. Convertir a PDF con LibreOffice ────────────────────────────
     try:
         subprocess.run(
             ['soffice', '--headless', '--convert-to', 'pdf',
-             '--outdir', str(EXCEL_STORAGE_DIR), str(out_path)],
+             '--outdir', str(output_dir), str(out_path)],
             capture_output=True, text=True, timeout=60, check=True
         )
     except subprocess.CalledProcessError as e:
