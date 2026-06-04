@@ -237,6 +237,8 @@ async def generate_bancos(history: list[dict] = None, filename: str = None) -> P
             _data_cell(ws.cell(row=row, column=11), cfg.get("cta_auxiliar", ""), bg=bg, size=8)
             _data_cell(ws.cell(row=row, column=12), iban, bg=bg, size=8)
             _data_cell(ws.cell(row=row, column=13), euribor_tipo, bg=bg, size=8)
+            _data_cell(ws.cell(row=row, column=14), euribor_val, align="right",
+                       bg=bg, number_fmt="0.000%", size=8)
             _data_cell(ws.cell(row=row, column=15), diferencial, align="right",
                        bg=bg, number_fmt="0.00%", size=8)
             _data_cell(ws.cell(row=row, column=16), nd_val, align="right",
