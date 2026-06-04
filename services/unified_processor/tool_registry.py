@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import yaml
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import List, Optional
 
@@ -20,10 +20,29 @@ class ToolConfig:
     output_artifacts: List[str]
     extractor_path: Path
     email_subject_template: str
-    email_mail_from: Optional[str] = None   # override MAIL_FROM global para esta tool
     max_file_size_mb: int = 200
     enabled: bool = True
-
+    # ── Inject mode (e.g. Croton) ────────────────────────────────────────────
+    # When True, the extractor receives:
+    #   - the primary ODS as the first positional argument
+    #   - the XLSX invoice via --factura <path>
+    #   - --inject  (appends Resumen_Partidas sheet to the ODS instead of
+    #                writing a separate output file)
+    # input_formats must include both accepted extensions, e.g. ["ods", "xlsx"]
+    inject_mode: bool = False
+    filename_pattern: str = ""   # e.g. "CROTON_{stem}.ods"
+    # ── Camion mode ──────────────────────────────────────────────────────────
+    # When True, the extractor receives named file arguments:
+    #   --xlsx <packing_list.xlsx>
+    #   --t1   <T1_1.pdf> [<T1_2.pdf> ...]
+    #   --doc  <doc.pdf>
+    #   -o     <output_dir>
+    # T1 files are identified by "t1" in the filename; the DOC file by "doc".
+    camion_mode: bool = False
+    croton_import_mode: bool = False
+    bl_mode: bool = False
+    export_visual_mode: bool = False
+    email_mail_from: Optional[str] = None   # override MAIL_FROM global para esta tool
 
 class ToolRegistry:
     """Registry of all available tools."""
@@ -67,9 +86,15 @@ class ToolRegistry:
                     "subject_template",
                     f"[{tool_name}] Batch {{batch_id}} processed"
                 ),
-                email_mail_from=tool_data.get("email", {}).get("mail_from") or None,
                 max_file_size_mb=tool_data.get("max_file_size_mb", 200),
-                enabled=True
+                enabled=True,
+                inject_mode=tool_data.get("extractor", {}).get("inject_mode", False),
+                filename_pattern=tool_data.get("output", {}).get("filename_pattern", ""),
+                camion_mode=tool_data.get("extractor", {}).get("camion_mode", False),
+                croton_import_mode=tool_data.get("extractor", {}).get("croton_import_mode", False),
+                bl_mode=tool_data.get("extractor", {}).get("bl_mode", False),
+                export_visual_mode=tool_data.get("extractor", {}).get("export_visual_mode", False),
+                email_mail_from=tool_data.get("email", {}).get("mail_from") or None,
             )
             
             # Ensure directories exist
