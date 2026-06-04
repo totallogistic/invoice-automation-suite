@@ -202,7 +202,6 @@ async def create_batch(
     cliente:         str = Form("aldi"),
     # caratula_dhl: tipo de envío y destinatarios de email desde la UI
     shipment_type:   str = Form("PAQUETERIA"),
-    email_subject:   str = Form(""),
     email_to:        str = Form(""),
     email_cc:        str = Form(""),
     email_bcc:       str = Form(""),
@@ -248,8 +247,6 @@ async def create_batch(
         if tool_name == "caratula_dhl":
             stype = str(shipment_type).strip().upper() or "PAQUETERIA"
             (batch_inbox / "_SHIPMENT_TYPE.txt").write_text(stype, encoding="utf-8")
-            if email_subject.strip():
-                (batch_inbox / "_EMAIL_SUBJECT.txt").write_text(email_subject.strip(), encoding="utf-8")
             if email_to.strip():
                 (batch_inbox / "_EMAIL_TO.txt").write_text(email_to.strip(), encoding="utf-8")
             if email_cc.strip():

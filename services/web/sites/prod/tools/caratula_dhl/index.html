@@ -508,19 +508,7 @@
     <div class="card email-section">
       <h3>✉️ Configuración del Email</h3>
 
-      <!-- ASUNTO -->
-      <div class="email-field">
-        <label>Asunto</label>
-        <div class="subject-wrap">
-          <span class="subject-prefix">FACTURA TRANSPORTE PEDIDO&nbsp;</span>
-          <input id="subjectSuffix" type="text"
-                 placeholder="CMAV - ROOSEVELT  (Pdo Nº y Fra se añaden del PDF)"
-                 autocomplete="off" />
-        </div>
-        <div class="subject-preview" style="margin-top:5px">
-          Vista previa: <strong id="subjectPreview">FACTURA TRANSPORTE PEDIDO … (Pdo Nº y Fra: auto)</strong>
-        </div>
-      </div>
+      <!-- ASUNTO: generado automáticamente del PDF (Factura + Pedido Transporte) -->
 
       <!-- PARA -->
       <div class="email-field">
@@ -714,19 +702,10 @@
         return [...new Set([...fromGrid, ...customEmails[customKey]])];
       }
 
-      // ── Subject preview ─────────────────────────────────────────────
-      function updateSubjectPreview() {
-        const suffix = ($("subjectSuffix").value || "").trim();
-        $("subjectPreview").textContent =
-          suffix ? `FACTURA TRANSPORTE PEDIDO ${suffix}` : "FACTURA TRANSPORTE PEDIDO …";
-      }
-
       // ── Init on load ────────────────────────────────────────────────
       renderContactGrid("toGrid",  TO_CONTACTS);
       renderContactGrid("ccGrid",  CC_CONTACTS);
       renderContactGrid("bccGrid", BCC_CONTACTS);
-
-      $("subjectSuffix").addEventListener("input", updateSubjectPreview);
 
       $("addToBtn").addEventListener("click",  () => addCustomEmail("to",  "customToInput"));
       $("addCcBtn").addEventListener("click",  () => addCustomEmail("cc",  "customCcInput"));
@@ -932,8 +911,6 @@
         const emailTo  = collectEmails("toGrid",  TO_CONTACTS,  "to");
         const emailCc  = collectEmails("ccGrid",  CC_CONTACTS,  "cc");
         const emailBcc = collectEmails("bccGrid", BCC_CONTACTS, "bcc");
-        const subject  = ("FACTURA TRANSPORTE PEDIDO " + ($("subjectSuffix").value || "")).trim();
-
         try {
           const fd = new FormData();
           selectedFiles.forEach(file => {
@@ -945,7 +922,6 @@
           fd.append("shipment_type", shipmentType);
 
           // Email metadata
-          fd.append("email_subject", subject);
           fd.append("email_to",      emailTo.join(","));
           fd.append("email_cc",      emailCc.join(","));
           fd.append("email_bcc",     emailBcc.join(","));
