@@ -223,7 +223,7 @@ async def generate_bancos(history: list[dict] = None, filename: str = None) -> P
             euribor_val = euribor.get(euribor_tipo, 0)
             diferencial = float(cfg.get("diferencial") or 0)
             nd_val = float(cfg.get("nd") or 0)
-            coste = diferencial
+            coste = euribor_val + diferencial
             disponible = limite - dispuesto
             pct_disp = dispuesto / limite if limite else 0
             pct_avail = disponible / limite if limite else 0
@@ -236,9 +236,9 @@ async def generate_bancos(history: list[dict] = None, filename: str = None) -> P
             _data_cell(ws.cell(row=row, column=10), cfg.get("tipo", "PÓLIZA"), bg=bg, size=8)
             _data_cell(ws.cell(row=row, column=11), cfg.get("cta_auxiliar", ""), bg=bg, size=8)
             _data_cell(ws.cell(row=row, column=12), iban, bg=bg, size=8)
-            _data_cell(ws.cell(row=row, column=13), euribor_tipo, bg=bg, size=8)
-            _data_cell(ws.cell(row=row, column=14), euribor_val, align="right",
-                       bg=bg, number_fmt="0.000%", size=8)
+            _data_cell(ws.cell(row=row, column=13), euribor_tipo, bg=bg, size=8)    # M: label
+            _data_cell(ws.cell(row=row, column=14), euribor_val, align="right",     # N: valor numérico
+                        bg=bg, number_fmt="0.000%", size=8)
             _data_cell(ws.cell(row=row, column=15), diferencial, align="right",
                        bg=bg, number_fmt="0.00%", size=8)
             _data_cell(ws.cell(row=row, column=16), nd_val, align="right",
