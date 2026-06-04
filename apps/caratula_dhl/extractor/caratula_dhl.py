@@ -437,6 +437,9 @@ def process_pdfs(pdf_files: list[Path], output_dir: Path):
 
     has_labels = bool(categorized.get("labels"))
 
+    # El directorio de entrada (donde están los flag files _SHIPMENT_TYPE.txt etc.)
+    folder = pdf_files[0].parent if pdf_files else output_dir
+
     # Tipo de envío → prioridades de ensamblado
     stype_file = folder / "_SHIPMENT_TYPE.txt"
     shipment_type = stype_file.read_text(encoding="utf-8").strip().upper() if stype_file.exists() else "TERRESTRE"
