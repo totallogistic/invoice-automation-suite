@@ -86,7 +86,7 @@ def send_email_with_json(to_email: str, subject: str, schema_name: str, data: di
     Send email with JSON attachment.
     Returns True if successful, False otherwise.
     """
-    if not SMTP_HOST or not SMTP_USER or not SMTP_PASS:
+    if not SMTP_HOST:
         print("⚠️ Email not configured, skipping...")
         return False
     
@@ -167,13 +167,15 @@ def send_email_with_json(to_email: str, subject: str, schema_name: str, data: di
         if SMTP_PORT == 465:
             # SSL directo para puerto 465
             with smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT) as server:
-                server.login(SMTP_USER, SMTP_PASS)
+                if SMTP_USER:
+                    server.login(SMTP_USER, SMTP_PASS)
                 server.send_message(msg)
         else:
             # STARTTLS para puerto 587
             with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as server:
-                server.starttls()
-                server.login(SMTP_USER, SMTP_PASS)
+                if SMTP_USER:
+                    server.starttls()
+                    server.login(SMTP_USER, SMTP_PASS)
                 server.send_message(msg)
         
         print(f"✅ Email sent to {to_email}")
@@ -2035,36 +2037,39 @@ HOJAS_CONTROL_VALIDAS = {
 }
 
 
-def _send_hoja_control_email(to_email: str, subject: str, body_text: str, xlsx_path: Path) -> bool:
-    """Envía el xlsx generado al destinatario configurado. Devuelve True/False."""
-    if not SMTP_HOST or not SMTP_USER or not SMTP_PASS:
-        print("⚠️ [hoja-control] SMTP no configurado, no se envía email")
+def _send_hoja_control_email(to_email: str, subject: str, body_text: str, attach_path: Path) -> bool:
+    """Envía el adjunto (PDF) al destinatario configurado. Devuelve True/False.
+    Soporta tanto SMTP autenticado (SSL/TLS) como relay local sin auth."""
+    if not SMTP_HOST:
+        print("⚠️ [hoja-control] SMTP_HOST no configurado, no se envía email")
         return False
 
     try:
         msg = MIMEMultipart()
-        msg['From'] = MAIL_FROM or SMTP_USER
-        msg['To'] = to_email
+        msg['From'] = MAIL_FROM or SMTP_USER or "procesos@totallogistic.es"
+        msg['To']   = to_email
         msg['Subject'] = subject
         msg.attach(MIMEText(body_text, 'plain', 'utf-8'))
 
-        with open(xlsx_path, 'rb') as f:
-            attach = MIMEBase('application',
-                              'vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+        with open(attach_path, 'rb') as f:
+            attach = MIMEBase('application', 'pdf')
             attach.set_payload(f.read())
             encoders.encode_base64(attach)
             attach.add_header('Content-Disposition',
-                              f'attachment; filename="{xlsx_path.name}"')
+                              f'attachment; filename="{attach_path.name}"')
             msg.attach(attach)
 
         if SMTP_PORT == 465:
             with smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT) as server:
-                server.login(SMTP_USER, SMTP_PASS)
+                if SMTP_USER and SMTP_PASS:
+                    server.login(SMTP_USER, SMTP_PASS)
                 server.send_message(msg)
         else:
             with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as server:
-                server.starttls()
-                server.login(SMTP_USER, SMTP_PASS)
+                # STARTTLS solo si el server lo anuncia y tenemos credenciales
+                if SMTP_USER and SMTP_PASS:
+                    server.starttls()
+                    server.login(SMTP_USER, SMTP_PASS)
                 server.send_message(msg)
 
         print(f"✅ [hoja-control] Email enviado a {to_email} — {subject}")
@@ -2077,19 +2082,8 @@ def _send_hoja_control_email(to_email: str, subject: str, body_text: str, xlsx_p
 @app.post("/api/save-hoja-control-expedientes")
 async def save_hoja_control_expedientes(request: Request):
     """
-    Genera la hoja de control correspondiente a un expediente y la envía al ERP.
-
-    Body JSON:
-      { "sheet": "HOJA CONTROL IMPORT FACTURA PRE",
-        "usuario": "cbarcia",
-        "referencia": "12345" }
-
-    Flujo:
-      1. Carga el master xlsx
-      2. Deja únicamente la hoja seleccionada (preservando formato, merges, X's)
-      3. Sobrescribe C70 con la fecha de hoy y F70 con el usuario VT
-      4. Guarda en EXCEL_STORAGE_DIR como  {SHEET}_{REF}_{YYYYMMDD}.xlsx
-      5. Envía email a MAIL_TO_HOJA_CONTROL_EXPEDIENTES con asunto "{SHEET} - #{REF}"
+    Genera la hoja de control en xlsx, la convierte a PDF y envía el PDF
+    al destinatario configurado. Ambos ficheros quedan en EXCEL_STORAGE_DIR.
     """
     data       = await request.json()
     sheet      = (data.get('sheet')      or '').strip()
@@ -2120,14 +2114,38 @@ async def save_hoja_control_expedientes(request: Request):
     ws['C70'] = today_str
     ws['F70'] = usuario
 
-    # ── 4. Guardar con naming acordado ────────────────────────────────
+    # ── 4. Ajustar page setup para que el PDF salga en una sola página ──
+    #ws.page_setup.orientation = ws.ORIENTATION_PORTRAIT
+    #ws.page_setup.paperSize   = ws.PAPERSIZE_A4
+    #ws.page_setup.fitToWidth  = 1
+    #ws.page_setup.fitToHeight = 0      # ← antes era 1; 0 = sin tope vertical
+    #ws.sheet_properties.pageSetUpPr.fitToPage = True
+    #ws.print_options.horizontalCentered = True
+
+    # ── 5. Guardar xlsx ───────────────────────────────────────────────
     today_compact = datetime.now().strftime('%Y%m%d')
     safe_sheet = sheet.replace(' ', '_').replace('/', '-')
     out_name = f"{safe_sheet}_{referencia}_{today_compact}.xlsx"
     out_path = EXCEL_STORAGE_DIR / out_name
     wb.save(out_path)
 
-    # ── 5. Enviar email ───────────────────────────────────────────────
+    # ── 6. Convertir a PDF con LibreOffice ────────────────────────────
+    try:
+        subprocess.run(
+            ['soffice', '--headless', '--convert-to', 'pdf',
+             '--outdir', str(EXCEL_STORAGE_DIR), str(out_path)],
+            capture_output=True, text=True, timeout=60, check=True
+        )
+    except subprocess.CalledProcessError as e:
+        raise HTTPException(500, f"Error convirtiendo a PDF: {e.stderr or e.stdout}")
+    except subprocess.TimeoutExpired:
+        raise HTTPException(504, "LibreOffice tardó más de 60s convirtiendo a PDF")
+
+    pdf_path = out_path.with_suffix('.pdf')
+    if not pdf_path.exists():
+        raise HTTPException(500, f"PDF no generado en {pdf_path}")
+
+    # ── 7. Enviar email con el PDF ────────────────────────────────────
     subject = f"#EX{referencia}#"
     body = (
         f"Adjunto hoja de control correspondiente al expediente #{referencia}.\n"
@@ -2142,19 +2160,19 @@ async def save_hoja_control_expedientes(request: Request):
     email_to = os.getenv("MAIL_TO_HOJA_CONTROL_EXPEDIENTES", "").strip() or os.getenv("MAIL_TO", "").strip()
     email_sent = False
     if email_to:
-        email_sent = _send_hoja_control_email(email_to, subject, body, out_path)
+        email_sent = _send_hoja_control_email(email_to, subject, body, pdf_path)
 
     return JSONResponse({
         "success": True,
         "message": (
-            f"Hoja generada y enviada a {email_to}" if email_sent
-            else f"Hoja generada ({out_name}) — email NO enviado (revisa configuración)"
+            f"Hoja generada (xlsx + PDF) y enviada a {email_to}" if email_sent
+            else f"Hoja generada ({pdf_path.name}) — email NO enviado (revisa configuración)"
         ),
         "excel_file": out_name,
-        "subject": subject,
+        "pdf_file":   pdf_path.name,
+        "subject":    subject,
         "email_sent": email_sent,
     })
-
 
 if __name__ == "__main__":
     print("=" * 60)

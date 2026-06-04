@@ -166,11 +166,40 @@ class UnifiedProcessor:
             processed_files=reported_count
         )
         
-        recipients = self._get_recipients(tool.name)
-        if recipients and tool.email_subject_template:
+        # ── Email: leer flags de UI (escritos por el API desde el formulario web) ──
+        def _read_flag(flag_file: Path) -> list:
+            """Lee un _EMAIL_*.txt y devuelve lista de direcciones."""
+            if not flag_file.exists():
+                return []
+            return [e.strip() for e in flag_file.read_text(encoding="utf-8").split(",") if e.strip()]
+
+        ui_to      = _read_flag(processing_path / "_EMAIL_TO.txt")
+        ui_cc      = _read_flag(processing_path / "_EMAIL_CC.txt")
+        ui_bcc     = _read_flag(processing_path / "_EMAIL_BCC.txt")
+        ui_subj_f  = processing_path / "_EMAIL_SUBJECT.txt"
+        ui_subject = ui_subj_f.read_text(encoding="utf-8").strip() if ui_subj_f.exists() else ""
+
+        # Siempre incluir el env var (MAIL_TO_<TOOL>) como copia de respaldo
+        env_recipients = self._get_recipients(tool.name)
+
+        if tool.name == "caratula_dhl" and (ui_to or ui_cc or ui_bcc):
+            # Combinar TO + CC + BCC de la UI con el env var (sin duplicados)
+            all_recipients = list(dict.fromkeys(ui_to + ui_cc + ui_bcc + env_recipients))
+            subject = ui_subject if ui_subject else (
+                tool.email_subject_template.format(batch_id=batch_id)
+                if tool.email_subject_template else batch_id
+            )
+            logger.info(
+                f"[{tool.name}] Enviando email → TO:{ui_to} CC:{ui_cc} BCC:{ui_bcc} "
+                f"ENV:{env_recipients} | Asunto: {subject}"
+            )
+            body = self._build_email_body(batch_id, file_count, output_path, artifacts)
+            self.email_service.send(all_recipients, subject, body, artifacts)
+        elif env_recipients and tool.email_subject_template:
+            # Comportamiento estándar para el resto de tools
             subject = tool.email_subject_template.format(batch_id=batch_id)
             body = self._build_email_body(batch_id, file_count, output_path, artifacts)
-            self.email_service.send(recipients, subject, body, artifacts)
+            self.email_service.send(env_recipients, subject, body, artifacts)
         
         if tool.bl_mode:
             try:

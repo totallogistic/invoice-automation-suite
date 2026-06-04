@@ -162,9 +162,11 @@ async def manual_sync():
 
 @app.get("/export/situacion")
 async def export_situacion():
-    from situacion_export import generate_situacion
+    from bancos_export import generate_bancos
+    from db import get_history_per_bank
+    history = await get_history_per_bank(days=90)
     try:
-        path = await generate_situacion()
+        path = await generate_bancos(history=history)
     except FileNotFoundError as e:
         raise HTTPException(404, str(e))
     except ValueError as e:
@@ -175,7 +177,6 @@ async def export_situacion():
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         filename=f"situacion_financiera_{today}.xlsx",
     )
-
 
 # ------------------------------------------------------------------
 # Export Excel
