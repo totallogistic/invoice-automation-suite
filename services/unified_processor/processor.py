@@ -28,11 +28,13 @@ class UnifiedProcessor:
         self,
         registry: ToolRegistry,
         email_service: EmailService,
+        email_config: EmailConfig,
         poll_seconds: int = 3,
         batch_quiet_seconds: int = 180
     ):
         self.registry = registry
         self.email_service = email_service
+        self.email_config  = email_config
         self.poll_seconds = poll_seconds
         self.batch_quiet_seconds = batch_quiet_seconds
         
@@ -166,9 +168,8 @@ class UnifiedProcessor:
             processed_files=reported_count
         )
         
-        # ── Email: leer flags de UI (escritos por el API desde el formulario web) ──
+        # ── Leer flags de UI (escritos por el API desde el formulario web) ──
         def _read_flag(flag_file: Path) -> list:
-            """Lee un _EMAIL_*.txt y devuelve lista de direcciones."""
             if not flag_file.exists():
                 return []
             return [e.strip() for e in flag_file.read_text(encoding="utf-8").split(",") if e.strip()]
@@ -179,27 +180,103 @@ class UnifiedProcessor:
         ui_subj_f  = processing_path / "_EMAIL_SUBJECT.txt"
         ui_subject = ui_subj_f.read_text(encoding="utf-8").strip() if ui_subj_f.exists() else ""
 
-        # Siempre incluir el env var (MAIL_TO_<TOOL>) como copia de respaldo
         env_recipients = self._get_recipients(tool.name)
 
-        if tool.name == "caratula_dhl" and (ui_to or ui_cc or ui_bcc):
-            # Combinar TO + CC + BCC de la UI con el env var (sin duplicados)
-            all_recipients = list(dict.fromkeys(ui_to + ui_cc + ui_bcc + env_recipients))
-            subject = ui_subject if ui_subject else (
-                tool.email_subject_template.format(batch_id=batch_id)
-                if tool.email_subject_template else batch_id
+        if tool.name == "caratula_dhl":
+            # Leer metadatos extraídos del PDF (Pdo, Fra, tipo envío)
+            import json as _json
+            meta = {}
+            meta_file = output_path / "_email_meta.json"
+            if meta_file.exists():
+                try:
+                    meta = _json.loads(meta_file.read_text(encoding="utf-8"))
+                except Exception:
+                    pass
+
+            # Asunto: auto desde PDF + sufijo opcional de la UI
+            pedidos  = " / ".join(meta.get("pedidos", []))
+            facturas = " / ".join(meta.get("facturas", []))
+            # Formato: FACTURA {N/Factura} TRANSPORTE DEL PEDIDO {pedidoTransporte}
+            # Ejemplo: FACTURA 1188CAD26 TRANSPORTE DEL PEDIDO 7000110945
+            factura_part = facturas if facturas else ""
+            pedido_part  = pedidos  if pedidos  else ""
+            auto_subject = "FACTURA"
+            if factura_part:
+                auto_subject += f" {factura_part}"
+            auto_subject += " TRANSPORTE DEL PEDIDO"
+            if pedido_part:
+                auto_subject += f" {pedido_part}"
+            if ui_subject:
+                auto_subject += f" {ui_subject}"
+            subject = auto_subject
+
+            # Cuerpo estándar con firma opcional
+            # Firma: HTML con logo si existe firma.html; texto plano como fallback
+            firma_html_file = Path("/apps/caratula_dhl/firma.html")
+            firma_txt_file  = Path("/apps/caratula_dhl/firma.txt")
+            _DEFAULT_FIRMA_TXT = (
+                "TOTAL LOGISTIC SERVICES, S.L.\n"
+                "Calle Chile S/N — Parcela I 4 nave B6 Bajo de la Cabezuela\n"
+                "Puerto Real, 11519 Cádiz. España.\n"
+                "Teléfono: +34 956567808  Móvil: +34 653585831 / +34 670591445\n"
+                "navantiarota@totallogistic.es | www.totallogistic.es"
             )
-            logger.info(
-                f"[{tool.name}] Enviando email → TO:{ui_to} CC:{ui_cc} BCC:{ui_bcc} "
-                f"ENV:{env_recipients} | Asunto: {subject}"
-            )
-            body = self._build_email_body(batch_id, file_count, output_path, artifacts)
-            self.email_service.send(all_recipients, subject, body, artifacts)
+
+            if firma_html_file.exists():
+                try:
+                    firma_html = firma_html_file.read_text(encoding="utf-8")
+                except Exception:
+                    firma_html = None
+            else:
+                firma_html = None
+
+            if firma_html:
+                # Email HTML con logo embebido
+                body_html = (
+                    "<html><body>"
+                    "<p>Buenos días,</p>"
+                    "<p>Adjunto les remitimos la documentación definitiva del pedido del asunto.</p>"
+                    "<br/>"
+                    f"{firma_html}"
+                    "</body></html>"
+                )
+                body = body_html
+            else:
+                # Fallback texto plano
+                if firma_txt_file.exists():
+                    try:
+                        firma_txt = "\n\n" + firma_txt_file.read_text(encoding="utf-8").strip()
+                    except Exception:
+                        firma_txt = "\n\n" + _DEFAULT_FIRMA_TXT
+                else:
+                    firma_txt = "\n\n" + _DEFAULT_FIRMA_TXT
+                body = (
+                    "Buenos días,\n\n"
+                    "Adjunto les remitimos la documentación definitiva del pedido del asunto."
+                    f"{firma_txt}"
+                )
+
+            all_recipients = list(dict.fromkeys(
+                (ui_to + ui_cc + ui_bcc + env_recipients) if (ui_to or ui_cc or ui_bcc)
+                else env_recipients
+            ))
+            if all_recipients:
+                logger.info(
+                    f"[{tool.name}] Enviando \u2192 TO:{ui_to} CC:{ui_cc} BCC:{ui_bcc} "
+                    f"ENV:{env_recipients} | Asunto: {subject}"
+                )
+                # Logo inline para la firma HTML
+                logo_path = Path("/apps/caratula_dhl/logo.gif")
+                inline_imgs = [logo_path] if (firma_html and logo_path.exists()) else []
+                self._get_email_service(tool).send(
+                    all_recipients, subject, body, artifacts,
+                    inline_images=inline_imgs,
+                )
+
         elif env_recipients and tool.email_subject_template:
-            # Comportamiento estándar para el resto de tools
             subject = tool.email_subject_template.format(batch_id=batch_id)
             body = self._build_email_body(batch_id, file_count, output_path, artifacts)
-            self.email_service.send(env_recipients, subject, body, artifacts)
+            self._get_email_service(tool).send(env_recipients, subject, body, artifacts)
         
         if tool.bl_mode:
             try:
@@ -481,6 +558,17 @@ class UnifiedProcessor:
     
             return cmd
 
+    def _get_email_service(self, tool: "ToolConfig") -> "EmailService":
+        """Devuelve un EmailService con el mail_from correcto para la tool.
+        Si tool.email_mail_from está definido en tools.yaml, lo usa como remitente;
+        si no, usa el EmailService global (MAIL_FROM del entorno)."""
+        override_from = getattr(tool, "email_mail_from", None)
+        if override_from:
+            from dataclasses import replace as _dc_replace
+            custom_config = _dc_replace(self.email_config, mail_from=override_from)
+            return EmailService(custom_config)
+        return self.email_service
+
     def _get_recipients(self, tool_name: str) -> List[str]:
         tool_key = f"MAIL_TO_{tool_name.upper()}"
         mail_to = os.getenv(tool_key, "").strip()
@@ -514,6 +602,7 @@ def main():
     processor = UnifiedProcessor(
         registry=registry,
         email_service=EmailService(email_config),
+        email_config=email_config,
         poll_seconds=int(os.getenv("POLL_SECONDS", "3")),
         batch_quiet_seconds=int(os.getenv("BATCH_QUIET_SECONDS", "180"))
     )

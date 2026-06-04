@@ -237,6 +237,20 @@
       }
       .back-link:hover { text-decoration: underline; }
 
+      /* ── Shipment type selector ── */
+      .shipment-radio-group {
+        display: flex; gap: 10px; flex-wrap: wrap; margin-top: 6px;
+      }
+      .shipment-radio-group label {
+        display: flex; align-items: center; gap: 7px;
+        padding: 8px 18px; border: 2px solid #e5e7eb; border-radius: 6px;
+        cursor: pointer; font-size: 0.9rem; font-weight: 500;
+        color: #374151; transition: all 0.15s; user-select: none; background: white;
+      }
+      .shipment-radio-group label:hover { border-color: #2563a8; background: #eff6ff; }
+      .shipment-radio-group input[type="radio"] { accent-color: #2563a8; width:15px; height:15px; }
+      .shipment-radio-group label:has(input:checked) { border-color: #2563a8; background: #eff6ff; color:#1d4ed8; }
+
       /* ── Email config section ── */
       .email-section { margin: 0; }
       .email-section h3 {
@@ -477,6 +491,19 @@
       </p>
     </div>
 
+    <!-- ── TIPO DE ENVÍO ─────────────────────────────────────────────── -->
+    <div class="card">
+      <div class="email-field" style="margin-bottom:0">
+        <label>Tipo de Envío</label>
+        <div class="shipment-radio-group">
+          <label><input type="radio" name="shipmentType" value="AEREO"><span>✈️ Aéreo</span></label>
+          <label><input type="radio" name="shipmentType" value="MARITIMO"><span>🚢 Marítimo</span></label>
+          <label><input type="radio" name="shipmentType" value="PAQUETERIA" checked><span>📦 Paquetería</span></label>
+          <label><input type="radio" name="shipmentType" value="TERRESTRE"><span>🚛 Terrestre</span></label>
+        </div>
+      </div>
+    </div>
+
     <!-- ── EMAIL CONFIG ─────────────────────────────────────────────── -->
     <div class="card email-section">
       <h3>✉️ Configuración del Email</h3>
@@ -487,11 +514,11 @@
         <div class="subject-wrap">
           <span class="subject-prefix">FACTURA TRANSPORTE PEDIDO&nbsp;</span>
           <input id="subjectSuffix" type="text"
-                 placeholder=""
+                 placeholder="CMAV - ROOSEVELT  (Pdo Nº y Fra se añaden del PDF)"
                  autocomplete="off" />
         </div>
         <div class="subject-preview" style="margin-top:5px">
-          Vista previa: <strong id="subjectPreview">FACTURA TRANSPORTE PEDIDO …</strong>
+          Vista previa: <strong id="subjectPreview">FACTURA TRANSPORTE PEDIDO … (Pdo Nº y Fra: auto)</strong>
         </div>
       </div>
 
@@ -912,6 +939,10 @@
           selectedFiles.forEach(file => {
             fd.append("files", file, file.name);
           });
+
+          // Tipo de envío
+          const shipmentType = (document.querySelector('input[name="shipmentType"]:checked') || {}).value || "TERRESTRE";
+          fd.append("shipment_type", shipmentType);
 
           // Email metadata
           fd.append("email_subject", subject);

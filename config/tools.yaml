@@ -264,6 +264,10 @@ tools:
 
     email:
       subject_template: "[Carátula DHL] Batch {batch_id} - Carátulas listas"
+      # Override del MAIL_FROM para esta tool (opcional).
+      # Si está definido, usa esta dirección como remitente en lugar de MAIL_FROM global.
+      # Requiere que ToolConfig lo lea y se lo pase a EmailService.send().
+      mail_from: "navantiarota@totallogistic.es"
 
     status_dir: /data/caratula_dhl/status
 
