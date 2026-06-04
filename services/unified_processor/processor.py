@@ -265,12 +265,9 @@ class UnifiedProcessor:
                     f"[{tool.name}] Enviando \u2192 TO:{ui_to} CC:{ui_cc} BCC:{ui_bcc} "
                     f"ENV:{env_recipients} | Asunto: {subject}"
                 )
-                # Logo inline para la firma HTML
-                logo_path = Path("/apps/caratula_dhl/logo.gif")
-                inline_imgs = [logo_path] if (firma_html and logo_path.exists()) else []
+                # Logo embebido en base64 dentro de firma.html → no se necesita inline_images
                 self._get_email_service(tool).send(
                     all_recipients, subject, body, artifacts,
-                    inline_images=inline_imgs,
                 )
 
         elif env_recipients and tool.email_subject_template:

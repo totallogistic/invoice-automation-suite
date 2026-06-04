@@ -260,7 +260,7 @@ tools:
     output:
       directory: /data/out
       artifacts:
-        - "Caratula_DHL_*.pdf"
+        - "*.pdf"
 
     email:
       subject_template: "[Carátula DHL] Batch {batch_id} - Carátulas listas"
