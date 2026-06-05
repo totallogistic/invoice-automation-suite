@@ -94,23 +94,14 @@ async def _post_sync_exports(results: dict):
         logger.warning("saldos_actuales.yaml failed: %s", exc)
 
     # 2. Excel saldos diario + histórico
-    try:
-        from excel_export import generate_excel
-        today_str = datetime.now().strftime("%Y%m%d")
-        await generate_excel(latest, history, daily, filename=f"saldos_{today_str}.xlsx")
-        await generate_excel(latest, history, daily, filename="saldos_historico.xlsx")
-        logger.info("Excel saldos diario y histórico actualizados")
-    except Exception as exc:
-        logger.warning("Excel saldos failed: %s", exc)
-
-    # 3. Excel bancos por empresa (replica modelo manual)
+# Reemplaza todo el bloque de exports de Excel por esto:
     try:
         from bancos_export import generate_bancos
         today_str = datetime.now().strftime("%Y%m%d")
-        await generate_bancos(history=history, filename=f"bancos_{today_str}.xlsx")
-        logger.info("Excel bancos actualizado: bancos_%s.xlsx", today_str)
+        await generate_bancos(history=None, filename=f"situacion_{today_str}.xlsx")
+        logger.info("situacion_%s.xlsx actualizado", today_str)
     except Exception as exc:
-        logger.warning("Excel bancos failed: %s", exc)
+        logger.warning("Excel export failed: %s", exc)
 
     # 3. Google Sheets (si configurado en .env)
     creds_path = os.environ.get("GOOGLE_SHEETS_CREDENTIALS", "")
