@@ -18,6 +18,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libpangoft2-1.0-0 \
     libharfbuzz0b \
     libfontconfig1 \
+    ghostscript \
  && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .

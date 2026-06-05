@@ -139,6 +139,16 @@ def export_visual_version():
 
 # ── Shared ZIP download helper ────────────────────────────────────────────────
 
+@app.get("/api/merge_pdf/rules")
+def merge_pdf_rules():
+    """Reglas por defecto (default_rules.json) para precargar la UI. Solo lectura."""
+    path = Path("/app/apps/merge_pdf/extractor/default_rules.json")
+    if not path.is_file():
+        raise HTTPException(404, "default_rules.json no encontrado")
+    data = json.loads(path.read_text(encoding="utf-8"))
+    data.pop("_comment", None)
+    return JSONResponse(data)
+
 def _zip_batch_download(tool_name: str, batch_id: str, zip_prefix: str) -> StreamingResponse:
     """Shared ZIP download for split_* tools (no email, direct browser download)."""
     tool = registry.get_tool(tool_name)
@@ -178,6 +188,31 @@ def _zip_batch_download(tool_name: str, batch_id: str, zip_prefix: str) -> Strea
 
 
 # ── Download endpoints ────────────────────────────────────────────────────────
+
+@app.get("/api/merge_pdf/batches/{batch_id}/download")
+def merge_pdf_download(batch_id: str = PathParam(...)):
+    """Descarga directa del PDF consolidado (merged.pdf) del batch."""
+    tool = registry.get_tool("merge_pdf")
+    if not tool:
+        raise HTTPException(404, "Tool merge_pdf not found")
+
+    status_mgr = StatusManager(tool.status_dir)
+    status = status_mgr.get_status(batch_id)
+    if not status:
+        raise HTTPException(404, f"Batch not found: {batch_id}")
+    if status.state not in ("DONE", "done"):
+        raise HTTPException(409, f"Batch not ready for download (state={status.state})")
+
+    merged = tool.output_dir / batch_id / "merged.pdf"
+    if not merged.is_file():
+        raise HTTPException(404, f"merged.pdf not found for batch {batch_id}")
+
+    return FileResponse(
+        str(merged),
+        media_type="application/pdf",
+        filename=f"merged_{batch_id}.pdf",
+    )
+
 
 @app.get("/api/split_nominas/batches/{batch_id}/download")
 def split_nominas_download(batch_id: str = PathParam(...)):

@@ -1,15 +1,12 @@
 {
-  "_comment": "Reglas por defecto para merge_pdf. Cada regla casa una cadena (match) contra el nombre del fichero (case-insensitive, substring) y le asigna una posicion (order). Menor order = antes en el PDF consolidado. Los ficheros que no casen ninguna regla van al final, ordenados alfabeticamente. Estas reglas se pueden sobreescribir puntualmente desde la web UI (campo rules.json del formulario).",
-  "match_mode": "substring",
+  "_comment": "Reglas por defecto de merge_pdf en modo REGEX (permite mezclar literales y patrones). Cada match es una expresion regular que se busca dentro del nombre del fichero (re.search, case-insensitive). Varios ficheros que casan la misma regla comparten order y se ordenan alfabeticamente entre si. Los que no casan ninguna regla van al final.",
+  "match_mode": "regex",
   "case_sensitive": false,
   "rules": [
-    { "match": "caratula", "order": 1 },
-    { "match": "CAD",      "order": 2 },
-    { "match": "cotiz",    "order": 3 },
-    { "match": "HELV",     "order": 4 },
-    { "match": "TLSNAV",   "order": 5 },
-    { "match": "LABELS",   "order": 6 },
-    { "match": "INV",      "order": 7 },
-    { "match": "PACKING",  "order": 8 }
+    { "match": "Factura",               "order": 1 },
+    { "match": "Relaci[oó]n de Partidas", "order": 2 },
+    { "match": "DM-",                    "order": 3 },
+    { "match": "EE-",                    "order": 4 },
+    { "match": "\\d{4}_\\d{3}",          "order": 5 }
   ]
 }
