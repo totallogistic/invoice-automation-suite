@@ -49,11 +49,18 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 DEFAULT_RULES_PATH = SCRIPT_DIR / "default_rules.json"
 OUTPUT_NAME = "merged.pdf"
 
-# Si el PDF consolidado supera este umbral, se intenta comprimir con Ghostscript.
-COMPRESS_THRESHOLD_MB = 50
-# Nivel de Ghostscript: ebook = 150 dpi, buen equilibrio calidad/tamano para
-# documentos mezcla texto+escaneo. (screen=72dpi mas agresivo; printer=300dpi).
-GS_PDFSETTINGS = "/ebook"
+# ── Compresion ────────────────────────────────────────────────────────────────
+# Si el PDF consolidado supera este tamano, se intenta comprimir con Ghostscript.
+COMPRESS_THRESHOLD_MB = 40
+# Niveles de Ghostscript a probar, EN ORDEN. Se prueba el primero; si no baja del
+# objetivo se prueba el siguiente. En cada paso solo se acepta el resultado si es
+# mas pequeno que el original (algunos PDFs ya optimizados ENGORDAN con /ebook).
+#   screen  = 72 dpi  (mas agresivo)   ebook = 150 dpi   printer = 300 dpi
+GS_LEVELS = ["/screen", "/ebook"]
+# Objetivo: tamano maximo de PDF EN DISCO que cabe en el correo tras codificarse
+# en base64 (~+37%). Con Postfix a 75 MB de mensaje, ~52 MB de PDF es seguro.
+# Si tras comprimir sigue por encima, se avisa en el reporte (no se trunca nada).
+TARGET_MAX_MB = 50
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -159,9 +166,14 @@ def merge(sequence, output_path: Path):
     return pages_per_file
 
 
-def write_order_report(sequence, pages_per_file, discarded, origin, report_path: Path):
+def write_order_report(sequence, pages_per_file, discarded, origin, report_path: Path,
+                       final_mb=None, compress_note=None):
     lines = []
     lines.append(f"Reglas aplicadas desde: {origin}")
+    if final_mb is not None:
+        lines.append(f"Tamano final: {final_mb:.1f} MB")
+    if compress_note:
+        lines.append(f"Compresion: {compress_note}")
     lines.append("")
     lines.append("Orden del PDF consolidado:")
     lines.append("")
@@ -185,56 +197,77 @@ def _size_mb(path: Path) -> float:
     return path.stat().st_size / (1024 * 1024)
 
 
-def compress_if_needed(pdf_path: Path, threshold_mb: int = COMPRESS_THRESHOLD_MB):
-    """Si pdf_path supera threshold_mb, intenta comprimir con Ghostscript.
-
-    Devuelve (final_size_mb, accion) donde accion es uno de:
-      'sin-compresion'  : no superaba el umbral
-      'comprimido'      : Ghostscript redujo el tamano (se sustituye el fichero)
-      'sin-mejora'      : Ghostscript no redujo -> se mantiene el original
-      'gs-no-disponible': Ghostscript no instalado -> se mantiene el original
-      'error-gs'        : Ghostscript fallo -> se mantiene el original
-
-    Nunca deja el PDF en peor estado: ante cualquier problema conserva el original.
-    """
-    orig_mb = _size_mb(pdf_path)
-    if orig_mb <= threshold_mb:
-        return orig_mb, "sin-compresion"
-
-    gs = shutil.which("gs") or shutil.which("ghostscript")
-    if not gs:
-        return orig_mb, "gs-no-disponible"
-
-    tmp_out = pdf_path.with_suffix(".compressed.pdf")
+def _gs_compress(gs: str, src: Path, level: str, dst: Path, timeout=900) -> bool:
+    """Ejecuta Ghostscript src->dst con el nivel dado. True si genero dst no vacio."""
     cmd = [
         gs, "-sDEVICE=pdfwrite",
         "-dCompatibilityLevel=1.5",
-        f"-dPDFSETTINGS={GS_PDFSETTINGS}",
+        f"-dPDFSETTINGS={level}",
         "-dNOPAUSE", "-dQUIET", "-dBATCH",
         "-dDetectDuplicateImages=true",
-        f"-sOutputFile={tmp_out}",
-        str(pdf_path),
+        f"-sOutputFile={dst}",
+        str(src),
     ]
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
     except Exception:
-        if tmp_out.exists():
-            tmp_out.unlink(missing_ok=True)
-        return orig_mb, "error-gs"
+        if dst.exists():
+            dst.unlink(missing_ok=True)
+        return False
+    if r.returncode != 0 or not dst.exists() or dst.stat().st_size == 0:
+        if dst.exists():
+            dst.unlink(missing_ok=True)
+        return False
+    return True
 
-    if result.returncode != 0 or not tmp_out.exists() or tmp_out.stat().st_size == 0:
-        if tmp_out.exists():
-            tmp_out.unlink(missing_ok=True)
-        return orig_mb, "error-gs"
 
-    new_mb = _size_mb(tmp_out)
-    # Solo sustituimos si realmente reduce (con un margen minimo del 2%)
-    if new_mb < orig_mb * 0.98:
-        tmp_out.replace(pdf_path)
-        return new_mb, "comprimido"
-    else:
-        tmp_out.unlink(missing_ok=True)
-        return orig_mb, "sin-mejora"
+def compress_if_needed(pdf_path: Path,
+                       threshold_mb: int = COMPRESS_THRESHOLD_MB,
+                       target_mb: int = TARGET_MAX_MB,
+                       levels=GS_LEVELS):
+    """Si pdf_path supera threshold_mb, intenta comprimir con Ghostscript probando
+    los niveles en orden y quedandose con el resultado MAS PEQUENO (nunca uno mayor
+    que el original). Para en cuanto baja de target_mb.
+
+    Devuelve (final_mb, action, cabe_bool) donde action es uno de:
+      'sin-compresion'  : no superaba el umbral de disparo
+      'comprimido'      : se redujo (se sustituye el fichero); cabe_bool indica si <= target
+      'sin-mejora'      : ningun nivel redujo -> se mantiene original (cabe_bool=False)
+      'gs-no-disponible': Ghostscript no instalado -> original (cabe_bool=False)
+
+    cabe_bool: True si el tamano final <= target_mb (cabe en el correo).
+    Nunca deja el PDF en peor estado.
+    """
+    orig_mb = _size_mb(pdf_path)
+    if orig_mb <= threshold_mb:
+        return orig_mb, "sin-compresion", orig_mb <= target_mb
+
+    gs = shutil.which("gs") or shutil.which("ghostscript")
+    if not gs:
+        return orig_mb, "gs-no-disponible", False
+
+    best_path = None
+    best_mb = orig_mb
+    for i, level in enumerate(levels):
+        tmp = pdf_path.with_suffix(f".gs{i}.pdf")
+        if _gs_compress(gs, pdf_path, level, tmp):
+            mb = _size_mb(tmp)
+            if mb < best_mb * 0.98:          # mejora real (>2%)
+                # descartar el best anterior si era un temporal
+                if best_path is not None:
+                    best_path.unlink(missing_ok=True)
+                best_path, best_mb = tmp, mb
+                if best_mb <= target_mb:     # ya cabe: no probar niveles peores
+                    break
+            else:
+                tmp.unlink(missing_ok=True)
+        # si fallo, seguimos al siguiente nivel
+
+    if best_path is None:
+        return orig_mb, "sin-mejora", False
+
+    best_path.replace(pdf_path)
+    return best_mb, "comprimido", best_mb <= target_mb
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -312,23 +345,28 @@ Ejemplos:
     pages_per_file = merge(sequence, out_pdf)
 
     # Comprimir si supera el umbral (solo entonces)
-    final_mb, action = compress_if_needed(out_pdf)
+    final_mb, action, cabe = compress_if_needed(out_pdf)
+
+    _compress_msgs = {
+        "sin-compresion":   f"Tamano por debajo de {COMPRESS_THRESHOLD_MB} MB, sin comprimir.",
+        "comprimido":       f"Comprimido con Ghostscript a {final_mb:.1f} MB.",
+        "sin-mejora":       f"Superaba {COMPRESS_THRESHOLD_MB} MB pero Ghostscript no pudo reducir; se mantiene original ({final_mb:.1f} MB).",
+        "gs-no-disponible": f"Superaba {COMPRESS_THRESHOLD_MB} MB pero Ghostscript no esta instalado; se mantiene original ({final_mb:.1f} MB).",
+    }
+    compress_note = _compress_msgs.get(action, action)
+    if not cabe and final_mb > TARGET_MAX_MB:
+        compress_note += (f" AVISO: supera el objetivo de {TARGET_MAX_MB} MB para email; "
+                          f"posible rechazo en el envio, descargar desde la UI.")
 
     report = output_dir / "orden.txt"
-    write_order_report(sequence, pages_per_file, discarded, origin, report)
+    write_order_report(sequence, pages_per_file, discarded, origin, report,
+                       final_mb=final_mb, compress_note=compress_note)
 
     total_pages = sum(n for _, n in pages_per_file)
     print(f"OK -> {out_pdf}  ({len(sequence)} PDFs incluidos / {len(discarded)} descartados, "
           f"{total_pages} paginas, {final_mb:.1f} MB)")
     print(f"Reglas: {origin} · match_mode={match_mode} · case_sensitive={case_sensitive}")
-    _compress_msgs = {
-        "sin-compresion":   f"Tamano por debajo de {COMPRESS_THRESHOLD_MB} MB, sin comprimir.",
-        "comprimido":       f"Superaba {COMPRESS_THRESHOLD_MB} MB: comprimido con Ghostscript.",
-        "sin-mejora":       f"Superaba {COMPRESS_THRESHOLD_MB} MB pero Ghostscript no redujo; se mantiene original.",
-        "gs-no-disponible": f"Superaba {COMPRESS_THRESHOLD_MB} MB pero Ghostscript no esta instalado; se mantiene original.",
-        "error-gs":         f"Superaba {COMPRESS_THRESHOLD_MB} MB pero Ghostscript fallo; se mantiene original.",
-    }
-    print(f"Compresion: {_compress_msgs.get(action, action)}")
+    print(f"Compresion: {compress_note}")
     for i, (p, order) in enumerate(sequence, 1):
         print(f"  {i:>2}. [#{order}] {p.name}")
     for p in discarded:
