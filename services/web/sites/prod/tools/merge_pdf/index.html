@@ -146,11 +146,12 @@
 
     <main>
       <p class="intro">
-        Sube varios PDFs y se consolidan en uno solo (<span class="mono">merged.pdf</span>)
-        siguiendo las <strong>reglas de orden</strong>: cada regla casa una cadena contra el
-        nombre del fichero y le asigna una posición. Los ficheros que no casen ninguna regla
-        van al final, ordenados alfabéticamente. Las reglas por defecto se cargan abajo y
-        puedes ajustarlas para este envío.
+        Sube los PDFs (puedes seleccionar la carpeta entera) y se consolidan en uno solo
+        (<span class="mono">merged.pdf</span>) siguiendo las <strong>reglas de orden</strong>:
+        cada regla casa una cadena contra el nombre del fichero y le asigna una posición.
+        Los ficheros que <strong>no coincidan con ninguna regla se descartan</strong> automáticamente
+        (no hace falta que elijas manualmente cuáles procesar). Las reglas por defecto se cargan
+        abajo y puedes ajustarlas para este envío.
       </p>
 
       <!-- ── Reglas ── -->
@@ -332,15 +333,23 @@
         const box = $("preview");
         if (!selectedFiles.length) { box.innerHTML = ""; return; }
         const cfg = collectRules();
-        const items = selectedFiles.map(f => ({ name: f.name, order: matchOrder(f.name, cfg) }));
+        const items = selectedFiles
+          .filter(f => f.name.toLowerCase().endsWith(".pdf"))
+          .map(f => ({ name: f.name, order: matchOrder(f.name, cfg) }));
         const matched = items.filter(i => i.order !== null).sort((a, b) => a.order - b.order || a.name.localeCompare(b.name));
-        const unmatched = items.filter(i => i.order === null).sort((a, b) => a.name.localeCompare(b.name));
-        const seq = [...matched, ...unmatched];
-        box.innerHTML = "<strong>Orden previsto:</strong><ol>" + seq.map(i =>
-          i.order !== null
-            ? `<li>${i.name} <span class="tag">· regla #${i.order}</span></li>`
-            : `<li class="nomatch">${i.name} <span class="tag">· sin match (al final)</span></li>`
-        ).join("") + "</ol>";
+        const discarded = items.filter(i => i.order === null).sort((a, b) => a.name.localeCompare(b.name));
+
+        let html = "<strong>Se consolidarán (" + matched.length + "):</strong><ol>" +
+          matched.map(i => `<li>${i.name} <span class="tag">· regla #${i.order}</span></li>`).join("") +
+          "</ol>";
+        if (discarded.length) {
+          html += `<strong>Descartados — no coinciden (${discarded.length}):</strong><ul style="list-style:none;padding-left:0;margin:.3rem 0 0">` +
+            discarded.map(i => `<li class="nomatch">✕ ${i.name}</li>`).join("") + "</ul>";
+        }
+        if (!matched.length) {
+          html += `<p class="err" style="margin-top:.5rem">Ningún archivo coincide con las reglas: no se generará PDF.</p>`;
+        }
+        box.innerHTML = html;
       }
 
       ["btnAddRule","btnResetRules"].forEach(id => $(id).addEventListener("click", () => setTimeout(renderPreview, 0)));

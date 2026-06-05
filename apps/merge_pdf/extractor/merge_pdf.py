@@ -119,26 +119,27 @@ def assign_order(filename: str, rules, match_mode, case_sensitive):
 
 
 def build_sequence(pdf_files, rules, match_mode, case_sensitive):
-    """Ordena la lista de Path de PDFs segun las reglas.
+    """Ordena los PDFs segun las reglas. Los que NO casan ninguna regla se
+    DESCARTAN del merge (comportamiento global).
 
-    Returns: lista de (Path, order_or_None, matched_bool)
+    Returns: (sequence, discarded)
+      sequence  : lista de (Path, order) de los ficheros que SI se consolidan,
+                  ya ordenada (order asc, desempate alfabetico).
+      discarded : lista de Path descartados (alfabetica) para el reporte.
     """
-    matched, unmatched = [], []
+    matched, discarded = [], []
     for p in pdf_files:
         order = assign_order(p.name, rules, match_mode, case_sensitive)
         if order is None:
-            unmatched.append(p)
+            discarded.append(p)
         else:
             matched.append((p, order))
 
-    # matched: por order asc, desempate por nombre
     matched.sort(key=lambda t: (t[1], t[0].name.lower()))
-    # unmatched: alfabetico, van al final
-    unmatched.sort(key=lambda p: p.name.lower())
+    discarded.sort(key=lambda p: p.name.lower())
 
-    seq = [(p, o, True) for (p, o) in matched]
-    seq += [(p, None, False) for p in unmatched]
-    return seq
+    sequence = [(p, o) for (p, o) in matched]
+    return sequence, discarded
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -147,7 +148,7 @@ def build_sequence(pdf_files, rules, match_mode, case_sensitive):
 def merge(sequence, output_path: Path):
     writer = PdfWriter()
     pages_per_file = []
-    for p, _order, _matched in sequence:
+    for p, _order in sequence:
         reader = PdfReader(str(p))
         n = len(reader.pages)
         for page in reader.pages:
@@ -158,17 +159,22 @@ def merge(sequence, output_path: Path):
     return pages_per_file
 
 
-def write_order_report(sequence, pages_per_file, origin, report_path: Path):
+def write_order_report(sequence, pages_per_file, discarded, origin, report_path: Path):
     lines = []
     lines.append(f"Reglas aplicadas desde: {origin}")
     lines.append("")
     lines.append("Orden del PDF consolidado:")
     lines.append("")
     pages_map = dict(pages_per_file)
-    for i, (p, order, matched) in enumerate(sequence, 1):
-        tag = f"regla #{order}" if matched else "SIN MATCH (al final)"
+    for i, (p, order) in enumerate(sequence, 1):
         npages = pages_map.get(p.name, "?")
-        lines.append(f"  {i:>2}. {p.name}  ·  {npages} pag.  ·  {tag}")
+        lines.append(f"  {i:>2}. {p.name}  ·  {npages} pag.  ·  regla #{order}")
+    if discarded:
+        lines.append("")
+        lines.append(f"Descartados (sin coincidencia, NO incluidos): {len(discarded)}")
+        lines.append("")
+        for p in discarded:
+            lines.append(f"   -  {p.name}")
     report_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
@@ -295,7 +301,12 @@ Ejemplos:
 
     rules, match_mode, case_sensitive, origin = load_rules(rules_override)
 
-    sequence = build_sequence(pdf_files, rules, match_mode, case_sensitive)
+    sequence, discarded = build_sequence(pdf_files, rules, match_mode, case_sensitive)
+
+    if not sequence:
+        print("ERROR: ningun PDF coincide con las reglas; no hay nada que consolidar. "
+              f"Descartados {len(discarded)} fichero(s).", file=sys.stderr)
+        sys.exit(1)
 
     out_pdf = output_dir / OUTPUT_NAME
     pages_per_file = merge(sequence, out_pdf)
@@ -304,10 +315,11 @@ Ejemplos:
     final_mb, action = compress_if_needed(out_pdf)
 
     report = output_dir / "orden.txt"
-    write_order_report(sequence, pages_per_file, origin, report)
+    write_order_report(sequence, pages_per_file, discarded, origin, report)
 
     total_pages = sum(n for _, n in pages_per_file)
-    print(f"OK -> {out_pdf}  ({len(pdf_files)} PDFs, {total_pages} paginas, {final_mb:.1f} MB)")
+    print(f"OK -> {out_pdf}  ({len(sequence)} PDFs incluidos / {len(discarded)} descartados, "
+          f"{total_pages} paginas, {final_mb:.1f} MB)")
     print(f"Reglas: {origin} · match_mode={match_mode} · case_sensitive={case_sensitive}")
     _compress_msgs = {
         "sin-compresion":   f"Tamano por debajo de {COMPRESS_THRESHOLD_MB} MB, sin comprimir.",
@@ -317,9 +329,10 @@ Ejemplos:
         "error-gs":         f"Superaba {COMPRESS_THRESHOLD_MB} MB pero Ghostscript fallo; se mantiene original.",
     }
     print(f"Compresion: {_compress_msgs.get(action, action)}")
-    for i, (p, order, matched) in enumerate(sequence, 1):
-        tag = f"#{order}" if matched else "fin"
-        print(f"  {i:>2}. [{tag:>3}] {p.name}")
+    for i, (p, order) in enumerate(sequence, 1):
+        print(f"  {i:>2}. [#{order}] {p.name}")
+    for p in discarded:
+        print(f"   x  [descartado] {p.name}")
 
 
 if __name__ == "__main__":
