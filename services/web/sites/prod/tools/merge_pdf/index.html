@@ -229,7 +229,7 @@
     <script>
       const API = "/api/merge_pdf";
       const $ = id => document.getElementById(id);
-      let pollTimer = null, currentBatchId = null, selectedFiles = [];
+      let pollTimer = null, currentBatchId = null, selectedFiles = [], autoDownloaded = false;
       let defaultRules = null;
 
       /* ── Env badge ── */
@@ -384,18 +384,32 @@
           const r = await fetch(`${API}/batches/${batchId}/status`, { cache: "no-store" });
           if (!r.ok) return;
           const s = await r.json();
+          const state = (s.state || "").toLowerCase();
+          const stage = (s.stage || "").toLowerCase();
           $("state").textContent = s.state || "—";
           $("stage").textContent = s.stage || "—";
           $("message").textContent = s.message || "—";
-          $("updated").textContent = s.updated_at || "—";
-          const pct = s.progress != null ? s.progress : (s.state === "done" ? 100 : 0);
+          $("updated").textContent = s.updated_at || s.message || "—";
+          // progreso: usa s.progress si viene; si no, lo calcula de processed/total
+          let pct = 0;
+          if (s.progress != null) pct = s.progress;
+          else if (s.total_files) pct = Math.round((s.processed_files || 0) / s.total_files * 100);
+          if (state === "done") pct = 100;
           $("bar").value = pct; $("pct").textContent = pct + "%";
-          if (s.state === "done") {
+
+          if (state === "done") {
             stopPolling();
             $("downloadBanner").classList.add("show");
-            $("btnDownload").onclick = () =>
-              window.location.href = `${API}/batches/${batchId}/download`;
-          } else if (s.state === "error") {
+            const dlUrl = `${API}/batches/${batchId}/download`;
+            $("btnDownload").onclick = () => { window.location.href = dlUrl; };
+            // Descarga automatica al terminar (ademas del boton de respaldo)
+            if (!autoDownloaded) {
+              autoDownloaded = true;
+              const a = document.createElement("a");
+              a.href = dlUrl; a.download = "";
+              document.body.appendChild(a); a.click(); a.remove();
+            }
+          } else if (state === "error" || stage === "error") {
             stopPolling();
             $("finalNote").innerHTML = `<span class="err">Error: ${s.message || "fallo en el proceso"}</span>`;
           }
@@ -411,6 +425,7 @@
         setUploadMsg("Subiendo…");
         $("statusCard").style.display = "block";
         $("downloadBanner").classList.remove("show");
+        autoDownloaded = false;
         $("finalNote").innerHTML = "";
         stopPolling();
 
