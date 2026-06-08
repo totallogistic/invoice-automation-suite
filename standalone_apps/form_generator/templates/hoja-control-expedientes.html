@@ -152,8 +152,8 @@
 
             <div class="form-group">
                 <label for="referencia">Número de expediente *</label>
-                <input type="text" id="referencia" placeholder="Ej: 12345" required autocomplete="off">
-                <span class="hint">Se enviará al ERP como <code>#</code> seguido de este número, sin espacios.</span>
+                <input type="text" id="referencia" placeholder="Ej: 12345" required autocomplete="off" onblur="checkDuplicate()">
+                <span class="hint" id="referencia-hint">Se enviará al ERP como <code>#</code> seguido de este número, sin espacios.</span>
             </div>
         </div>
     </div>
@@ -177,6 +177,46 @@
         const opt = Array.from(select.options).find(o => o.value === sheet && !o.disabled);
         if (opt) select.value = sheet;
     })();
+
+    const HINT_DEFAULT = 'Se enviará al ERP como <code>#</code> seguido de este número, sin espacios.';
+
+    async function checkDuplicate() {
+        const ref  = document.getElementById('referencia').value.trim();
+        const hint = document.getElementById('referencia-hint');
+        const btn  = document.getElementById('btnEnviar');
+
+        if (!ref) {
+            hint.innerHTML = HINT_DEFAULT;
+            hint.style.color = '';
+            btn.disabled = false;
+            return;
+        }
+        // Formato inválido: no llamamos al server, lo capturará validate() al enviar
+        if (/\s/.test(ref) || ref.includes('#')) return;
+
+        try {
+            const res  = await fetch(`/api/hoja-control/check?ref=${encodeURIComponent(ref)}`);
+            const data = await res.json();
+            if (data.exists) {
+                const p = data.previous;
+                const date = p.timestamp
+                    ? new Date(p.timestamp).toLocaleString('es-ES')
+                    : 'fecha desconocida';
+                hint.innerHTML = `⚠️ Ya procesado el ${date} por <b>${p.usuario || '?'}</b> — ${p.sheet || '?'}. No se puede reenviar.`;
+                hint.style.color = '#991b1b';
+                btn.disabled = true;
+            } else {
+                hint.innerHTML = '✅ Referencia disponible.';
+                hint.style.color = '#065f46';
+                btn.disabled = false;
+            }
+        } catch(e) {
+            // Si el check falla por red, no bloqueamos — el backend lo validará igualmente
+            hint.innerHTML = HINT_DEFAULT;
+            hint.style.color = '';
+            btn.disabled = false;
+        }
+    }
 
     function collectData() {
         return {
@@ -212,7 +252,14 @@
                 body: JSON.stringify(data),
             });
             const result = await res.json();
-            if (!res.ok) throw new Error(result.detail || result.message || 'Error');
+            if (!res.ok) {
+                if (res.status === 409 && result.detail && result.detail.previous) {
+                    const p = result.detail.previous;
+                    const date = p.timestamp ? new Date(p.timestamp).toLocaleString('es-ES') : 'fecha desconocida';
+                    throw new Error(`Ya procesado el ${date} por ${p.usuario || '?'} (${p.sheet || '?'})`);
+                }
+                throw new Error(result.detail || result.message || 'Error');
+            }
 
             showMsg(`✅ ${result.message}`, 'success');
             // Limpiar referencia para permitir otro envío rápido

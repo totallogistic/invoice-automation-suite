@@ -27,6 +27,7 @@ from jsonschema import Draft202012Validator, ValidationError, validate, Draft7Va
 from fastapi.responses import FileResponse as _FileResponse
 
 import subprocess
+import fcntl
 import os
 from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Font, Alignment, PatternFill
@@ -2076,6 +2077,59 @@ HOJAS_CONTROL_VALIDAS = {
 }
 
 
+# ── Tracking de expedientes ya procesados ─────────────────────────────
+# Histórico en JSON al lado de los xlsx/pdf. Con flock para evitar
+# race conditions si dos peticiones llegan a la vez con la misma ref.
+
+def _processed_file() -> Path:
+    """Ruta al JSON de tracking, en el mismo dir que los xlsx/pdf."""
+    return get_form_output_dir("hoja_control_expedientes") / "_processed.json"
+
+
+def _load_processed() -> dict:
+    """Lee el JSON con shared lock. Devuelve {} si no existe o está corrupto."""
+    path = _processed_file()
+    if not path.exists():
+        return {}
+    try:
+        with open(path, 'r', encoding='utf-8') as f:
+            fcntl.flock(f.fileno(), fcntl.LOCK_SH)
+            try:
+                return json.load(f) or {}
+            finally:
+                fcntl.flock(f.fileno(), fcntl.LOCK_UN)
+    except Exception as e:
+        print(f"⚠️ [hoja-control] Error leyendo {path}: {e}")
+        return {}
+
+
+def _append_processed(ref: str, entry: dict):
+    """Añade entrada al JSON con exclusive lock (atomic read-modify-write)."""
+    path = _processed_file()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    mode = 'r+' if path.exists() else 'w+'
+    try:
+        with open(path, mode, encoding='utf-8') as f:
+            fcntl.flock(f.fileno(), fcntl.LOCK_EX)
+            try:
+                if mode == 'r+':
+                    f.seek(0)
+                    try:
+                        data = json.load(f) or {}
+                    except json.JSONDecodeError:
+                        data = {}
+                else:
+                    data = {}
+                data[ref] = entry
+                f.seek(0)
+                f.truncate()
+                json.dump(data, f, indent=2, ensure_ascii=False)
+            finally:
+                fcntl.flock(f.fileno(), fcntl.LOCK_UN)
+    except Exception as e:
+        print(f"❌ [hoja-control] Error escribiendo {path}: {e}")
+
+
 def _send_hoja_control_email(to_email: str, subject: str, body_text: str, attach_path: Path) -> bool:
     """Envía el adjunto (PDF) al destinatario configurado. Devuelve True/False.
     Soporta tanto SMTP autenticado (SSL/TLS) como relay local sin auth."""
@@ -2118,11 +2172,37 @@ def _send_hoja_control_email(to_email: str, subject: str, body_text: str, attach
         return False
 
 
+@app.get("/api/hoja-control/check")
+async def check_hoja_control_duplicate(ref: str):
+    """Devuelve si la referencia ya fue procesada. Usado por el frontend
+    para validación en vivo (onblur sobre el campo referencia)."""
+    ref = (ref or '').strip()
+    if not ref:
+        return JSONResponse({"exists": False, "ref": ref})
+    if any(c.isspace() for c in ref) or '#' in ref:
+        return JSONResponse({"exists": False, "ref": ref, "invalid": True})
+
+    processed = _load_processed()
+    if ref in processed:
+        prev = processed[ref]
+        return JSONResponse({
+            "exists": True,
+            "ref": ref,
+            "previous": {
+                "timestamp": prev.get("timestamp"),
+                "sheet":     prev.get("sheet"),
+                "usuario":   prev.get("usuario"),
+            }
+        })
+    return JSONResponse({"exists": False, "ref": ref})
+
+
 @app.post("/api/save-hoja-control-expedientes")
 async def save_hoja_control_expedientes(request: Request):
     """
     Genera la hoja de control en xlsx, la convierte a PDF y envía el PDF
     al destinatario configurado. Ambos ficheros quedan en EXCEL_STORAGE_DIR.
+    Rechaza con 409 si la referencia ya fue procesada previamente.
     """
     data       = await request.json()
     sheet      = (data.get('sheet')      or '').strip()
@@ -2137,6 +2217,20 @@ async def save_hoja_control_expedientes(request: Request):
         raise HTTPException(400, "El campo 'referencia' es obligatorio")
     if any(c.isspace() for c in referencia) or '#' in referencia:
         raise HTTPException(400, "La referencia no puede contener espacios ni '#'")
+
+    # ── Validar que la referencia no esté ya procesada ────────────────
+    processed = _load_processed()
+    if referencia in processed:
+        prev = processed[referencia]
+        raise HTTPException(409, detail={
+            "error":    "Referencia ya procesada anteriormente",
+            "ref":      referencia,
+            "previous": {
+                "timestamp": prev.get("timestamp"),
+                "sheet":     prev.get("sheet"),
+                "usuario":   prev.get("usuario"),
+            }
+        })
 
     if not HOJAS_CONTROL_MASTER.exists():
         raise HTTPException(500, f"Master xlsx no encontrado en {HOJAS_CONTROL_MASTER}")
@@ -2201,6 +2295,19 @@ async def save_hoja_control_expedientes(request: Request):
     email_sent = False
     if email_to:
         email_sent = _send_hoja_control_email(email_to, subject, body, pdf_path)
+
+    # ── 8. Registrar en el tracking JSON (atomic con flock) ───────────
+    # Se hace siempre que xlsx+pdf se hayan generado, aunque el email haya
+    # fallado: el fichero ya existe en disco y la ref queda "consumida".
+    _append_processed(referencia, {
+        "timestamp":  datetime.now().isoformat(),
+        "sheet":      sheet,
+        "usuario":    usuario,
+        "xlsx_file":  out_name,
+        "pdf_file":   pdf_path.name,
+        "email_sent": email_sent,
+        "source":     "endpoint",
+    })
 
     return JSONResponse({
         "success": True,
