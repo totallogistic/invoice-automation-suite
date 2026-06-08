@@ -313,16 +313,22 @@
         });
 
       /* ── Preview local del orden (sin subir) ── */
+      /* Normaliza a NFC para igualar tildes combinantes (NFD de macOS) con las
+         precompuestas, igual que hace el extractor en el servidor. Asi el preview
+         coincide con el resultado real. */
+      function nfc(s) { return s.normalize("NFC"); }
       function matchOrder(name, cfg) {
         let best = null;
-        const n = cfg.case_sensitive ? name : name.toLowerCase();
+        const fname = nfc(name);
+        const n = cfg.case_sensitive ? fname : fname.toLowerCase();
         for (const r of cfg.rules) {
           let hit = false;
+          const patRaw = nfc(r.match);
           if (cfg.match_mode === "regex") {
-            try { hit = new RegExp(r.match, cfg.case_sensitive ? "" : "i").test(name); }
+            try { hit = new RegExp(patRaw, cfg.case_sensitive ? "" : "i").test(fname); }
             catch { hit = false; }
           } else {
-            const pat = cfg.case_sensitive ? r.match : r.match.toLowerCase();
+            const pat = cfg.case_sensitive ? patRaw : patRaw.toLowerCase();
             hit = n.includes(pat);
           }
           if (hit && (best === null || r.order < best)) best = r.order;
