@@ -162,9 +162,10 @@ async def manual_sync():
 
 @app.get("/export/situacion")
 async def export_situacion():
-    from situacion_export import generate_situacion
+    from bancos_export import generate_bancos
+    from db import get_history_per_bank
     try:
-        path = await generate_situacion()
+        path = await generate_bancos(history=None)
     except FileNotFoundError as e:
         raise HTTPException(404, str(e))
     except ValueError as e:
