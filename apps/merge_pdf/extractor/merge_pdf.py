@@ -41,6 +41,7 @@ import re
 import shutil
 import argparse
 import subprocess
+import unicodedata
 from pathlib import Path
 
 from pypdf import PdfReader, PdfWriter
@@ -102,13 +103,22 @@ def load_rules(rules_override: Path = None):
 # ─────────────────────────────────────────────────────────────────────────────
 # Asignacion de orden a cada fichero
 # ─────────────────────────────────────────────────────────────────────────────
+def _nfc(s: str) -> str:
+    """Normaliza a NFC para que tildes combinantes (NFD, tipicas de macOS) y
+    caracteres precompuestos sean equivalentes. Sin esto, 'o'+U+0301 (o + tilde)
+    no casa con 'ó' (U+00F3) aunque se vean igual."""
+    return unicodedata.normalize("NFC", s)
+
+
 def matches(filename: str, pattern: str, match_mode: str, case_sensitive: bool) -> bool:
-    name = filename if case_sensitive else filename.lower()
-    pat = pattern if case_sensitive else pattern.lower()
+    fname = _nfc(filename)
+    pat_raw = _nfc(pattern)
+    name = fname if case_sensitive else fname.lower()
+    pat = pat_raw if case_sensitive else pat_raw.lower()
     if match_mode == "regex":
         flags = 0 if case_sensitive else re.IGNORECASE
         try:
-            return re.search(pattern, filename, flags) is not None
+            return re.search(pat_raw, fname, flags) is not None
         except re.error:
             return False
     # default: substring
@@ -367,7 +377,7 @@ Ejemplos:
     #   portal   : hay Factura_LR* -> no adjuntar; notificar para subir al portal
     #   email    : no portal y cabe (<=TARGET) -> adjuntar al interno
     #   oversize : no portal pero no cabe ni comprimido -> notificar sin adjunto
-    is_portal = any(re.search(PORTAL_FILENAME_REGEX, p.name, re.IGNORECASE)
+    is_portal = any(re.search(PORTAL_FILENAME_REGEX, _nfc(p.name), re.IGNORECASE)
                     for p, _ in sequence)
     if is_portal:
         delivery_mode = "portal"
