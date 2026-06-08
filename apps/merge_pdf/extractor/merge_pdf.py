@@ -51,16 +51,17 @@ OUTPUT_NAME = "merged.pdf"
 
 # ── Compresion ────────────────────────────────────────────────────────────────
 # Si el PDF consolidado supera este tamano, se intenta comprimir con Ghostscript.
-COMPRESS_THRESHOLD_MB = 40
-# Niveles de Ghostscript a probar, EN ORDEN. Se prueba el primero; si no baja del
-# objetivo se prueba el siguiente. En cada paso solo se acepta el resultado si es
-# mas pequeno que el original (algunos PDFs ya optimizados ENGORDAN con /ebook).
-#   screen  = 72 dpi  (mas agresivo)   ebook = 150 dpi   printer = 300 dpi
-GS_LEVELS = ["/screen", "/ebook"]
-# Objetivo: tamano maximo de PDF EN DISCO que cabe en el correo tras codificarse
-# en base64 (~+37%). Con Postfix a 75 MB de mensaje, ~52 MB de PDF es seguro.
-# Si tras comprimir sigue por encima, se avisa en el reporte (no se trunca nada).
-TARGET_MAX_MB = 50
+COMPRESS_THRESHOLD_MB = 15
+# Niveles de Ghostscript a probar, EN ORDEN (de menos a mas agresivo). Se prueba
+# uno; si no baja del objetivo se prueba el siguiente. En cada paso solo se acepta
+# el resultado si es mas pequeno que el original.
+GS_LEVELS = ["/ebook", "/screen"]
+# Objetivo: tamano maximo de PDF EN DISCO para que el correo (mensaje base64, ~+37%)
+# quepa en el destino mas restrictivo. Gmail limita a 25 MB de MENSAJE => ~18 MB de PDF.
+TARGET_MAX_MB = 18
+# Marca de cliente "portal": si algun PDF incluido casa este patron, el flujo es
+# portal (no se adjunta a email; el usuario lo sube manualmente al portal del cliente).
+PORTAL_FILENAME_REGEX = r"Factura_LR"
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -362,11 +363,37 @@ Ejemplos:
     write_order_report(sequence, pages_per_file, discarded, origin, report,
                        final_mb=final_mb, compress_note=compress_note)
 
+    # ── Decision de entrega (la ejecuta el processor leyendo _DELIVERY.json) ──
+    #   portal   : hay Factura_LR* -> no adjuntar; notificar para subir al portal
+    #   email    : no portal y cabe (<=TARGET) -> adjuntar al interno
+    #   oversize : no portal pero no cabe ni comprimido -> notificar sin adjunto
+    is_portal = any(re.search(PORTAL_FILENAME_REGEX, p.name, re.IGNORECASE)
+                    for p, _ in sequence)
+    if is_portal:
+        delivery_mode = "portal"
+    elif final_mb <= TARGET_MAX_MB:
+        delivery_mode = "email"
+    else:
+        delivery_mode = "oversize"
+
+    delivery = {
+        "mode": delivery_mode,
+        "size_mb": round(final_mb, 1),
+        "target_mb": TARGET_MAX_MB,
+        "merged_name": OUTPUT_NAME,
+        "n_included": len(sequence),
+        "n_discarded": len(discarded),
+        "compress_note": compress_note,
+    }
+    (output_dir / "_DELIVERY.json").write_text(
+        json.dumps(delivery, ensure_ascii=False, indent=2), encoding="utf-8")
+
     total_pages = sum(n for _, n in pages_per_file)
     print(f"OK -> {out_pdf}  ({len(sequence)} PDFs incluidos / {len(discarded)} descartados, "
           f"{total_pages} paginas, {final_mb:.1f} MB)")
     print(f"Reglas: {origin} · match_mode={match_mode} · case_sensitive={case_sensitive}")
     print(f"Compresion: {compress_note}")
+    print(f"Entrega: modo={delivery_mode} (portal={is_portal}, cabe={final_mb <= TARGET_MAX_MB})")
     for i, (p, order) in enumerate(sequence, 1):
         print(f"  {i:>2}. [#{order}] {p.name}")
     for p in discarded:

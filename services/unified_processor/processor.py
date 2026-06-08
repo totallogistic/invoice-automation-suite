@@ -270,11 +270,77 @@ class UnifiedProcessor:
                     all_recipients, subject, body, artifacts,
                 )
 
+        elif tool.name == "merge_pdf":
+            import json as _json
+            # Leer la decision de entrega que dejo el extractor
+            delivery = {}
+            dfile = output_path / "_DELIVERY.json"
+            if dfile.exists():
+                try:
+                    delivery = _json.loads(dfile.read_text(encoding="utf-8"))
+                except Exception:
+                    delivery = {}
+            mode      = delivery.get("mode", "email")
+            size_mb   = delivery.get("size_mb", 0)
+            n_inc     = delivery.get("n_included", file_count)
+            n_disc    = delivery.get("n_discarded", 0)
+
+            # Destinatario SIEMPRE interno (el usuario reenvia/sube manualmente)
+            internal = os.getenv("MAIL_INTERNO_MERGE_PDF", "").strip()
+            internal_recipients = [e.strip() for e in internal.split(",") if e.strip()]
+            if not internal_recipients:
+                # fallback al MAIL_TO_MERGE_PDF de siempre, para no perder el aviso
+                internal_recipients = env_recipients
+
+            # merged.pdf es el artefacto principal
+            merged = [a for a in artifacts if a.name == "merged.pdf"]
+
+            if mode == "portal":
+                subject = f"[Consolidar PDF] PORTAL listo — {batch_id} ({n_inc} docs)"
+                body = (
+                    f"El PDF consolidado para CLIENTE PORTAL esta listo.\n\n"
+                    f"  Archivo : merged.pdf ({size_mb} MB)\n"
+                    f"  Incluidos: {n_inc}  ·  Descartados: {n_disc}\n"
+                    f"  Ubicacion: /data/out/{batch_id}/merged.pdf\n\n"
+                    f"ACCION: descargalo (carpeta o UI) y subelo al portal del cliente.\n"
+                    f"No se adjunta por ser flujo portal."
+                )
+                attachments = []  # SIN adjunto
+            elif mode == "oversize":
+                subject = f"[Consolidar PDF] DEMASIADO GRANDE — {batch_id} ({size_mb} MB)"
+                body = (
+                    f"El PDF consolidado NO cabe en email ni comprimido ({size_mb} MB; "
+                    f"limite ~{delivery.get('target_mb', 18)} MB).\n\n"
+                    f"  Incluidos: {n_inc}  ·  Descartados: {n_disc}\n"
+                    f"  Ubicacion: /data/out/{batch_id}/merged.pdf\n\n"
+                    f"ACCION: descargalo desde la UI; no es posible adjuntarlo."
+                )
+                attachments = []  # SIN adjunto
+            else:  # email
+                subject = f"[Consolidar PDF] {batch_id} — listo para reenviar ({size_mb} MB)"
+                body = (
+                    f"Adjunto el PDF consolidado, listo para reenviar al cliente.\n\n"
+                    f"  Archivo : merged.pdf ({size_mb} MB)\n"
+                    f"  Incluidos: {n_inc}  ·  Descartados: {n_disc}\n"
+                )
+                attachments = merged  # CON adjunto
+
+            if internal_recipients:
+                logger.info(f"[merge_pdf] Entrega modo={mode} -> interno {internal_recipients} "
+                            f"(adjunto={'si' if attachments else 'no'}, {size_mb} MB)")
+                self._get_email_service(tool).send(
+                    internal_recipients, subject, body, attachments,
+                )
+            else:
+                logger.warning("[merge_pdf] Sin destinatario interno configurado "
+                            "(MAIL_INTERNO_MERGE_PDF); no se notifica.")
+
         elif env_recipients and tool.email_subject_template:
+            # (rama generica existente — NO la borres, queda para las demas tools)
             subject = tool.email_subject_template.format(batch_id=batch_id)
             body = self._build_email_body(batch_id, file_count, output_path, artifacts)
             self._get_email_service(tool).send(env_recipients, subject, body, artifacts)
-        
+
         if tool.bl_mode:
             try:
                 report_script = Path("/apps/bl/extractor/bl_report.py")

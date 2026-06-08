@@ -56,6 +56,8 @@ services:
       - MAIL_TO_INTRASTAT=${MAIL_TO_INTRASTAT:-}
       - MAIL_TO_CARATULA_DHL=${MAIL_TO_CARATULA_DHL:-}
       - MAIL_TO_MERGE_PDF=${MAIL_TO_MERGE_PDF}
+      - MAIL_INTERNO_MERGE_PDF=${MAIL_INTERNO_MERGE_PDF}
+
     volumes:
       - ${DATA_ROOT:-/data}:/data
       - ./config:/config:ro
