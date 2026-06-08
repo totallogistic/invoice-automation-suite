@@ -292,7 +292,7 @@ tools:
       path: /apps/merge_pdf/extractor/merge_pdf.py
 
     output:
-      directory: /data/out
+      directory: /data/merge_pdf/out
       artifacts:
         - "merged.pdf"
         - "orden.txt"
