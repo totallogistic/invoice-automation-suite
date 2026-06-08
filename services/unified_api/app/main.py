@@ -191,27 +191,39 @@ def _zip_batch_download(tool_name: str, batch_id: str, zip_prefix: str) -> Strea
 
 @app.get("/api/merge_pdf/batches/{batch_id}/download")
 def merge_pdf_download(batch_id: str = PathParam(...)):
-    """Descarga directa del PDF consolidado (merged.pdf) del batch."""
+    """Descarga directa del PDF consolidado, con nombre de cara al cliente."""
     tool = registry.get_tool("merge_pdf")
     if not tool:
         raise HTTPException(404, "Tool merge_pdf not found")
-
+ 
     status_mgr = StatusManager(tool.status_dir)
     status = status_mgr.get_status(batch_id)
     if not status:
         raise HTTPException(404, f"Batch not found: {batch_id}")
     if status.state not in ("DONE", "done"):
         raise HTTPException(409, f"Batch not ready for download (state={status.state})")
-
-    merged = tool.output_dir / batch_id / "merged.pdf"
+ 
+    batch_out = tool.output_dir / batch_id
+    merged = batch_out / "merged.pdf"
     if not merged.is_file():
         raise HTTPException(404, f"merged.pdf not found for batch {batch_id}")
-
+ 
+    # Nombre de cara al cliente desde _DELIVERY.json (fallback al de siempre)
+    download_name = f"merged_{batch_id}.pdf"
+    dfile = batch_out / "_DELIVERY.json"
+    if dfile.is_file():
+        try:
+            download_name = json.loads(dfile.read_text(encoding="utf-8")).get(
+                "download_name", download_name)
+        except Exception:
+            pass
+ 
     return FileResponse(
         str(merged),
         media_type="application/pdf",
-        filename=f"merged_{batch_id}.pdf",
+        filename=download_name,
     )
+ 
 
 
 @app.get("/api/split_nominas/batches/{batch_id}/download")

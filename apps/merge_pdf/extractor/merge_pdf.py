@@ -63,6 +63,11 @@ TARGET_MAX_MB = 18
 # Marca de cliente "portal": si algun PDF incluido casa este patron, el flujo es
 # portal (no se adjunta a email; el usuario lo sube manualmente al portal del cliente).
 PORTAL_FILENAME_REGEX = r"Factura_LR"
+# Para el nombre del PDF final de cara al cliente:
+#   - identificador de factura: todo lo que va tras "Factura_" (LR26539, ALI25549...)
+#   - sufijo opcional: fichero NNNN_NNN (4 digitos _ 3 digitos)
+FACTURA_ID_REGEX = r"Factura_([A-Za-z0-9]+)"
+CUATRO_TRES_REGEX = r"(\d{4}_\d{3})"
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -284,6 +289,32 @@ def compress_if_needed(pdf_path: Path,
 # ─────────────────────────────────────────────────────────────────────────────
 # Main
 # ─────────────────────────────────────────────────────────────────────────────
+def build_download_name(sequence, batch_id):
+    """Nombre del PDF de cara al cliente, a partir de los ficheros incluidos:
+      - {factura}_{NNNN_NNN}_full.pdf  si hay factura y fichero 4d_3d
+      - {factura}_full.pdf             si solo hay factura
+      - merged_{batch_id}.pdf          fallback si no hay Factura_ (no deberia pasar)
+    """
+    factura_id = None
+    cuatro_tres = None
+    for p, _ in sequence:
+        name = _nfc(p.name)
+        if factura_id is None:
+            m = re.search(FACTURA_ID_REGEX, name, re.IGNORECASE)
+            if m:
+                factura_id = m.group(1)
+        if cuatro_tres is None:
+            m = re.search(CUATRO_TRES_REGEX, name)
+            if m:
+                cuatro_tres = m.group(1)
+
+    if not factura_id:
+        return f"merged_{batch_id}.pdf"
+    if cuatro_tres:
+        return f"{factura_id}_{cuatro_tres}_full.pdf"
+    return f"{factura_id}_full.pdf"
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Consolida varios PDFs en uno solo segun reglas de orden.",
@@ -386,11 +417,14 @@ Ejemplos:
     else:
         delivery_mode = "oversize"
 
+    download_name = build_download_name(sequence, output_dir.name)
+
     delivery = {
         "mode": delivery_mode,
         "size_mb": round(final_mb, 1),
         "target_mb": TARGET_MAX_MB,
         "merged_name": OUTPUT_NAME,
+        "download_name": download_name,
         "n_included": len(sequence),
         "n_discarded": len(discarded),
         "compress_note": compress_note,
@@ -404,6 +438,7 @@ Ejemplos:
     print(f"Reglas: {origin} · match_mode={match_mode} · case_sensitive={case_sensitive}")
     print(f"Compresion: {compress_note}")
     print(f"Entrega: modo={delivery_mode} (portal={is_portal}, cabe={final_mb <= TARGET_MAX_MB})")
+    print(f"Nombre descarga/cliente: {download_name}")
     for i, (p, order) in enumerate(sequence, 1):
         print(f"  {i:>2}. [#{order}] {p.name}")
     for p in discarded:

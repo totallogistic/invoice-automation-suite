@@ -284,6 +284,7 @@ class UnifiedProcessor:
             size_mb   = delivery.get("size_mb", 0)
             n_inc     = delivery.get("n_included", file_count)
             n_disc    = delivery.get("n_discarded", 0)
+            download_name = delivery.get("download_name", "merged.pdf")
 
             # Destinatario SIEMPRE interno (el usuario reenvia/sube manualmente)
             internal = os.getenv("MAIL_INTERNO_MERGE_PDF", "").strip()
@@ -299,7 +300,7 @@ class UnifiedProcessor:
                 subject = f"[Consolidar PDF] PORTAL listo — {batch_id} ({n_inc} docs)"
                 body = (
                     f"El PDF consolidado para CLIENTE PORTAL esta listo.\n\n"
-                    f"  Archivo : merged.pdf ({size_mb} MB)\n"
+                    f"  Archivo : {download_name} ({size_mb} MB)\n"
                     f"  Incluidos: {n_inc}  ·  Descartados: {n_disc}\n"
                     f"  Ubicacion: /data/out/{batch_id}/merged.pdf\n\n"
                     f"ACCION: descargalo (carpeta o UI) y subelo al portal del cliente.\n"
@@ -311,6 +312,7 @@ class UnifiedProcessor:
                 body = (
                     f"El PDF consolidado NO cabe en email ni comprimido ({size_mb} MB; "
                     f"limite ~{delivery.get('target_mb', 18)} MB).\n\n"
+                    f"  Archivo : {download_name}\n"
                     f"  Incluidos: {n_inc}  ·  Descartados: {n_disc}\n"
                     f"  Ubicacion: /data/out/{batch_id}/merged.pdf\n\n"
                     f"ACCION: descargalo desde la UI; no es posible adjuntarlo."
@@ -320,12 +322,28 @@ class UnifiedProcessor:
                 subject = f"[Consolidar PDF] {batch_id} — listo para reenviar ({size_mb} MB)"
                 body = (
                     f"Adjunto el PDF consolidado, listo para reenviar al cliente.\n\n"
-                    f"  Archivo : merged.pdf ({size_mb} MB)\n"
+                    f"  Archivo : {download_name} ({size_mb} MB)\n"
                     f"  Incluidos: {n_inc}  ·  Descartados: {n_disc}\n"
                 )
-                attachments = merged  # CON adjunto
+                # Adjuntar una COPIA con el nombre de cara al cliente (independiente
+                # de como EmailService nombre los adjuntos: usa el nombre en disco).
+                attachments = []
+                if merged:
+                    src = merged[0]
+                    nice = src.parent / download_name
+                    try:
+                        if nice != src:
+                            import shutil as _shutil
+                            _shutil.copyfile(src, nice)
+                        attachments = [nice]
+                    except Exception as e:
+                        logger.warning(f"[merge_pdf] No se pudo renombrar adjunto, "
+                                       f"uso merged.pdf: {e}")
+                        attachments = merged
 
             if internal_recipients:
+                logger.info(f"[merge_pdf] merged: {n_inc} incluidos, {n_disc} descartados, "
+                            f"{size_mb} MB, modo={mode}, nombre={download_name}")
                 logger.info(f"[merge_pdf] Entrega modo={mode} -> interno {internal_recipients} "
                             f"(adjunto={'si' if attachments else 'no'}, {size_mb} MB)")
                 self._get_email_service(tool).send(
