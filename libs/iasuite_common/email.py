@@ -36,17 +36,14 @@ class EmailService:
         attachments: List[Path] = None,
         inline_images: List[Path] = None,
     ) -> bool:
-        """Send email with attachments. Returns True if successful.
+        """Send email with optional attachments and inline images.
 
-        Si body comienza con <html o <!DOCTYPE se envía como text/html.
-        inline_images: lista de ficheros imagen que se embeben como CID inline.
-        El CID de cada imagen es el nombre del fichero sin extensión
-        (e.g. logo.gif → cid:logo en el HTML).
+        inline_images: lista de imágenes que se embeben como CID (cid:<stem>).
+        Requiere body HTML. Crea estructura multipart/related igual que Thunderbird.
         """
         if not to:
             logger.warning("No recipients, skipping email")
             return False
-
         try:
             msg = self._build_message(
                 to, subject, body,
@@ -68,50 +65,77 @@ class EmailService:
         attachments: List[Path],
         inline_images: List[Path] = None,
     ) -> EmailMessage:
-        """Build email message (HTML o texto plano según el cuerpo)."""
-        msg = EmailMessage()
-        msg["From"] = self.config.mail_from
-        msg["To"] = ", ".join(to)
-        msg["Subject"] = subject
+        """Build email message.
+
+        Con inline_images construye estructura MIME igual a Thunderbird:
+            multipart/mixed
+            ├── multipart/related
+            │   ├── text/html
+            │   └── image/gif  (Content-ID: <tls_logo>)
+            └── application/pdf  (adjunto)
+        Sin inline_images usa EmailMessage estándar.
+        """
+        from email.mime.multipart import MIMEMultipart
+        from email.mime.text import MIMEText
+        from email.mime.image import MIMEImage
+        from email.mime.base import MIMEBase
+        from email import encoders as _enc
 
         is_html = body.strip().lower().startswith(("<html", "<!doctype"))
 
         if is_html:
-            msg.set_content(body, subtype="html")
-            # Añadir imágenes inline (CID = nombre sin extensión)
-            for img in (inline_images or []):
-                if not img.exists():
-                    logger.warning(f"Inline image not found: {img}")
+            outer = MIMEMultipart("mixed")
+            outer["From"]    = self.config.mail_from
+            outer["To"]      = ", ".join(to)
+            outer["Subject"] = subject
+
+            related = MIMEMultipart("related")
+            related.attach(MIMEText(body, "html", "utf-8"))
+
+            for img_path in (inline_images or []):
+                if not img_path.exists():
+                    logger.warning(f"Inline image not found: {img_path}")
                     continue
-                data = img.read_bytes()
-                subtype = img.suffix.lstrip(".").lower() or "octet-stream"
-                cid = img.stem          # logo.gif → cid "logo"
-                msg.add_related(
-                    data,
-                    maintype="image",
-                    subtype=subtype,
-                    cid=f"<{cid}>",
-                    disposition="inline",
-                )
-                logger.debug(f"Inline image added: cid:{cid} ({img.name})")
+                img_subtype = img_path.suffix.lstrip(".").lower() or "octet-stream"
+                mime_img = MIMEImage(img_path.read_bytes(), img_subtype)
+                mime_img["Content-ID"] = f"<{img_path.stem}>"
+                mime_img["Content-Disposition"] = f'inline; filename="{img_path.name}"'
+                related.attach(mime_img)
+                logger.debug(f"Inline image: cid:{img_path.stem} ({img_path.name})")
+
+            outer.attach(related)
+
+            for path in attachments:
+                if not path.exists():
+                    logger.warning(f"Attachment not found: {path}")
+                    continue
+                maintype, subtype = self._get_mime_type(path)
+                part = MIMEBase(maintype, subtype)
+                part.set_payload(path.read_bytes())
+                _enc.encode_base64(part)
+                part["Content-Disposition"] = f'attachment; filename="{path.name}"'
+                outer.attach(part)
+
+            return outer
+
         else:
+            msg = EmailMessage()
+            msg["From"]    = self.config.mail_from
+            msg["To"]      = ", ".join(to)
+            msg["Subject"] = subject
             msg.set_content(body)
 
-        for path in attachments:
-            if not path.exists():
-                logger.warning(f"Attachment not found: {path}")
-                continue
+            for path in attachments:
+                if not path.exists():
+                    logger.warning(f"Attachment not found: {path}")
+                    continue
+                data = path.read_bytes()
+                maintype, subtype = self._get_mime_type(path)
+                msg.add_attachment(
+                    data, maintype=maintype, subtype=subtype, filename=path.name
+                )
 
-            data = path.read_bytes()
-            maintype, subtype = self._get_mime_type(path)
-            msg.add_attachment(
-                data,
-                maintype=maintype,
-                subtype=subtype,
-                filename=path.name,
-            )
-
-        return msg
+            return msg
 
     def _send_message(self, msg: EmailMessage, recipients: List[str]):
         """Send via SMTP."""
