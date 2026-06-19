@@ -17,9 +17,7 @@ Instalación como servicio: ver install/bl-inbox-watcher.service.template
 import argparse
 import logging
 import os
-import random
 import shutil
-import string
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -32,10 +30,15 @@ logging.basicConfig(
 log = logging.getLogger("bl-watcher")
 
 
-def batch_id() -> str:
-    ts     = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
-    suffix = "".join(random.choices(string.ascii_lowercase + string.digits, k=4))
-    return f"{ts}_{suffix}"
+def batch_id(inbox: Path) -> str:
+    ts   = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+    base = f"{ts}_bl"
+    candidate = base
+    counter = 2
+    while (inbox / candidate).exists():
+        candidate = f"{base}_{counter}"
+        counter += 1
+    return candidate
 
 
 def loose_pdfs(inbox: Path) -> list[Path]:
@@ -59,15 +62,18 @@ def last_modified(files: list[Path]) -> float:
 
 def empaquetar(inbox: Path, pdfs: list[Path]) -> str:
     """Mueve los PDFs a una subcarpeta de batch y escribe _DONE."""
-    bid     = batch_id()
+    bid     = batch_id(inbox)
     batch   = inbox / bid
     batch.mkdir(parents=True, exist_ok=True)
 
     for pdf in pdfs:
         dest = batch / pdf.name
-        # Si ya existe un fichero con ese nombre en el batch, añadir sufijo
+        # Si ya existe un fichero con ese nombre en el batch, añadir sufijo numérico
         if dest.exists():
-            dest = batch / f"{pdf.stem}_{bid[-4:]}{pdf.suffix}"
+            counter = 2
+            while dest.exists():
+                dest = batch / f"{pdf.stem}_{counter}{pdf.suffix}"
+                counter += 1
         shutil.move(str(pdf), str(dest))
         log.info("  → %s", dest.name)
 
