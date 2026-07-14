@@ -1,5 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "version": "1.0.0",
   "title": "Revisión de Motocicletas",
   "description": "Registro de revisiones y mantenimiento de motocicletas de empresa - Algeciras",
   "category": "📊 Sede Algeciras",

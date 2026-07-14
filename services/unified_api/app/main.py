@@ -92,15 +92,17 @@ def lear_cable_version():
     path = "/app/apps/lear_cable/extractor/extract_lear_fields.py"
     return {"version": _read_script_version(path), "changelog": _read_script_changelog(path)}
 
-@app.get("/api/import_partida/version")
-def import_partida_version():
-    path = "/app/apps/import_partida/extractor/extract_import_partida_fields.py"
-    return {"version": _read_script_version(path), "changelog": _read_script_changelog(path)}
+# RETIRADO 2026-07-13 (fuera de uso; extractor conservado en apps/import_partida):
+# @app.get("/api/import_partida/version")
+# def import_partida_version():
+#     path = "/app/apps/import_partida/extractor/extract_import_partida_fields.py"
+#     return {"version": _read_script_version(path), "changelog": _read_script_changelog(path)}
 
-@app.get("/api/croton/version")
-def croton_version():
-    path = "/app/apps/croton/extractor/extract_croton.py"
-    return {"version": _read_script_version(path), "changelog": _read_script_changelog(path)}
+# RETIRADO 2026-07-13 (fuera de uso; extractor conservado en apps/croton):
+# @app.get("/api/croton/version")
+# def croton_version():
+#     path = "/app/apps/croton/extractor/extract_croton.py"
+#     return {"version": _read_script_version(path), "changelog": _read_script_changelog(path)}
 
 @app.get("/api/cuadre_asientos/version")
 def cuadre_asientos_version():
@@ -112,10 +114,11 @@ def camion_version():
     path = "/app/apps/camion/extractor/run_processors.py"
     return {"version": _read_script_version(path), "changelog": _read_script_changelog(path)}
 
-@app.get("/api/croton_import/version")
-def croton_import_version():
-    path = "/app/apps/croton_import/extractor/extract_croton_import.py"
-    return {"version": _read_script_version(path), "changelog": _read_script_changelog(path)}
+# RETIRADO 2026-07-13 (fuera de uso; extractor conservado en apps/croton_import):
+# @app.get("/api/croton_import/version")
+# def croton_import_version():
+#     path = "/app/apps/croton_import/extractor/extract_croton_import.py"
+#     return {"version": _read_script_version(path), "changelog": _read_script_changelog(path)}
 
 @app.get("/api/split_nominas/version")
 def split_nominas_version():
@@ -127,15 +130,102 @@ def split_cotizaciones_version():
     path = "/app/apps/split_cotizaciones/extractor/split_cotizaciones.py"
     return {"version": _read_script_version(path), "changelog": _read_script_changelog(path)}
 
-@app.get("/api/bl/version")
-def bl_version():
-    path = "/app/apps/bl/extractor/extract_bl.py"
+# RETIRADO 2026-07-13 (fuera de uso; extractor conservado en apps/bl):
+# @app.get("/api/bl/version")
+# def bl_version():
+#     path = "/app/apps/bl/extractor/extract_bl.py"
+#     return {"version": _read_script_version(path), "changelog": _read_script_changelog(path)}
+
+# RETIRADO 2026-07-13 (fuera de uso; extractor conservado en apps/export_visual):
+# @app.get("/api/export_visual/version")
+# def export_visual_version():
+#     path = "/app/apps/export_visual/extractor/export_visual.py"
+#     return {"version": _read_script_version(path), "changelog": _read_script_changelog(path)}
+
+@app.get("/api/lear_tac/version")
+def lear_tac_version():
+    path = "/app/apps/lear_tac/extractor/extract_lear_tac_fields.py"
     return {"version": _read_script_version(path), "changelog": _read_script_changelog(path)}
 
-@app.get("/api/export_visual/version")
-def export_visual_version():
-    path = "/app/apps/export_visual/extractor/export_visual.py"
+@app.get("/api/lear_kenitra/version")
+def lear_kenitra_version():
+    path = "/app/apps/lear_kenitra/extractor/extract_lear_kenitra_fields.py"
     return {"version": _read_script_version(path), "changelog": _read_script_changelog(path)}
+
+@app.get("/api/intrastat/version")
+def intrastat_version():
+    # SCRIPT_VERSION / SCRIPT_CHANGELOG viven en el generador, no en el wrapper.py
+    # que referencia el config (el wrapper solo adapta la CLI al processor).
+    path = "/app/apps/intrastat/extractor/intrastat_generator.py"
+    return {"version": _read_script_version(path), "changelog": _read_script_changelog(path)}
+
+@app.get("/api/caratula_dhl/version")
+def caratula_dhl_version():
+    path = "/app/apps/caratula_dhl/extractor/caratula_dhl.py"
+    return {"version": _read_script_version(path), "changelog": _read_script_changelog(path)}
+
+
+# ── Agregador de versiones (todos los procesos de una vez) ────────────────────
+# Fichero donde vive SCRIPT_VERSION / SCRIPT_CHANGELOG de cada tool.
+# Para intrastat es el generador, no el wrapper.py del config.
+TOOL_VERSION_FILES = {
+    "merge_pdf":          "/app/apps/merge_pdf/extractor/merge_pdf.py",
+    "lear_rabat":         "/app/apps/lear_rabat/extractor/extract_lear_rabat.py",
+    "lear_cable":         "/app/apps/lear_cable/extractor/extract_lear_fields.py",
+    "lear_tac":           "/app/apps/lear_tac/extractor/extract_lear_tac_fields.py",
+    "lear_kenitra":       "/app/apps/lear_kenitra/extractor/extract_lear_kenitra_fields.py",
+    # RETIRADO 2026-07-13 (fuera de uso; extractores conservados en apps/):
+    # "import_partida":     "/app/apps/import_partida/extractor/extract_import_partida_fields.py",
+    # "croton":             "/app/apps/croton/extractor/extract_croton.py",
+    # "croton_import":      "/app/apps/croton_import/extractor/extract_croton_import.py",
+    "cuadre_asientos":    "/app/apps/cuadre_asientos/extractor/cuadre_asientos_wrapper.py",
+    "camion":             "/app/apps/camion/extractor/run_processors.py",
+    "intrastat":          "/app/apps/intrastat/extractor/intrastat_generator.py",
+    "caratula_dhl":       "/app/apps/caratula_dhl/extractor/caratula_dhl.py",
+    "split_nominas":      "/app/apps/split_nominas/extractor/split_nominas.py",
+    "split_cotizaciones": "/app/apps/split_cotizaciones/extractor/split_cotizaciones.py",
+    # RETIRADO 2026-07-13 (fuera de uso; extractores conservados en apps/):
+    # "bl":                 "/app/apps/bl/extractor/extract_bl.py",
+    # "export_visual":      "/app/apps/export_visual/extractor/export_visual.py",
+}
+
+
+@app.get("/api/versions")
+def all_versions():
+    """Versión + changelog + metadatos de config + estado 'up' de todos los
+    procesos de una sola vez. Cada proceso devuelve EXACTAMENTE los mismos campos.
+
+    - in_config: la tool está declarada en tools.yaml (la corre el processor).
+      Si es False, el endpoint de versión existe pero la tool no está en el
+      pipeline activo (legacy o flujo propio, p.ej. bl).
+    """
+    tools = {}
+    up = 0
+    for name, path in TOOL_VERSION_FILES.items():
+        exists = os.path.isfile(path)
+        version = _read_script_version(path) if exists else "unknown"
+        is_up = exists and version != "unknown"
+        if is_up:
+            up += 1
+        cfg = registry.get_tool(name)
+        tools[name] = {
+            "version": version,
+            "changelog": _read_script_changelog(path) if exists else "",
+            "up": is_up,
+            "in_config": cfg is not None,
+            "display_name": cfg.display_name if cfg else name,
+            "description": cfg.description if cfg else "",
+            "extractor": path,
+        }
+    active = sum(1 for t in tools.values() if t["in_config"])
+    return {
+        "total": len(tools),
+        "up": up,
+        "down": len(tools) - up,
+        "in_config": active,
+        "tools": tools,
+    }
+
 
 # ── Shared ZIP download helper ────────────────────────────────────────────────
 

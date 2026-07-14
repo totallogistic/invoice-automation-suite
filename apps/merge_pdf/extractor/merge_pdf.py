@@ -1,12 +1,4 @@
 #!/usr/bin/env python3
-# __version__ = "1.0.0"
-# __changelog__ =
-#   1.0.0  Version inicial. Consolida PDFs en uno solo segun reglas de orden
-#          (cadena -> posicion). Reglas por defecto en default_rules.json,
-#          override puntual via rules.json enviado desde la web UI. Los ficheros
-#          sin match van al final ordenados alfabeticamente. Match por substring
-#          o regex, case-insensitive configurable. Entrega: merged.pdf (descarga
-#          directa + email).
 """
 merge_pdf — Consolida varios PDFs en uno solo segun reglas de orden.
 
@@ -32,6 +24,16 @@ Uso (contrato del unified_processor, igual que caratula_dhl):
 Salida:
     <output_dir>/merged.pdf          PDF consolidado
     <output_dir>/orden.txt           orden aplicado (para trazabilidad / email)
+"""
+
+SCRIPT_VERSION = "1.0.0"
+SCRIPT_CHANGELOG = """
+## 1.0.0
+Versión inicial. Consolida varios PDFs en uno solo (merged.pdf) según reglas de
+orden (cadena → posición). Reglas por defecto en default_rules.json; override
+puntual vía rules.json enviado desde la web UI. Los ficheros sin match van al
+final, ordenados alfabéticamente. Match por substring o regex, case-insensitive
+configurable. Entrega: descarga directa del PDF + email.
 """
 
 import sys

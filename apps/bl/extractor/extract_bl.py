@@ -14,6 +14,13 @@ Uso integrado (llamado por unified_processor):
 """
 
 SCRIPT_VERSION = "1.1.0"
+SCRIPT_CHANGELOG = """
+## 1.1.0
+Extractor de Conocimientos de Embarque (BL). Navieras soportadas: AML, Balearia,
+DFDS, RFS, Trasmediterranea. Campos extraídos: num_bl, nombre, puerto_destino,
+matricula, buque, fecha, hora. Filtro: solo se procesan BLs con
+puerto_destino = ALGECIRAS.
+"""
 
 import re
 import os

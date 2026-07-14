@@ -629,6 +629,88 @@ async def health():
         "schemas_available": len(list(SCHEMAS_DIR.glob("*.json"))) if SCHEMAS_DIR.exists() else 0
     }
 
+
+# ─────────────────────────────────────────────────────────────────────────
+# Versión / validación / estado ("up") por formulario
+# ─────────────────────────────────────────────────────────────────────────
+def _form_meta(schema_name: str) -> dict:
+    """Metadatos + estado de un formulario: version, description y si está 'up'.
+
+    up = el schema existe, es un JSON Schema bien formado y su template existe.
+    Análogo a /api/<tool>/version de los procesos, pero la versión y la
+    descripción viven en el propio schema JSON (campos 'version' y 'description').
+    """
+    meta = {
+        "name": schema_name,
+        "title": schema_name,
+        "version": "unknown",
+        "description": "",
+        "category": "",
+        "template": None,
+        "schema_ok": False,
+        "template_ok": False,
+        "up": False,
+        "errors": [],
+    }
+    schema_file = SCHEMAS_DIR / f"{schema_name}.json"
+    if not schema_file.exists():
+        meta["errors"].append("schema no encontrado")
+        return meta
+    try:
+        schema = json.loads(schema_file.read_text(encoding="utf-8"))
+    except Exception as e:
+        meta["errors"].append(f"JSON inválido: {e}")
+        return meta
+
+    meta["title"] = schema.get("title", schema_name)
+    meta["version"] = schema.get("version", "1.0.0")
+    meta["description"] = schema.get("description", "")
+    meta["category"] = schema.get("category", "")
+
+    # ¿Es un JSON Schema bien formado?
+    try:
+        Draft202012Validator.check_schema(schema)
+        meta["schema_ok"] = True
+    except Exception as e:
+        meta["errors"].append(f"schema inválido: {e}")
+
+    # ¿Existe el template que renderiza el form?
+    template_name = schema.get("custom_template", "form.html")
+    meta["template"] = template_name
+    meta["template_ok"] = (TEMPLATES_DIR / template_name).exists()
+    if not meta["template_ok"]:
+        meta["errors"].append(f"template no encontrado: {template_name}")
+
+    meta["up"] = meta["schema_ok"] and meta["template_ok"]
+    return meta
+
+
+@app.get("/api/form/{schema_name}/version")
+async def form_version(schema_name: str):
+    """Versión + descripción + estado 'up' de un formulario concreto."""
+    meta = _form_meta(schema_name)
+    if not meta["schema_ok"] and meta["version"] == "unknown":
+        raise HTTPException(404, f"Formulario no encontrado o inválido: {schema_name}")
+    return JSONResponse(meta)
+
+
+@app.get("/api/forms/status")
+async def forms_status():
+    """Agregador: versión, descripción y estado 'up' de todos los formularios."""
+    forms = []
+    if SCHEMAS_DIR.exists():
+        for schema_file in sorted(SCHEMAS_DIR.glob("*.json")):
+            forms.append(_form_meta(schema_file.stem))
+    up = sum(1 for f in forms if f["up"])
+    return JSONResponse({
+        "service": "form_generator",
+        "status": "ok",
+        "total": len(forms),
+        "up": up,
+        "down": len(forms) - up,
+        "forms": forms,
+    })
+
 # ========================================
 # MODIFICAR ENDPOINT EXISTENTE: /api/save-estanterias-completo
 # Reemplazar el endpoint actual con este código

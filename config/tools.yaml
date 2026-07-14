@@ -304,6 +304,19 @@ tools:
     status_dir: /data/merge_pdf/status
 
 # ─────────────────────────────────────────────────────────────────────────
+# Procesos RETIRADOS (2026-07-13): webs eliminadas, fuera del pipeline activo.
+# Los extractores se conservan en apps/<tool>/extractor/ por si se retoman.
+# Para reactivar una tool: declararla como entrada activa aquí + descomentar su
+# endpoint /api/<tool>/version y su entrada en TOOL_VERSION_FILES
+# (services/unified_api/app/main.py) + su web en services/web/sites/prod/tools/.
+#   - bl              apps/bl/extractor/extract_bl.py        (tenía flujo propio + viewer)
+#   - import_partida  apps/import_partida/extractor/extract_import_partida_fields.py
+#   - croton          apps/croton/extractor/extract_croton.py
+#   - croton_import   apps/croton_import/extractor/extract_croton_import.py
+#   - export_visual   apps/export_visual/extractor/export_visual.py
+# ─────────────────────────────────────────────────────────────────────────
+
+# ─────────────────────────────────────────────────────────────────────────
 # Formularios servidos por form_generator (fuera de Docker, en el host).
 # Cada entrada es opcional: si no aparece un form aquí o no tiene output_dir,
 # el endpoint cae al default EXCEL_STORAGE_DIR del propio form_generator.

@@ -11,6 +11,15 @@ Dependencias (añadir a services/unified_processor/requirements.txt):
     pdfplumber
 """
 
+SCRIPT_VERSION = "1.0.0"
+SCRIPT_CHANGELOG = """
+## 1.0.0
+Divide un PDF de nóminas multi-página en PDFs individuales por empleado.
+Detecta automáticamente empresa (TLS/TE), mes, año y nombre del empleado desde
+el texto del PDF y nombra cada archivo como MMYY-APELLIDO_APELLIDO_NOMBRE-EMPRESA.pdf.
+Entrega: descarga directa de un ZIP desde el navegador.
+"""
+
 import argparse
 import re
 import sys
