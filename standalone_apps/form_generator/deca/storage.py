@@ -29,10 +29,14 @@ class Storage:
         self._s3 = None
         if self.endpoint and self.key and self.secret:
             import boto3  # import perezoso
+            from botocore.config import Config
 
             self._s3 = boto3.client(
                 "s3", endpoint_url=self.endpoint,
                 aws_access_key_id=self.key, aws_secret_access_key=self.secret,
+                # path-style: obligatorio para MinIO/endpoint por IP, y compatible
+                # con Hetzner (evita que boto3 intente el virtual-host bucket.<host>).
+                config=Config(s3={"addressing_style": "path"}),
             )
             if not self.public_base:
                 self.public_base = f"{self.endpoint.rstrip('/')}/{self.bucket}"
