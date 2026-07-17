@@ -60,6 +60,25 @@ if [[ $REPLY =~ ^[Nn]$ ]]; then
   exit 0
 fi
 
+# ── Dependencias Python (una vez, en el --user site del usuario del servicio) ──
+# El servicio corre como $SUDO_USER con /usr/bin/python3 (sin venv), así que las
+# deps deben vivir en SU --user site. Instalar aquí evita el ModuleNotFoundError
+# al añadir paquetes al requirements.txt (fix deploy §7-D). Instalación desatendida.
+REQ_FILE="$APP_DIR/requirements.txt"
+if [ -f "$REQ_FILE" ]; then
+  echo -e "${BLUE}📦 Instalando dependencias Python desde requirements.txt...${NC}"
+  if [ -n "$SUDO_USER" ]; then
+    sudo -H -u "$SUDO_USER" python3 -m pip install --user --break-system-packages -r "$REQ_FILE"
+  else
+    python3 -m pip install --break-system-packages -r "$REQ_FILE"
+  fi
+  echo -e "${GREEN}   ✓ Dependencias instaladas${NC}"
+  echo ""
+else
+  echo -e "${YELLOW}⚠️  No hay requirements.txt en $APP_DIR, se omite la instalación de deps${NC}"
+  echo ""
+fi
+
 # Install each environment - AVOID SUBSHELL with <<< syntax
 INSTALL_COUNT=0
 echo ""
