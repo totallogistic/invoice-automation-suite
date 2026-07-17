@@ -223,6 +223,7 @@ tools:
     extractor:
       type: python
       path: /apps/intrastat/extractor/wrapper.py
+      version_file: /apps/intrastat/extractor/intrastat_generator.py
 
     input:
       formats: [xlsx, ods, csv]

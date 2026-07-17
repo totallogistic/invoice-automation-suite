@@ -21,6 +21,7 @@ class ToolConfig:
     extractor_path: Path
     email_subject_template: str
     email_mail_from: Optional[str] = None   # override MAIL_FROM global para esta tool
+    version_file: Optional[Path] = None      # fichero de versión si difiere de extractor.path (p.ej. intrastat)
     max_file_size_mb: int = 200
     enabled: bool = True
 
@@ -63,6 +64,10 @@ class ToolRegistry:
                 output_dir=Path(tool_data.get("output", {}).get("directory", tool_root / "out")),
                 output_artifacts=tool_data.get("output", {}).get("artifacts", []),
                 extractor_path=Path(tool_data.get("extractor", {}).get("path", "")),
+                version_file=(
+                    Path(tool_data["extractor"]["version_file"])
+                    if tool_data.get("extractor", {}).get("version_file") else None
+                ),
                 email_subject_template=tool_data.get("email", {}).get(
                     "subject_template",
                     f"[{tool_name}] Batch {{batch_id}} processed"

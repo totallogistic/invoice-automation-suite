@@ -2403,6 +2403,34 @@ async def save_hoja_control_expedientes(request: Request):
         "email_sent": email_sent,
     })
 
+# ── DeCA · operativa (patrón hoja-control) ───────────────────────────────────
+import base64
+from deca.models import DecaInput
+from deca.pdf import qr_png_bytes
+from deca.service import DecaService
+
+_deca_svc = DecaService()
+
+@app.post("/api/save-deca")
+async def save_deca(request: Request):
+    """Genera el DeCA (PDF nativo + QR), lo sube al bucket y devuelve URL + QR."""
+    payload = await request.json()
+    try:
+        data = DecaInput(**payload)
+    except Exception as e:
+        raise HTTPException(400, f"Datos del DeCA inválidos: {e}")
+    try:
+        rec = _deca_svc.create(data)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    qr_b64 = base64.b64encode(qr_png_bytes(rec.url_publica)).decode()
+    return JSONResponse({
+        "success": True, "uuid": rec.uuid, "url": rec.url_publica,
+        "qr_data_uri": f"data:image/png;base64,{qr_b64}",
+        "url_activa_hasta": rec.url_activa_hasta.isoformat() if rec.url_activa_hasta else None,
+        "message": "DeCA generado y subido. Envía el QR o el enlace al conductor.",
+    })
+
 if __name__ == "__main__":
     print("=" * 60)
     print("🚀 JSON Schema Form Generator")
