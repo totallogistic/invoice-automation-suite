@@ -1,0 +1,11 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "version": "1.0.0",
+  "title": "Carta de Porte",
+  "description": "Carta de porte nacional (contrato de transporte). Mismos datos base que el DeCA + campos contractuales. Firma simple opcional.",
+  "category": "🚚 Transporte",
+  "custom_template": "carta-porte-cmr.html",
+  "doc_tipo": "carta_porte",
+  "type": "object",
+  "properties": {}
+}
