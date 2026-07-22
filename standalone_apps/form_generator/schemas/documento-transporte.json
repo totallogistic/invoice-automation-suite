@@ -1,0 +1,10 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "version": "1.0.0",
+  "title": "Documento de transporte (DeCA / carta de porte / CMR)",
+  "description": "Un solo formulario: mete los datos una vez y genera los documentos que necesites (DeCA, carta de porte, CMR) a la vez. Firma simple opcional.",
+  "category": "🚚 Transporte",
+  "custom_template": "documento-transporte.html",
+  "type": "object",
+  "properties": {}
+}

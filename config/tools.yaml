@@ -327,3 +327,10 @@ forms:
   - name: hoja_control_expedientes
     enabled: true
     output_dir: /data/ias_prod/data/out/hoja_control
+
+  - name: carta-porte
+    pipeline: [ { custom: { handler: deca } } ]
+  - name: cmr
+    pipeline: [ { custom: { handler: deca } } ]
+  - name: documento-transporte
+    pipeline: [ { custom: { handler: deca } } ]

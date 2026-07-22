@@ -2431,6 +2431,42 @@ async def save_deca(request: Request):
         "message": "DeCA generado y subido. Envía el QR o el enlace al conductor.",
     })
 
+# ── Dispatcher config-driven + carta de porte / CMR (emisión múltiple) ───────
+import form_actions
+form_actions.configure(output_dir=OUTPUT_DIR, excel_dir=EXCEL_STORAGE_DIR,
+                       get_form_output_dir=get_form_output_dir, load_schema=load_schema)
+
+@form_actions.register_handler("deca")
+def _deca_pipeline_handler(ctx):
+    payload = ctx["payload"]
+    data = DecaInput(**payload)
+    tipos = payload.get("documentos")            # lista → emisión múltiple (DeCA + carta de porte + CMR)
+    if tipos:
+        recs = _deca_svc.create_many(data, tipos)
+        docs = [{"tipo": r.datos.tipo_documento, "uuid": r.uuid, "url": r.url_publica,
+                 "qr_data_uri": "data:image/png;base64," + base64.b64encode(qr_png_bytes(r.url_publica)).decode()}
+                for r in recs]
+        return {"documentos": docs, "message": f"{len(docs)} documento(s) generado(s)."}
+    rec = _deca_svc.create(data)                 # un solo documento
+    qr_b64 = base64.b64encode(qr_png_bytes(rec.url_publica)).decode()
+    return {"uuid": rec.uuid, "url": rec.url_publica,
+            "qr_data_uri": f"data:image/png;base64,{qr_b64}",
+            "url_activa_hasta": rec.url_activa_hasta.isoformat() if rec.url_activa_hasta else None,
+            "message": "DeCA generado y subido."}
+
+@app.post("/api/submit/{schema_name}")
+async def submit_pipeline(schema_name: str, request: Request):
+    """Ejecuta el pipeline de acciones declarado en tools.yaml (sección forms)."""
+    payload = await request.json()
+    try:
+        return JSONResponse(form_actions.run_pipeline(schema_name, payload, FORMS_CONFIG))
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        raise HTTPException(500, f"Error en pipeline '{schema_name}': {type(e).__name__}: {e}")
+
+
 if __name__ == "__main__":
     print("=" * 60)
     print("🚀 JSON Schema Form Generator")

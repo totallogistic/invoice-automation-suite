@@ -36,6 +36,16 @@ class DecaService:
         self.repo.save_new(record, pdf_bytes)
         return record
 
+    def create_many(self, data: DecaInput, tipos):
+        """Emite varios documentos (deca/carta_porte/cmr) desde los MISMOS datos.
+        Se meten los datos una vez y salen todos, cada uno con su UUID/URL/QR.
+        Las firmas no se aplican al DeCA (no las necesita)."""
+        recs = []
+        for t in tipos:
+            firmas = [] if t == "deca" else data.firmas
+            recs.append(self.create(data.model_copy(update={"tipo_documento": t, "firmas": firmas})))
+        return recs
+
     def modify(self, uuid: str):
         return self.repo.register_modification(uuid)
 
