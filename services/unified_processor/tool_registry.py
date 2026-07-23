@@ -43,6 +43,7 @@ class ToolConfig:
     bl_mode: bool = False
     export_visual_mode: bool = False
     email_mail_from: Optional[str] = None   # override MAIL_FROM global para esta tool
+    email_mode_send_email: Optional[str] = None  # 'postfix' | 'custom' (override del MAIL_SEND_MODE global)
 
 class ToolRegistry:
     """Registry of all available tools."""
@@ -95,6 +96,7 @@ class ToolRegistry:
                 bl_mode=tool_data.get("extractor", {}).get("bl_mode", False),
                 export_visual_mode=tool_data.get("extractor", {}).get("export_visual_mode", False),
                 email_mail_from=tool_data.get("email", {}).get("mail_from") or None,
+                email_mode_send_email=tool_data.get("email", {}).get("mode_send_email") or None,
             )
             
             # Ensure directories exist

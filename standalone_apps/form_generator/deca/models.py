@@ -61,6 +61,11 @@ class DecaInput(BaseModel):
     tipo_documento: str = Field("deca", description="deca | carta_porte | cmr")
 
     # ── Núcleo compartido (art. 6 FOM/2861/2012) ──
+    # Expedidor: quien entrega la mercancía al transportista (sale del almacén).
+    # Total Logistic actúa siempre como expedidor cuando la carga sale de sus
+    # instalaciones. Opcional en la norma, pero se incluye por operativa. NO se
+    # usa la figura de "operador de transporte".
+    expedidor: Optional[Cargador] = None
     cargador_contractual: Cargador
     transportista_efectivo: Transportista
     origen: str
@@ -69,13 +74,17 @@ class DecaInput(BaseModel):
     fecha_transporte: dt.date
     matricula_tractora: str
     matricula_remolque: Optional[str] = None
+    numero_contenedor: Optional[str] = None
+    telefono_conductor: Optional[str] = None
     autorizaciones_especiales: Optional[str] = None
     observaciones: Optional[str] = None
     servicio_inicio: Optional[dt.datetime] = None
     servicio_fin: Optional[dt.datetime] = None
 
-    # ── Añade Carta de porte / CMR ──
+    # ── Destinatario (opcional; se incluye en DeCA y carta de porte / CMR) ──
     destinatario: Optional[Destinatario] = None
+
+    # ── Añade Carta de porte / CMR ──
     portes: Optional[str] = Field(None, description="Pagados / Debidos")
     condiciones_pago: Optional[str] = None
     valor_declarado: Optional[str] = None

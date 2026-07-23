@@ -21,6 +21,34 @@ class EmailConfig:
     use_ssl: bool = False
     timeout: int = 30
 
+    @classmethod
+    def from_env(cls, mode: Optional[str] = None) -> "EmailConfig":
+        """Construye la config según el MODO DE ENVÍO.
+
+        mode: 'postfix' (relay local del host, sin autenticación) | 'custom'
+        (cuenta SMTP externa autenticada). Si es None, se usa la variable de
+        entorno MAIL_SEND_MODE (por defecto 'postfix').
+
+        Cada modo lee sus propias variables namespaced; si no están definidas,
+        cae a las planas SMTP_HOST/PORT/USER/PASS (retrocompatibilidad: sin
+        tocar el .env, 'postfix' reproduce el comportamiento actual).
+        """
+        import os
+        mode = (mode or os.getenv("MAIL_SEND_MODE", "postfix") or "postfix").lower()
+        mail_from = os.getenv("MAIL_FROM", "")
+        if mode == "custom":
+            host = os.getenv("SMTP_CUSTOM_HOST") or os.getenv("SMTP_HOST", "")
+            port = int(os.getenv("SMTP_CUSTOM_PORT") or os.getenv("SMTP_PORT") or "587")
+            user = os.getenv("SMTP_CUSTOM_USER") or os.getenv("SMTP_USER", "")
+            pwd = os.getenv("SMTP_CUSTOM_PASS") or os.getenv("SMTP_PASS", "")
+        else:  # 'postfix' (relay local, sin auth)
+            host = os.getenv("SMTP_POSTFIX_HOST") or os.getenv("SMTP_HOST", "") or "172.18.0.1"
+            port = int(os.getenv("SMTP_POSTFIX_PORT") or os.getenv("SMTP_PORT") or "25")
+            user = os.getenv("SMTP_POSTFIX_USER", "")   # normalmente vacío (sin auth)
+            pwd = os.getenv("SMTP_POSTFIX_PASS", "")
+        return cls(host=host, port=port, user=user, password=pwd,
+                   mail_from=mail_from, use_ssl=(port == 465))
+
 
 class EmailService:
     """Centralized email sending service."""

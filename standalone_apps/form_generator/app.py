@@ -59,10 +59,21 @@ EXCEL_STORAGE_DIR = Path(__file__).parent / "excel_storage"
 EXCEL_STORAGE_DIR.mkdir(exist_ok=True)
 
 # Email configuration (read from env)
-SMTP_HOST = os.getenv("SMTP_HOST", "")
-SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
-SMTP_USER = os.getenv("SMTP_USER", "")
-SMTP_PASS = os.getenv("SMTP_PASS", "")
+def _resolve_smtp(mode=None):
+    """Transporte SMTP segun MODO DE ENVIO: postfix (relay local, sin auth) |
+    custom (SMTP externo autenticado). None -> MAIL_SEND_MODE (def postfix).
+    Retrocompat: cae a SMTP_HOST/PORT/USER/PASS planos."""
+    mode = (mode or os.getenv("MAIL_SEND_MODE", "postfix") or "postfix").lower()
+    if mode == "custom":
+        return (os.getenv("SMTP_CUSTOM_HOST") or os.getenv("SMTP_HOST", ""),
+                int(os.getenv("SMTP_CUSTOM_PORT") or os.getenv("SMTP_PORT") or "587"),
+                os.getenv("SMTP_CUSTOM_USER") or os.getenv("SMTP_USER", ""),
+                os.getenv("SMTP_CUSTOM_PASS") or os.getenv("SMTP_PASS", ""))
+    return (os.getenv("SMTP_POSTFIX_HOST") or os.getenv("SMTP_HOST", "") or "172.18.0.1",
+            int(os.getenv("SMTP_POSTFIX_PORT") or os.getenv("SMTP_PORT") or "25"),
+            os.getenv("SMTP_POSTFIX_USER", ""), os.getenv("SMTP_POSTFIX_PASS", ""))
+
+SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS = _resolve_smtp()
 MAIL_FROM = os.getenv("MAIL_FROM", "")
 
 # Ensure directories exist

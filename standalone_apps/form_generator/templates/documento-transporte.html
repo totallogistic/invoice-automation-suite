@@ -15,6 +15,8 @@
   .back-link { display: inline-block; color: #fff; text-decoration: none; padding: .4rem .9rem; background: rgba(255,255,255,.2); border-radius: 6px; margin-bottom: 1rem; font-size: .875rem; }
   .section { padding: 1.4rem 2rem; border-bottom: 1px solid #e5e7eb; }
   .section h2 { font-size: .75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: #9ca3af; margin-bottom: 1rem; }
+  .sec-head { display: flex; justify-content: space-between; align-items: center; gap: .5rem; }
+  .sec-head h2 { margin-bottom: 1rem; }
   .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
   .form-group { display: flex; flex-direction: column; gap: .3rem; }
   .form-group.full { grid-column: 1 / -1; }
@@ -69,7 +71,17 @@
     </div>
 
     <div class="section">
-      <h2 id="lbl-remitente">Cargador contractual</h2>
+      <div class="sec-head"><h2>Expedidor</h2><button type="button" class="btn-sm btn-ghost" onclick="fillTL('e')">Somos Total Logistic</button></div>
+      <div class="form-grid">
+        <div class="form-group full"><label>Nombre / razón social</label><input id="e_nombre"></div>
+        <div class="form-group"><label>NIF</label><input id="e_nif"></div>
+        <div class="form-group"><label>Domicilio</label><input id="e_domicilio"></div>
+      </div>
+      <p style="font-size:.75rem;color:#9ca3af;margin-top:.5rem">Quien entrega la mercancía al transportista. Sois vosotros cuando la carga sale de vuestro almacén (se rellena por defecto).</p>
+    </div>
+
+    <div class="section">
+      <div class="sec-head"><h2 id="lbl-remitente">Cargador contractual</h2><button type="button" class="btn-sm btn-ghost" onclick="fillTL('c')">Somos Total Logistic</button></div>
       <div class="form-grid">
         <div class="form-group full"><label>Nombre / razón social *</label><input id="c_nombre" required></div>
         <div class="form-group"><label>NIF *</label><input id="c_nif" required></div>
@@ -78,20 +90,21 @@
     </div>
 
     <div class="section">
-      <h2>Transportista efectivo</h2>
+      <div class="sec-head"><h2>Transportista efectivo</h2><button type="button" class="btn-sm btn-ghost" onclick="fillTL('t')">Somos Total Logistic</button></div>
       <div class="form-grid">
-        <div class="form-group"><label>Nombre / razón social *</label><input id="t_nombre" value="Total Logistic Services, S.L." required></div>
+        <div class="form-group full"><label>Nombre / razón social *</label><input id="t_nombre" required></div>
         <div class="form-group"><label>NIF *</label><input id="t_nif" required></div>
       </div>
     </div>
 
-    <div class="section" id="sec-destinatario" style="display:none">
-      <h2>Destinatario</h2>
+    <div class="section" id="sec-destinatario">
+      <h2>Destinatario / consignatario</h2>
       <div class="form-grid">
-        <div class="form-group"><label>Nombre / razón social *</label><input id="d_nombre"></div>
+        <div class="form-group full"><label>Nombre / razón social</label><input id="d_nombre"></div>
         <div class="form-group"><label>NIF</label><input id="d_nif"></div>
-        <div class="form-group full"><label>Domicilio</label><input id="d_domicilio"></div>
+        <div class="form-group"><label>Domicilio</label><input id="d_domicilio"></div>
       </div>
+      <p style="font-size:.75rem;color:#9ca3af;margin-top:.5rem">Opcional en el DeCA; recomendado. Obligatorio si generas carta de porte / CMR.</p>
     </div>
 
     <div class="section">
@@ -101,7 +114,9 @@
         <div class="form-group"><label id="lbl-destino">Destino *</label><input id="destino" required></div>
         <div class="form-group"><label>Fecha del transporte *</label><input id="fecha" type="date" required></div>
         <div class="form-group"><label>Matrícula tractora *</label><input id="mat_tractora" required></div>
-        <div class="form-group"><label>Matrícula remolque</label><input id="mat_remolque"></div>
+        <div class="form-group"><label>Matrícula remolque / semirremolque</label><input id="mat_remolque"></div>
+        <div class="form-group"><label>Nº de contenedor</label><input id="num_contenedor"></div>
+        <div class="form-group"><label>Teléfono del conductor</label><input id="tel_conductor"></div>
         <div class="form-group"><label>Naturaleza de la mercancía *</label><input id="m_naturaleza" required></div>
         <div class="form-group"><label>Peso (kg) *</label><input id="m_peso" type="number" min="0" step="1" required></div>
         <div class="form-group"><label>Bultos y marcas</label><input id="m_bultos"></div>
@@ -139,8 +154,9 @@
 
     <div class="section" id="sec-firmas" style="display:none">
       <h2>Firmas (opcional · firma simple)</h2>
+      <p style="font-size:.78rem;color:#6b7280;margin:-.5rem 0 .8rem">El sello de <b>Total Logistic</b> se añade automáticamente a la carta de porte / CMR. Aquí firma el <b>camionero</b> en la pantalla táctil.</p>
       <div class="form-grid" style="margin-bottom:.6rem">
-        <div class="form-group"><label>Rol</label><select id="sigRol"><option value="cargador">Cargador / Remitente</option><option value="transportista">Transportista</option><option value="destinatario">Destinatario</option></select></div>
+        <div class="form-group"><label>Rol</label><select id="sigRol"><option value="conductor">Conductor / camionero</option><option value="cargador">Cargador / Remitente</option><option value="transportista">Transportista</option><option value="destinatario">Destinatario</option></select></div>
         <div class="form-group"><label>Nombre del firmante</label><input id="sigNombre"></div>
       </div>
       <canvas id="sig"></canvas>
@@ -149,6 +165,18 @@
         <button type="button" class="btn-sm btn-blue" onclick="addFirma()">Añadir firma</button>
       </div>
       <div id="firmasList"></div>
+    </div>
+
+    <div class="section">
+      <h2>Enviar al camionero (opcional)</h2>
+      <label style="display:flex;gap:.6rem;align-items:center;font-size:.9rem;color:#374151;cursor:pointer">
+        <input type="checkbox" id="send_email" onchange="document.getElementById('email-row').style.display=this.checked?'grid':'none'">
+        Enviar el QR / enlace por email
+      </label>
+      <div class="form-grid" id="email-row" style="display:none;margin-top:.8rem">
+        <div class="form-group full"><label>Email del camionero</label><input id="email_camionero" type="email" placeholder="conductor@ejemplo.com"></div>
+      </div>
+      <p style="font-size:.75rem;color:#9ca3af;margin-top:.5rem">Se envían los <b>QR y enlaces de todos los documentos generados</b> desde <b>almacenalgeciras@totallogistic.es</b>. La descarga local sigue disponible en la pantalla de resultado.</p>
     </div>
 
     <div id="message" class="message"></div>
@@ -168,9 +196,15 @@
   function val(id){ return document.getElementById(id).value.trim(); }
   function checked(id){ return document.getElementById(id).checked; }
 
+  const TL = { nombre: 'Total Logistic Services, S.L.', nif: 'B29961059',
+               domicilio: 'Avda. del Estrecho, parcela 5.15, Pol. Ind. La Menacha, 11204 Algeciras (Cádiz)' };
+  function fillTL(prefix){
+    const setv = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
+    setv(prefix + '_nombre', TL.nombre); setv(prefix + '_nif', TL.nif); setv(prefix + '_domicilio', TL.domicilio);
+  }
+
   function upd(){
     const cp = checked('doc_cp'), cmr = checked('doc_cmr'), contrato = cp || cmr;
-    document.getElementById('sec-destinatario').style.display = contrato ? 'block' : 'none';
     document.getElementById('sec-condiciones').style.display  = contrato ? 'block' : 'none';
     document.getElementById('sec-firmas').style.display       = contrato ? 'block' : 'none';
     document.getElementById('sec-cmr').style.display          = cmr ? 'block' : 'none';
@@ -180,6 +214,7 @@
     document.querySelectorAll('.docpick label').forEach(l => l.classList.toggle('on', l.querySelector('input').checked));
     if (contrato && !cctx) setupCanvas();
   }
+  fillTL('e');  // el expedidor es Total Logistic por defecto
 
   // ── Canvas de firma ──
   let drawing = false, hasInk = false, cctx = null;
@@ -221,10 +256,17 @@
       firmas: firmas,
     };
     if (val('mat_remolque')) d.matricula_remolque = val('mat_remolque');
+    if (val('num_contenedor')) d.numero_contenedor = val('num_contenedor');
+    if (val('tel_conductor')) d.telefono_conductor = val('tel_conductor');
     if (val('autorizaciones')) d.autorizaciones_especiales = val('autorizaciones');
     if (val('observaciones')) d.observaciones = val('observaciones');
-    if (checked('doc_cp') || checked('doc_cmr')) {
+    // Expedidor (todos los documentos): sólo si está completo (nombre/NIF/domicilio)
+    if (val('e_nombre') && val('e_nif') && val('e_domicilio'))
+      d.expedidor = { nombre: val('e_nombre'), nif: val('e_nif'), domicilio: val('e_domicilio') };
+    // Destinatario (todos los documentos; opcional en DeCA)
+    if (val('d_nombre'))
       d.destinatario = { nombre: val('d_nombre'), nif: val('d_nif') || null, domicilio: val('d_domicilio') || null };
+    if (checked('doc_cp') || checked('doc_cmr')) {
       d.portes = val('portes') || null; d.condiciones_pago = val('cond_pago') || null;
       d.valor_declarado = val('valor') || null; d.instrucciones_aduana = val('aduana') || null;
     }
@@ -233,6 +275,8 @@
       const tb = document.getElementById('trasbordo').value; d.prohibicion_trasbordo = tb === 'si' ? true : (tb === 'no' ? false : null);
       d.plazo_entrega = val('plazo') || null; d.documentos_anexos = val('docs') || null; d.transportistas_sucesivos = val('sucesivos') || null;
     }
+    d.enviar_email = checked('send_email');
+    if (d.enviar_email) d.email_camionero = val('email_camionero');
     return d;
   }
   function validate(d){
@@ -243,7 +287,8 @@
     if (!d.mercancia.naturaleza || !d.mercancia.peso_kg) return 'Indica naturaleza y peso de la mercancía';
     if (!d.fecha_transporte) return 'Indica la fecha';
     if (!d.matricula_tractora) return 'Indica la matrícula de la tractora';
-    if ((checked('doc_cp') || checked('doc_cmr')) && !d.destinatario.nombre) return 'Indica el destinatario (carta de porte / CMR)';
+    if ((checked('doc_cp') || checked('doc_cmr')) && !d.destinatario) return 'Indica el destinatario (carta de porte / CMR)';
+    if (checked('send_email') && !val('email_camionero')) return 'Indica el email del camionero o desmarca el envío';
     return null;
   }
   const LBL = { deca: 'DeCA', carta_porte: 'Carta de porte', cmr: 'CMR (e-CMR)' };
@@ -261,6 +306,8 @@
           <img src="${doc.qr_data_uri}"><div class="u"><input readonly value="${doc.url}">
           <a class="btn-sm btn-ghost" href="${doc.url}" target="_blank" rel="noopener">Abrir</a></div>
           <div style="font-size:.7rem;color:#9ca3af;margin-top:.3rem">${doc.uuid}</div></div>`).join('');
+      if (r.email_qr_sent) { const s = document.querySelector('#result .sub'); s.innerHTML += `<br><span style="color:#065f46">✉️ Enviado por email a ${r.email_qr_to}</span>`; }
+      else if (d.enviar_email) { const s = document.querySelector('#result .sub'); s.innerHTML += `<br><span style="color:#b45309">⚠️ No se pudo enviar el email (revisa SMTP)</span>`; }
       document.getElementById('formWrap').style.display = 'none';
       document.getElementById('result').style.display = 'block';
     } catch(e) { showMsg('❌ ' + e.message, 'error'); } finally { btn.disabled = false; }

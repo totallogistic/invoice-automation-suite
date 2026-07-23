@@ -95,7 +95,7 @@ def _boxed(rows, colWidths):
     return t
 
 
-def _firma_image(b64: str, max_w_mm=42, max_h_mm=15) -> Image:
+def _firma_image(b64: str, max_w_mm=42, max_h_mm=19) -> Image:
     from PIL import Image as PILImage
     if b64.startswith("data:"):
         b64 = b64.split(",", 1)[1]
@@ -125,7 +125,7 @@ def _firmas_block(ss, firmas):
         cells.append(inner)
     while len(cells) < 3:
         cells.append([Paragraph("&nbsp;", ss["DSign"])])
-    t = Table([cells[:3]], colWidths=[52.6 * mm, 52.6 * mm, 52.6 * mm], rowHeights=[24 * mm])
+    t = Table([cells[:3]], colWidths=[52.6 * mm, 52.6 * mm, 52.6 * mm], rowHeights=[28 * mm])
     t.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "MIDDLE"), ("ALIGN", (0, 0), (-1, -1), "CENTER"),
                            ("BOX", (0, 0), (-1, -1), 0.5, LINE), ("INNERGRID", (0, 0), (-1, -1), 0.5, LINE)]))
     return t
@@ -155,6 +155,27 @@ def render_pdf(record: DecaRecord) -> bytes:
               Spacer(1, 6)]
 
     # ── Partes ──
+    story.append(Paragraph("PARTES", ss["DSection"]))
+
+    # Fila superior: Expedidor | Destinatario (ambos opcionales; en DeCA y CdP/CMR).
+    # Total Logistic actúa como expedidor cuando la carga sale de su almacén.
+    if d.expedidor or d.destinatario:
+        exp_block = ([Paragraph("Expedidor", ss["DSection"]),
+                      _field(ss, "Nombre / razón social", d.expedidor.nombre),
+                      _field(ss, "NIF", d.expedidor.nif),
+                      _field(ss, "Domicilio", d.expedidor.domicilio)]
+                     if d.expedidor else [Paragraph("Expedidor", ss["DSection"]),
+                                          Paragraph("—", ss["DValue"])])
+        dest_block = ([Paragraph("Destinatario / consignatario", ss["DSection"]),
+                       _field(ss, "Nombre / razón social", d.destinatario.nombre),
+                       _field(ss, "NIF", d.destinatario.nif),
+                       _field(ss, "Domicilio", d.destinatario.domicilio)]
+                      if d.destinatario else [Paragraph("Destinatario / consignatario", ss["DSection"]),
+                                              Paragraph("—", ss["DValue"])])
+        story.append(_boxed([[exp_block, dest_block]], [half, half]))
+        story.append(Spacer(1, 6))
+
+    # Fila: Cargador contractual | Transportista efectivo
     remit_label = "Remitente" if tipo == "cmr" else "Cargador contractual"
     col_izq = [Paragraph(remit_label, ss["DSection"]),
                _field(ss, "Nombre / razón social", d.cargador_contractual.nombre),
@@ -163,19 +184,8 @@ def render_pdf(record: DecaRecord) -> bytes:
     col_der = [Paragraph("Transportista efectivo", ss["DSection"]),
                _field(ss, "Nombre / razón social", d.transportista_efectivo.nombre),
                _field(ss, "NIF", d.transportista_efectivo.nif)]
-    story.append(Paragraph("PARTES", ss["DSection"]))
     story.append(_boxed([[col_izq, col_der]], [half, half]))
     story.append(Spacer(1, 6))
-
-    # Destinatario (carta de porte / CMR)
-    if tipo != "deca" and d.destinatario:
-        story.append(_boxed([[
-            [Paragraph("Destinatario", ss["DSection"]),
-             _field(ss, "Nombre / razón social", d.destinatario.nombre),
-             _field(ss, "NIF", d.destinatario.nif)],
-            [_field(ss, "Domicilio", d.destinatario.domicilio), Spacer(1, 1)],
-        ]], [half, half]))
-        story.append(Spacer(1, 6))
 
     # ── Transporte + mercancía ──
     story.append(Paragraph("DATOS DEL TRANSPORTE", ss["DSection"]))
@@ -189,6 +199,8 @@ def render_pdf(record: DecaRecord) -> bytes:
          _field(ss, "Peso (kg)", f"{d.mercancia.peso_kg:,.0f}")],
         [_field(ss, "Bultos y marcas", d.mercancia.bultos),
          _field(ss, "Embalaje", d.mercancia.embalaje)],
+        [_field(ss, "Nº de contenedor", d.numero_contenedor),
+         _field(ss, "Teléfono del conductor", d.telefono_conductor)],
         [_field(ss, "Autorizaciones especiales", d.autorizaciones_especiales), ""],
     ]
     story.append(_boxed(filas, [half, half]))

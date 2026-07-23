@@ -647,13 +647,15 @@ class UnifiedProcessor:
         Si tool.email_mail_from está definido en tools.yaml, lo usa como remitente;
         si no, usa el EmailService global (MAIL_FROM del entorno)."""
         override_from = getattr(tool, "email_mail_from", None)
-        logger.info(f"[{tool.name}] mail_from override → yaml='{override_from}' | global='{self.email_config.mail_from}'")
-        if override_from:
+        override_mode = getattr(tool, "email_mode_send_email", None)
+        logger.info(f"[{tool.name}] email override → mode='{override_mode}' mail_from='{override_from}'")
+        if override_mode or override_from:
             from dataclasses import replace as _dc_replace
-            custom_config = _dc_replace(self.email_config, mail_from=override_from)
-            logger.info(f"[{tool.name}] Usando mail_from override: {override_from}")
-            return EmailService(custom_config)
-        logger.warning(f"[{tool.name}] Sin override mail_from, usando global: {self.email_config.mail_from}")
+            cfg = EmailConfig.from_env(override_mode) if override_mode else self.email_config
+            if override_from:
+                cfg = _dc_replace(cfg, mail_from=override_from)
+            logger.info(f"[{tool.name}] Envio via {cfg.host}:{cfg.port} from={cfg.mail_from}")
+            return EmailService(cfg)
         return self.email_service
 
     def _get_recipients(self, tool_name: str) -> List[str]:
@@ -677,14 +679,8 @@ def main():
     config_path = os.getenv("CONFIG_PATH", "/config/tools.yaml")
     registry = ToolRegistry.from_yaml(config_path)
     
-    email_config = EmailConfig(
-        host=os.getenv("SMTP_HOST", ""),
-        port=int(os.getenv("SMTP_PORT", "587")),
-        user=os.getenv("SMTP_USER", ""),
-        password=os.getenv("SMTP_PASS", ""),
-        mail_from=os.getenv("MAIL_FROM", ""),
-        use_ssl=(os.getenv("SMTP_PORT") == "465")
-    )
+    # Modo de envío por defecto (postfix | custom) segun MAIL_SEND_MODE.
+    email_config = EmailConfig.from_env()
     
     processor = UnifiedProcessor(
         registry=registry,
