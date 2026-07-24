@@ -27,6 +27,10 @@ def _utcnow() -> dt.datetime:
 
 class Repository:
     def __init__(self, db_path: str = DB_PATH) -> None:
+        # Crea la carpeta de la BD si no existe (sqlite no crea el directorio padre).
+        parent = pathlib.Path(db_path).parent
+        if str(parent) not in ("", "."):
+            parent.mkdir(parents=True, exist_ok=True)
         self.conn = sqlite3.connect(db_path)
         self.conn.execute(
             """CREATE TABLE IF NOT EXISTS deca (
