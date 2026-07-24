@@ -1,0 +1,4 @@
+# merge_pdf_watcher — vigila el inbox Samba y monta batches para el unified_processor.
+# pypdf: validacion de PDF completo antes de empaquetar (evita empaquetar ficheros
+# a medio copiar por SMB). Hay fallback sin pypdf, pero se recomienda instalarlo.
+pypdf>=4.0.0
