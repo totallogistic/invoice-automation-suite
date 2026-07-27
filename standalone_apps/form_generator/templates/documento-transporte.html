@@ -64,8 +64,8 @@
     <div class="section">
       <h2>¿Qué documentos necesitas?</h2>
       <div class="docpick" id="docpick">
-        <label class="on"><input type="checkbox" id="doc_deca" checked onchange="upd()"><span><span class="t">DeCA</span><br><span class="d">Documento de control · QR + envío al camionero</span></span></label>
-        <label><input type="checkbox" id="doc_cp" onchange="upd()"><span><span class="t">Carta de porte</span><br><span class="d">Contrato de transporte · interno (sin QR)</span></span></label>
+        <label class="on"><input type="checkbox" id="doc_deca" checked disabled><span><span class="t">DeCA</span><br><span class="d">Documento de control · <b>obligatorio</b> (siempre se genera)</span></span></label>
+        <label><input type="checkbox" id="doc_cp" onchange="upd()"><span><span class="t">Carta de porte</span><br><span class="d">Contrato · interno, 1 hoja con el QR del DeCA arriba</span></span></label>
       </div>
     </div>
 
@@ -156,7 +156,7 @@ El trincaje de la carga lo realiza el conductor, siendo a su criterio idóneo.</
       <div class="form-grid" id="email-row" style="display:none;margin-top:.8rem">
         <div class="form-group full"><label>Email del camionero</label><input id="email_camionero" type="email" placeholder="conductor@ejemplo.com"></div>
       </div>
-      <p style="font-size:.75rem;color:#9ca3af;margin-top:.5rem">Se envía el <b>QR y enlace del DeCA</b> desde <b>almacenalgeciras@totallogistic.es</b>. La carta de porte <b>no</b> se envía al camionero (es interna); se descarga/imprime desde la pantalla de resultado.</p>
+      <p style="font-size:.75rem;color:#9ca3af;margin-top:.5rem"><b>Opcional.</b> El camionero se lleva la <b>carta de porte impresa</b>, que ya trae el QR del DeCA arriba. Marca esto solo si además quieres enviarle el enlace del DeCA por email, desde <b>almacenalgeciras@totallogistic.es</b>.</p>
     </div>
 
     <div id="message" class="message"></div>
@@ -184,7 +184,7 @@ El trincaje de la carga lo realiza el conductor, siendo a su criterio idóneo.</
   }
 
   function upd(){
-    const cp = checked('doc_cp');   // la carta de porte lleva firmas (sello TL + camionero); el DeCA no
+    const cp = checked('doc_cp');   // el DeCA es FIJO (obligatorio); la carta de porte es opcional
     document.getElementById('sec-firmas').style.display = cp ? 'block' : 'none';
     document.querySelectorAll('.docpick label').forEach(l => l.classList.toggle('on', l.querySelector('input').checked));
     if (cp && !cctx) setupCanvas();
@@ -217,9 +217,8 @@ El trincaje de la carga lo realiza el conductor, siendo a su criterio idóneo.</
   function delFirma(i){ firmas.splice(i,1); renderFirmas(); }
 
   function collectData(){
-    const documentos = [];
-    if (checked('doc_deca')) documentos.push('deca');
-    if (checked('doc_cp'))   documentos.push('carta_porte');
+    const documentos = ['deca'];   // DeCA siempre (obligatorio en transporte nacional)
+    if (checked('doc_cp')) documentos.push('carta_porte');
     const d = {
       documentos,
       cargador_contractual: { nombre: val('c_nombre'), nif: val('c_nif'), domicilio: val('c_domicilio') },

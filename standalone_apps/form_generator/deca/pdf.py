@@ -91,11 +91,11 @@ def _boxed(rows, colWidths):
     t.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP"),
                            ("BOX", (0, 0), (-1, -1), 0.5, LINE), ("INNERGRID", (0, 0), (-1, -1), 0.5, LINE),
                            ("LEFTPADDING", (0, 0), (-1, -1), 6), ("RIGHTPADDING", (0, 0), (-1, -1), 6),
-                           ("TOPPADDING", (0, 0), (-1, -1), 5), ("BOTTOMPADDING", (0, 0), (-1, -1), 6)]))
+                           ("TOPPADDING", (0, 0), (-1, -1), 3), ("BOTTOMPADDING", (0, 0), (-1, -1), 4)]))
     return t
 
 
-def _firma_image(b64: str, max_w_mm=42, max_h_mm=15) -> Image:
+def _firma_image(b64: str, max_w_mm=42, max_h_mm=13) -> Image:
     from PIL import Image as PILImage
     if b64.startswith("data:"):
         b64 = b64.split(",", 1)[1]
@@ -126,13 +126,13 @@ def _firmas_block(ss, firmas):
         cells.append(inner)
     while len(cells) < 3:
         cells.append([Paragraph("&nbsp;", ss["DSign"])])
-    t = Table([cells[:3]], colWidths=[52.6 * mm, 52.6 * mm, 52.6 * mm], rowHeights=[23 * mm])
+    t = Table([cells[:3]], colWidths=[52.6 * mm, 52.6 * mm, 52.6 * mm], rowHeights=[20 * mm])
     t.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "MIDDLE"), ("ALIGN", (0, 0), (-1, -1), "CENTER"),
                            ("BOX", (0, 0), (-1, -1), 0.5, LINE), ("INNERGRID", (0, 0), (-1, -1), 0.5, LINE)]))
     return t
 
 
-def render_pdf(record: DecaRecord) -> bytes:
+def render_pdf(record: DecaRecord, deca_qr_url: str | None = None) -> bytes:
     d = record.datos
     tipo = d.tipo_documento if d.tipo_documento in _TITULOS else "deca"
     titulo, subtitulo = _TITULOS[tipo]
@@ -143,6 +143,20 @@ def render_pdf(record: DecaRecord) -> bytes:
     story = []
     W = 158 * mm
     half = 79 * mm
+
+    # ── Banda del QR del DeCA (SOLO en la carta de porte) ──
+    # Así el camionero lleva UNA sola hoja (la carta de porte) que arriba trae el
+    # QR del DeCA; un control lo escanea y descarga el DeCA del bucket.
+    if tipo != "deca" and deca_qr_url:
+        band_txt = [Paragraph("DeCA · Documento de control de transporte", ss["DSection"]),
+                    Paragraph("Escanee este código en un control de carretera — enlaza al DeCA "
+                              "(documento de control obligatorio) alojado de forma segura.", ss["DSub"])]
+        band = Table([[band_txt, [_qr_image(deca_qr_url, box_mm=22)]]], colWidths=[128 * mm, 30 * mm])
+        band.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                                   ("BOX", (0, 0), (-1, -1), 0.8, GREEN),
+                                   ("LEFTPADDING", (0, 0), (-1, -1), 8), ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+                                   ("TOPPADDING", (0, 0), (-1, -1), 5), ("BOTTOMPADDING", (0, 0), (-1, -1), 5)]))
+        story += [band, Spacer(1, 3)]
 
     # ── Cabecera + QR ──
     # El QR va SOLO en el DeCA (público, en bucket). La carta de porte es interna,

@@ -65,19 +65,20 @@ class DecaService:
                       firmado_en=dt.datetime.now(dt.timezone.utc))
         return data.model_copy(update={"firmas": [firma, *data.firmas]})
 
-    def create(self, data: DecaInput, publico: bool = True) -> DecaRecord:
+    def create(self, data: DecaInput, publico: bool = True, deca_qr_url: str | None = None) -> DecaRecord:
         """Genera un documento. `publico=True` (DeCA): URL determinista + QR + subida
-        al bucket. `publico=False` (carta de porte): SIN URL pública, SIN QR y SIN
-        subida al bucket → documento interno; solo se guarda la copia de retención
-        y se devuelven los bytes para descarga interna."""
+        al bucket. `publico=False` (carta de porte): SIN URL pública, SIN QR propio y
+        SIN subida al bucket → documento interno; solo se guarda la copia de retención
+        y se devuelven los bytes para descarga interna. `deca_qr_url`: si se pasa (a la
+        carta de porte), se incrusta arriba una banda con el QR del DeCA."""
         data = self._with_org_firma(data)
         record = DecaRecord(datos=data)
         # 1) URL determinista SOLO si es público (antes de generar el QR)
         if publico:
             record.url_publica = self.storage.public_url(record.object_key())
         record.creado_en = dt.datetime.now(dt.timezone.utc)
-        # 2) PDF nativo (el QR se incrusta solo si hay url_publica)
-        pdf_bytes = render_pdf(record)
+        # 2) PDF nativo (QR propio si hay url_publica; banda del QR del DeCA si deca_qr_url)
+        pdf_bytes = render_pdf(record, deca_qr_url=deca_qr_url)
         if len(pdf_bytes) > MAX_PDF_BYTES:
             raise ValueError(f"PDF de {len(pdf_bytes)} bytes supera el máximo de 5 MB")
         # 3) Subida (PUT saliente) al bucket público solo si es público
@@ -90,15 +91,24 @@ class DecaService:
 
     def create_many(self, data: DecaInput, tipos):
         """Emite varios documentos desde los MISMOS datos. El DeCA es público
-        (bucket + QR + envío al camionero); la carta de porte es INTERNA (sin QR,
-        sin bucket, sin envío externo). El DeCA no lleva firma."""
-        recs = []
-        for t in tipos:
+        (bucket + QR); la carta de porte es INTERNA (sin bucket) pero lleva ARRIBA el
+        QR del DeCA → el camionero se lleva UNA sola hoja. Por eso el DeCA se genera
+        primero (para conocer su URL). El DeCA no lleva firma."""
+        # Generar el DeCA primero para tener su URL/QR y embeberlo en la carta de porte.
+        orden = ([t for t in tipos if t == "deca"] + [t for t in tipos if t != "deca"])
+        recs_by_tipo = {}
+        deca_url = None
+        for t in orden:
             firmas = [] if t == "deca" else data.firmas
             publico = (t == "deca")
-            recs.append(self.create(data.model_copy(update={"tipo_documento": t, "firmas": firmas}),
-                                    publico=publico))
-        return recs
+            dd = data.model_copy(update={"tipo_documento": t, "firmas": firmas})
+            rec = self.create(dd, publico=publico,
+                              deca_qr_url=(deca_url if t != "deca" else None))
+            if t == "deca":
+                deca_url = rec.url_publica
+            recs_by_tipo[t] = rec
+        # Devolver en el orden en que los pidió el usuario.
+        return [recs_by_tipo[t] for t in tipos if t in recs_by_tipo]
 
     def modify(self, uuid: str):
         return self.repo.register_modification(uuid)
