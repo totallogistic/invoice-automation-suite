@@ -2454,9 +2454,15 @@ def _deca_pipeline_handler(ctx):
     tipos = payload.get("documentos")            # lista → emisión múltiple (DeCA + carta de porte + CMR)
     if tipos:
         recs = _deca_svc.create_many(data, tipos)
-        docs = [{"tipo": r.datos.tipo_documento, "uuid": r.uuid, "url": r.url_publica,
-                 "qr_data_uri": "data:image/png;base64," + base64.b64encode(qr_png_bytes(r.url_publica)).decode()}
-                for r in recs]
+        docs = []
+        for r in recs:
+            t = r.datos.tipo_documento
+            if r.url_publica:  # DeCA: publico (bucket) -> QR + enlace (va al camionero)
+                docs.append({"tipo": t, "uuid": r.uuid, "url": r.url_publica,
+                             "qr_data_uri": "data:image/png;base64," + base64.b64encode(qr_png_bytes(r.url_publica)).decode()})
+            else:  # carta de porte: interna -> descarga directa del PDF, sin QR ni bucket
+                docs.append({"tipo": t, "uuid": r.uuid, "interno": True,
+                             "pdf_base64": base64.b64encode(r.pdf_bytes).decode()})
         return {"documentos": docs, "message": f"{len(docs)} documento(s) generado(s)."}
     rec = _deca_svc.create(data)                 # un solo documento
     qr_b64 = base64.b64encode(qr_png_bytes(rec.url_publica)).decode()

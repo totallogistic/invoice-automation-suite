@@ -95,7 +95,7 @@ def _boxed(rows, colWidths):
     return t
 
 
-def _firma_image(b64: str, max_w_mm=42, max_h_mm=19) -> Image:
+def _firma_image(b64: str, max_w_mm=42, max_h_mm=15) -> Image:
     from PIL import Image as PILImage
     if b64.startswith("data:"):
         b64 = b64.split(",", 1)[1]
@@ -121,11 +121,12 @@ def _firmas_block(ss, firmas):
         else:
             inner.append(Paragraph("✓ firmado", ss["DSign"]))
         sello = f.firmado_en.strftime("%d/%m/%Y %H:%M") if f.firmado_en else ""
-        inner.append(Paragraph(f"<b>{_esc(f.rol.capitalize())}</b><br/>{_esc(f.nombre)}<br/>{_esc(sello)}", ss["DSign"]))
+        ident = _esc(f.nombre) + (f" · DNI {_esc(f.dni)}" if f.dni else "")
+        inner.append(Paragraph(f"<b>{_esc(f.rol.capitalize())}</b><br/>{ident}<br/>{_esc(sello)}", ss["DSign"]))
         cells.append(inner)
     while len(cells) < 3:
         cells.append([Paragraph("&nbsp;", ss["DSign"])])
-    t = Table([cells[:3]], colWidths=[52.6 * mm, 52.6 * mm, 52.6 * mm], rowHeights=[28 * mm])
+    t = Table([cells[:3]], colWidths=[52.6 * mm, 52.6 * mm, 52.6 * mm], rowHeights=[23 * mm])
     t.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "MIDDLE"), ("ALIGN", (0, 0), (-1, -1), "CENTER"),
                            ("BOX", (0, 0), (-1, -1), 0.5, LINE), ("INNERGRID", (0, 0), (-1, -1), 0.5, LINE)]))
     return t
@@ -137,22 +138,26 @@ def render_pdf(record: DecaRecord) -> bytes:
     titulo, subtitulo = _TITULOS[tipo]
     ss = _styles()
     buf = io.BytesIO()
-    doc = SimpleDocTemplate(buf, pagesize=A4, topMargin=14 * mm, bottomMargin=12 * mm,
+    doc = SimpleDocTemplate(buf, pagesize=A4, topMargin=11 * mm, bottomMargin=9 * mm,
                             leftMargin=16 * mm, rightMargin=16 * mm, title=f"{titulo} {record.uuid}")
     story = []
     W = 158 * mm
     half = 79 * mm
 
     # ── Cabecera + QR ──
+    # El QR va SOLO en el DeCA (público, en bucket). La carta de porte es interna,
+    # sin QR → la cabecera usa todo el ancho.
     title_block = [Paragraph(titulo, ss["DTitle"]), Paragraph(subtitulo, ss["DSub"])]
-    qr_block = [_qr_image(record.url_publica or "https://pendiente.example/d/" + record.uuid),
-                Paragraph("Escanee para descargar", ss["DUrl"])]
-    header = Table([[title_block, qr_block]], colWidths=[120 * mm, 38 * mm])
+    if record.url_publica:
+        qr_block = [_qr_image(record.url_publica), Paragraph("Escanee para descargar", ss["DUrl"])]
+        header = Table([[title_block, qr_block]], colWidths=[120 * mm, 38 * mm])
+    else:
+        header = Table([[title_block]], colWidths=[W])
     header.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP"),
                                 ("LEFTPADDING", (0, 0), (-1, -1), 0), ("RIGHTPADDING", (0, 0), (-1, -1), 0)]))
-    story += [header, Spacer(1, 6),
+    story += [header, Spacer(1, 4),
               Table([[""]], colWidths=[W], style=TableStyle([("LINEBELOW", (0, 0), (-1, -1), 1, GREEN)])),
-              Spacer(1, 6)]
+              Spacer(1, 4)]
 
     # ── Partes ──
     story.append(Paragraph("PARTES", ss["DSection"]))
@@ -173,7 +178,7 @@ def render_pdf(record: DecaRecord) -> bytes:
                       if d.destinatario else [Paragraph("Destinatario / consignatario", ss["DSection"]),
                                               Paragraph("—", ss["DValue"])])
         story.append(_boxed([[exp_block, dest_block]], [half, half]))
-        story.append(Spacer(1, 6))
+        story.append(Spacer(1, 4))
 
     # Fila: Cargador contractual | Transportista efectivo
     remit_label = "Remitente" if tipo == "cmr" else "Cargador contractual"
@@ -185,56 +190,35 @@ def render_pdf(record: DecaRecord) -> bytes:
                _field(ss, "Nombre / razón social", d.transportista_efectivo.nombre),
                _field(ss, "NIF", d.transportista_efectivo.nif)]
     story.append(_boxed([[col_izq, col_der]], [half, half]))
-    story.append(Spacer(1, 6))
+    story.append(Spacer(1, 4))
 
     # ── Transporte + mercancía ──
     story.append(Paragraph("DATOS DEL TRANSPORTE", ss["DSection"]))
     mats = d.matricula_tractora + (f"  /  {d.matricula_remolque}" if d.matricula_remolque else "")
+    fecha_txt = d.fecha_transporte.isoformat() + (f"  {d.hora_transporte}" if d.hora_transporte else "")
     filas = [
-        [_field(ss, "Lugar de carga" if tipo == "cmr" else "Origen", d.lugar_carga or d.origen),
-         _field(ss, "Lugar de entrega" if tipo == "cmr" else "Destino", d.lugar_entrega or d.destino)],
-        [_field(ss, "Fecha del transporte", d.fecha_transporte.isoformat()),
+        [_field(ss, "Origen", d.origen), _field(ss, "Destino", d.destino)],
+        [_field(ss, "Fecha y hora del transporte", fecha_txt),
          _field(ss, "Matrículas (tractora / remolque)", mats)],
         [_field(ss, "Naturaleza de la mercancía", d.mercancia.naturaleza),
          _field(ss, "Peso (kg)", f"{d.mercancia.peso_kg:,.0f}")],
         [_field(ss, "Bultos y marcas", d.mercancia.bultos),
-         _field(ss, "Embalaje", d.mercancia.embalaje)],
-        [_field(ss, "Nº de contenedor", d.numero_contenedor),
          _field(ss, "Teléfono del conductor", d.telefono_conductor)],
         [_field(ss, "Autorizaciones especiales", d.autorizaciones_especiales), ""],
     ]
     story.append(_boxed(filas, [half, half]))
-    story.append(Spacer(1, 6))
-
-    # ── Condiciones (carta de porte / CMR) ──
-    if tipo != "deca":
-        story.append(Paragraph("CONDICIONES DEL TRANSPORTE", ss["DSection"]))
-        cond = [
-            [_field(ss, "Portes", d.portes), _field(ss, "Condiciones de pago", d.condiciones_pago)],
-            [_field(ss, "Valor declarado", d.valor_declarado),
-             _field(ss, "Instrucciones de aduana", d.instrucciones_aduana)],
-        ]
-        if tipo == "cmr":
-            trasbordo = None if d.prohibicion_trasbordo is None else ("Sí" if d.prohibicion_trasbordo else "No")
-            cond += [
-                [_field(ss, "Reembolso", d.reembolso), _field(ss, "Instrucciones de seguro", d.instrucciones_seguro)],
-                [_field(ss, "Prohibición de trasbordo", trasbordo), _field(ss, "Plazo de entrega", d.plazo_entrega)],
-                [_field(ss, "Documentos anexos", d.documentos_anexos),
-                 _field(ss, "Transportistas sucesivos", d.transportistas_sucesivos)],
-            ]
-        story.append(_boxed(cond, [half, half]))
-        story.append(Spacer(1, 6))
+    story.append(Spacer(1, 4))
 
     # ── Observaciones / reservas ──
     story.append(Paragraph("OBSERVACIONES Y RESERVAS", ss["DSection"]))
     story.append(_boxed([[Paragraph(_esc(d.observaciones or "—"), ss["DValue"])]], [W]))
-    story.append(Spacer(1, 8))
+    story.append(Spacer(1, 4))
 
     # ── Firmas (simple, opcional) ──
     if d.firmas:
         story.append(Paragraph("FIRMAS", ss["DSection"]))
         story.append(_firmas_block(ss, d.firmas))
-        story.append(Spacer(1, 6))
+        story.append(Spacer(1, 4))
 
     # ── Pie: identidad, sello e integridad ──
     creado = record.creado_en.isoformat(timespec="seconds") if record.creado_en else "—"
@@ -245,12 +229,14 @@ def render_pdf(record: DecaRecord) -> bytes:
         nota_legal = ("La firma no es obligatoria para la validez del DeCA (Resolución 5-jun-2026, Apartado Cuarto). "
                       "El enlace de descarga permanece activo durante el servicio y hasta 7 días naturales tras su finalización.")
     else:
-        nota_legal = ("Documento de contrato de transporte. Si se requiere validez contractual electrónica plena, "
-                      "la firma debe ser electrónica avanzada (eIDAS); la firma incluida aquí es simple, no cualificada.")
+        nota_legal = ("Documento de contrato de transporte de uso interno. Si se requiere validez contractual "
+                      "electrónica plena, la firma debe ser electrónica avanzada (eIDAS); la incluida aquí es simple.")
+    ubic = (f"URL de descarga: {_esc(record.url_publica)}" if record.url_publica
+            else "Documento interno (carta de porte) — no se publica ni se envía al conductor")
     story += [Table([[""]], colWidths=[W], style=TableStyle([("LINEBELOW", (0, 0), (-1, -1), 0.5, LINE)])),
               Spacer(1, 3),
               Paragraph(f"Identificador del documento (UUID): <b>{record.uuid}</b><br/>"
-                        f"Generado: {creado} · URL de descarga: {_esc(record.url_publica or '(pendiente de bucket)')}<br/>"
+                        f"Generado: {creado} · {ubic}<br/>"
                         f"{nota_firma}{nota_legal}", ss["DFoot"])]
 
     doc.build(story)

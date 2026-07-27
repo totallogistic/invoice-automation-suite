@@ -48,8 +48,9 @@ class Mercancia(BaseModel):
 
 class Firma(BaseModel):
     """Firma electrónica simple (NO cualificada): imagen del trazo + sello propio."""
-    rol: str = Field(..., description="cargador | transportista | destinatario")
+    rol: str = Field(..., description="cargador | transportista | destinatario | conductor")
     nombre: str = Field(..., description="Nombre de quien firma")
+    dni: Optional[str] = Field(None, description="DNI del firmante (p. ej. el conductor)")
     firma_png: Optional[str] = Field(None, description="Imagen del trazo en base64 (o data URI)")
     lugar: Optional[str] = None
     firmado_en: Optional[dt.datetime] = None
@@ -72,6 +73,7 @@ class DecaInput(BaseModel):
     destino: str
     mercancia: Mercancia
     fecha_transporte: dt.date
+    hora_transporte: Optional[str] = Field(None, description="Hora del transporte (HH:MM)")
     matricula_tractora: str
     matricula_remolque: Optional[str] = None
     numero_contenedor: Optional[str] = None
@@ -114,6 +116,9 @@ class DecaRecord(BaseModel):
     modificado_en: List[dt.datetime] = Field(default_factory=list)
     url_activa_hasta: Optional[dt.datetime] = None
     estado: str = "creado"
+    # Bytes del PDF generado (para descarga interna de la carta de porte).
+    # Excluido de la serialización.
+    pdf_bytes: Optional[bytes] = Field(default=None, exclude=True, repr=False)
 
     def object_key(self) -> str:
         return f"d/{self.uuid}.pdf"

@@ -1,13 +1,17 @@
 {
-  "_comment": "Reglas por defecto de merge_pdf en modo REGEX (permite mezclar literales y patrones). Cada match es una expresion regular que se busca dentro del nombre del fichero (re.search, case-insensitive). Varios ficheros que casan la misma regla comparten order y se ordenan alfabeticamente entre si. Los que no casan ninguna regla van al final.",
+  "_comment": "Reglas por defecto de merge_pdf en modo REGEX (re.search, case-insensitive). Varios ficheros con el mismo order comparten posicion y se ordenan alfabeticamente entre si. Los que no casan ninguna regla SE DESCARTAN. La regla 5 va anclada con ^ (nombre que empieza por 4 digitos + _ + 3 digitos). Las tres reglas order 7 agrupan facturas/invoices de nombre variable (empiezan por 'invoice', por 1-8 digitos, o por 'letra_digito'). La regla 8 son los DM (DM seguido de digitos, sin guion).",
   "match_mode": "regex",
   "case_sensitive": false,
   "rules": [
-    { "match": "Factura",               "order": 1 },
+    { "match": "Factura",                 "order": 1 },
     { "match": "Relaci[oó]n de Partidas", "order": 2 },
-    { "match": "DM-",                    "order": 3 },
-    { "match": "EE-",                    "order": 4 },
+    { "match": "DUA-IMPORT-",             "order": 3 },
+    { "match": "EE-",                     "order": 4 },
     { "match": "^\\d{4}_\\d{3}",          "order": 5 },
-    { "match": "DX-",                    "order": 6 }
+    { "match": "LEV-",                    "order": 6 },
+    { "match": "^invoice",                "order": 7 },
+    { "match": "^\\d{1,8}",               "order": 7 },
+    { "match": "^[a-z]_\\d",              "order": 7 },
+    { "match": "^DM\\d",                  "order": 8 }
   ]
 }
