@@ -52,9 +52,13 @@ class Repository:
         # Ventana de la URL pública: fin de servicio + 7 días (o creación + 7 si no hay fin).
         fin = record.datos.servicio_fin or record.creado_en
         record.url_activa_hasta = fin + dt.timedelta(days=int(os.getenv("DECA_URL_TTL_DAYS", "7")))
-        # Copia de retención interna (>= 1 año en producción).
+        # Copia de retención interna (>= 1 año en producción). Se añade el tipo de
+        # documento como sufijo para distinguir DeCA / carta de porte en la misma
+        # carpeta (p. ej. <uuid>_deca.pdf / <uuid>_carta_porte.pdf). Ambos se
+        # conservan en local; al bucket público solo va el DeCA (ver service/storage).
         RETENTION_DIR.mkdir(parents=True, exist_ok=True)
-        (RETENTION_DIR / f"{record.uuid}.pdf").write_bytes(pdf_bytes)
+        _tipo = "".join(c for c in (record.datos.tipo_documento or "doc") if c.isalnum() or c == "_") or "doc"
+        (RETENTION_DIR / f"{record.uuid}_{_tipo}.pdf").write_bytes(pdf_bytes)
         self.conn.execute(
             "INSERT INTO deca VALUES (?,?,?,?,?,?,?,?)",
             (record.uuid, record.creado_en.isoformat(), json.dumps([]),
