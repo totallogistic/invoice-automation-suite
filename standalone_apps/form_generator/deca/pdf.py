@@ -10,6 +10,7 @@
 from __future__ import annotations
 
 import base64
+import datetime as dt
 import hashlib
 import io
 from xml.sax.saxutils import escape as _esc
@@ -70,7 +71,7 @@ def _styles():
     ss.add(ParagraphStyle("DLabel", parent=ss["Normal"], fontSize=7, textColor=GREY, leading=9))
     ss.add(ParagraphStyle("DValue", parent=ss["Normal"], fontSize=9.5, textColor=colors.black, leading=12))
     ss.add(ParagraphStyle("DSection", parent=ss["Normal"], fontSize=8.5, textColor=GREEN,
-                          leading=11, spaceBefore=4, spaceAfter=2, fontName="Helvetica-Bold"))
+                          leading=11, spaceBefore=2, spaceAfter=1, fontName="Helvetica-Bold"))
     ss.add(ParagraphStyle("DUrl", parent=ss["Normal"], fontSize=6, textColor=GREY, leading=7, alignment=1))
     ss.add(ParagraphStyle("DFoot", parent=ss["Normal"], fontSize=6.5, textColor=GREY, leading=9))
     ss.add(ParagraphStyle("DSign", parent=ss["Normal"], fontSize=6.5, textColor=GREY, leading=8, alignment=1))
@@ -91,7 +92,7 @@ def _boxed(rows, colWidths):
     t.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP"),
                            ("BOX", (0, 0), (-1, -1), 0.5, LINE), ("INNERGRID", (0, 0), (-1, -1), 0.5, LINE),
                            ("LEFTPADDING", (0, 0), (-1, -1), 6), ("RIGHTPADDING", (0, 0), (-1, -1), 6),
-                           ("TOPPADDING", (0, 0), (-1, -1), 3), ("BOTTOMPADDING", (0, 0), (-1, -1), 4)]))
+                           ("TOPPADDING", (0, 0), (-1, -1), 2), ("BOTTOMPADDING", (0, 0), (-1, -1), 3)]))
     return t
 
 
@@ -108,27 +109,61 @@ def _firma_image(b64: str, max_w_mm=42, max_h_mm=13) -> Image:
     return Image(io.BytesIO(data), width=w * mm, height=h * mm)
 
 
+# Tres casillas fijas y SIEMPRE etiquetadas. Cada una se rellena con la primera
+# firma cuyo rol encaje (así el orden de captura o la inyección del sello no
+# alteran qué cae en cada casilla). El sello corporativo de Total Logistic entra
+# como "Expedidor"; el trazo del camionero como "Conductor".
+_FIRMA_SLOTS = [
+    ("Expedidor", ("expedidor", "almacén", "almacen", "cargador", "remitente")),
+    ("Conductor", ("conductor", "transportista", "camionero", "porteador")),
+    ("Destinatario", ("destinatario", "consignatario")),
+]
+
+
+def _fmt_local(dtobj) -> str:
+    """Formatea un datetime en hora local de España (Europe/Madrid). Un datetime
+    naíve se asume en UTC (así se corrige el sello que salía en UTC, p. ej. 06:38,
+    mientras el resto del documento va en hora local)."""
+    if not dtobj:
+        return ""
+    try:
+        from zoneinfo import ZoneInfo
+        if dtobj.tzinfo is None:
+            dtobj = dtobj.replace(tzinfo=dt.timezone.utc)
+        dtobj = dtobj.astimezone(ZoneInfo("Europe/Madrid"))
+    except Exception:
+        pass
+    return dtobj.strftime("%d/%m/%Y %H:%M")
+
+
 def _firmas_block(ss, firmas):
-    """Fila de cajas de firma (imagen del trazo o 'firmado' + rol/nombre/sello)."""
+    """Tres casillas fijas etiquetadas (Expedidor · Conductor · Destinatario).
+    Cada casilla muestra su etiqueta SIEMPRE; si hay una firma con rol encajable,
+    añade el trazo/‘firmado’, nombre, DNI y sello de tiempo en hora local."""
     cells = []
-    for f in firmas:
-        inner = []
-        if f.firma_png:
-            try:
-                inner.append(_firma_image(f.firma_png))
-            except Exception:
-                inner.append(Paragraph("(firma)", ss["DSign"]))
-        else:
-            inner.append(Paragraph("✓ firmado", ss["DSign"]))
-        sello = f.firmado_en.strftime("%d/%m/%Y %H:%M") if f.firmado_en else ""
-        ident = _esc(f.nombre) + (f" · DNI {_esc(f.dni)}" if f.dni else "")
-        inner.append(Paragraph(f"<b>{_esc(f.rol.capitalize())}</b><br/>{ident}<br/>{_esc(sello)}", ss["DSign"]))
+    for etiqueta, roles in _FIRMA_SLOTS:
+        f = next((x for x in firmas if (x.rol or "").strip().lower() in roles), None)
+        inner = [Paragraph(f"<b>{etiqueta}</b>", ss["DSign"])]
+        if f:
+            if f.firma_png:
+                try:
+                    inner.append(_firma_image(f.firma_png, max_w_mm=38, max_h_mm=8.5))
+                except Exception:
+                    inner.append(Paragraph("✓ firmado", ss["DSign"]))
+            else:
+                inner.append(Paragraph("✓ firmado", ss["DSign"]))
+            ident = _esc(f.nombre or "")
+            if f.dni:
+                ident += f"<br/>DNI {_esc(f.dni)}"
+            sello = _fmt_local(f.firmado_en)
+            if sello:
+                ident += f"<br/>{_esc(sello)}"
+            inner.append(Paragraph(ident, ss["DSign"]))
         cells.append(inner)
-    while len(cells) < 3:
-        cells.append([Paragraph("&nbsp;", ss["DSign"])])
-    t = Table([cells[:3]], colWidths=[52.6 * mm, 52.6 * mm, 52.6 * mm], rowHeights=[20 * mm])
-    t.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "MIDDLE"), ("ALIGN", (0, 0), (-1, -1), "CENTER"),
-                           ("BOX", (0, 0), (-1, -1), 0.5, LINE), ("INNERGRID", (0, 0), (-1, -1), 0.5, LINE)]))
+    t = Table([cells], colWidths=[52.6 * mm, 52.6 * mm, 52.6 * mm], rowHeights=[21 * mm])
+    t.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP"), ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+                           ("BOX", (0, 0), (-1, -1), 0.5, LINE), ("INNERGRID", (0, 0), (-1, -1), 0.5, LINE),
+                           ("TOPPADDING", (0, 0), (-1, -1), 3), ("BOTTOMPADDING", (0, 0), (-1, -1), 2)]))
     return t
 
 
@@ -138,7 +173,7 @@ def render_pdf(record: DecaRecord, deca_qr_url: str | None = None) -> bytes:
     titulo, subtitulo = _TITULOS[tipo]
     ss = _styles()
     buf = io.BytesIO()
-    doc = SimpleDocTemplate(buf, pagesize=A4, topMargin=11 * mm, bottomMargin=9 * mm,
+    doc = SimpleDocTemplate(buf, pagesize=A4, topMargin=10 * mm, bottomMargin=8 * mm,
                             leftMargin=16 * mm, rightMargin=16 * mm, title=f"{titulo} {record.uuid}")
     story = []
     W = 158 * mm
@@ -235,7 +270,7 @@ def render_pdf(record: DecaRecord, deca_qr_url: str | None = None) -> bytes:
         story.append(Spacer(1, 4))
 
     # ── Pie: identidad, sello e integridad ──
-    creado = record.creado_en.isoformat(timespec="seconds") if record.creado_en else "—"
+    creado = _fmt_local(record.creado_en) if record.creado_en else "—"
     integridad = hashlib.sha256(d.model_dump_json().encode("utf-8")).hexdigest()[:16]
     nota_firma = ("<b>Firma electrónica simple (no cualificada)</b> — imagen del trazo + sello de tiempo. "
                   f"Integridad SHA-256: {integridad}.<br/>" if d.firmas else "")
