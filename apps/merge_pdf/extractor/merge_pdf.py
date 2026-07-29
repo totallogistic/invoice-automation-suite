@@ -1,12 +1,4 @@
 #!/usr/bin/env python3
-# __version__ = "1.0.0"
-# __changelog__ =
-#   1.0.0  Version inicial. Consolida PDFs en uno solo segun reglas de orden
-#          (cadena -> posicion). Reglas por defecto en default_rules.json,
-#          override puntual via rules.json enviado desde la web UI. Los ficheros
-#          sin match van al final ordenados alfabeticamente. Match por substring
-#          o regex, case-insensitive configurable. Entrega: merged.pdf (descarga
-#          directa + email).
 """
 merge_pdf — Consolida varios PDFs en uno solo segun reglas de orden.
 
@@ -32,6 +24,16 @@ Uso (contrato del unified_processor, igual que caratula_dhl):
 Salida:
     <output_dir>/merged.pdf          PDF consolidado
     <output_dir>/orden.txt           orden aplicado (para trazabilidad / email)
+"""
+
+SCRIPT_VERSION = "1.0.0"
+SCRIPT_CHANGELOG = """
+## 1.0.0
+Versión inicial. Consolida varios PDFs en uno solo (merged.pdf) según reglas de
+orden (cadena → posición). Reglas por defecto en default_rules.json; override
+puntual vía rules.json enviado desde la web UI. Los ficheros sin match van al
+final, ordenados alfabéticamente. Match por substring o regex, case-insensitive
+configurable. Entrega: descarga directa del PDF + email.
 """
 
 import sys
@@ -63,6 +65,13 @@ TARGET_MAX_MB = 18
 # Marca de cliente "portal": si algun PDF incluido casa este patron, el flujo es
 # portal (no se adjunta a email; el usuario lo sube manualmente al portal del cliente).
 PORTAL_FILENAME_REGEX = r"Factura_LR"
+# Exclusiones condicionales A NIVEL DE LOTE: si en el lote hay AL MENOS UN fichero
+# que casa `trigger`, se descartan TODOS los que casan `victim` (aunque hubieran
+# casado una regla). Se aplica DESPUES del descarte normal por reglas.
+#   Ejemplo: (DUA-IMPORT-, LEV-) => si hay algun DUA-IMPORT, fuera todos los LEV.
+BATCH_EXCLUSIONS = [
+    (r"DUA-IMPORT-", r"LEV-"),
+]
 # Para el nombre del PDF final de cara al cliente:
 #   - identificador de factura: todo lo que va tras "Factura_" (LR26539, ALI25549...)
 #   - sufijo opcional: fichero NNNN_NNN (4 digitos _ 3 digitos)
@@ -143,12 +152,14 @@ def assign_order(filename: str, rules, match_mode, case_sensitive):
 
 def build_sequence(pdf_files, rules, match_mode, case_sensitive):
     """Ordena los PDFs segun las reglas. Los que NO casan ninguna regla se
-    DESCARTAN del merge (comportamiento global).
+    DESCARTAN del merge (comportamiento global). Ademas aplica exclusiones
+    condicionales a nivel de lote (BATCH_EXCLUSIONS).
 
-    Returns: (sequence, discarded)
-      sequence  : lista de (Path, order) de los ficheros que SI se consolidan,
-                  ya ordenada (order asc, desempate alfabetico).
-      discarded : lista de Path descartados (alfabetica) para el reporte.
+    Returns: (sequence, discarded, excluded_conflict)
+      sequence          : lista de (Path, order) que SI se consolidan, ordenada.
+      discarded         : Paths que no casaron ninguna regla (alfabetica).
+      excluded_conflict : Paths que casaron regla pero se excluyeron por conflicto
+                          de lote (p.ej. LEV- cuando hay DUA-IMPORT-), alfabetica.
     """
     matched, discarded = [], []
     for p in pdf_files:
@@ -158,11 +169,26 @@ def build_sequence(pdf_files, rules, match_mode, case_sensitive):
         else:
             matched.append((p, order))
 
+    # Exclusiones condicionales a nivel de lote (sobre los que SI casaron)
+    excluded_conflict = []
+    matched_names = [p.name for p, _ in matched]
+    for trigger, victim in BATCH_EXCLUSIONS:
+        hay_trigger = any(re.search(trigger, _nfc(n), re.IGNORECASE) for n in matched_names)
+        if hay_trigger:
+            keep = []
+            for p, o in matched:
+                if re.search(victim, _nfc(p.name), re.IGNORECASE):
+                    excluded_conflict.append(p)
+                else:
+                    keep.append((p, o))
+            matched = keep
+
     matched.sort(key=lambda t: (t[1], t[0].name.lower()))
     discarded.sort(key=lambda p: p.name.lower())
+    excluded_conflict.sort(key=lambda p: p.name.lower())
 
     sequence = [(p, o) for (p, o) in matched]
-    return sequence, discarded
+    return sequence, discarded, excluded_conflict
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -183,7 +209,7 @@ def merge(sequence, output_path: Path):
 
 
 def write_order_report(sequence, pages_per_file, discarded, origin, report_path: Path,
-                       final_mb=None, compress_note=None):
+                       final_mb=None, compress_note=None, excluded_conflict=None):
     lines = []
     lines.append(f"Reglas aplicadas desde: {origin}")
     if final_mb is not None:
@@ -197,6 +223,13 @@ def write_order_report(sequence, pages_per_file, discarded, origin, report_path:
     for i, (p, order) in enumerate(sequence, 1):
         npages = pages_map.get(p.name, "?")
         lines.append(f"  {i:>2}. {p.name}  ·  {npages} pag.  ·  regla #{order}")
+    if excluded_conflict:
+        lines.append("")
+        lines.append(f"Excluidos por conflicto de lote (p.ej. LEV- con DUA-IMPORT- presente): "
+                     f"{len(excluded_conflict)}")
+        lines.append("")
+        for p in excluded_conflict:
+            lines.append(f"   !  {p.name}")
     if discarded:
         lines.append("")
         lines.append(f"Descartados (sin coincidencia, NO incluidos): {len(discarded)}")
@@ -376,7 +409,8 @@ Ejemplos:
 
     rules, match_mode, case_sensitive, origin = load_rules(rules_override)
 
-    sequence, discarded = build_sequence(pdf_files, rules, match_mode, case_sensitive)
+    sequence, discarded, excluded_conflict = build_sequence(
+        pdf_files, rules, match_mode, case_sensitive)
 
     if not sequence:
         print("ERROR: ningun PDF coincide con las reglas; no hay nada que consolidar. "
@@ -402,7 +436,8 @@ Ejemplos:
 
     report = output_dir / "orden.txt"
     write_order_report(sequence, pages_per_file, discarded, origin, report,
-                       final_mb=final_mb, compress_note=compress_note)
+                       final_mb=final_mb, compress_note=compress_note,
+                       excluded_conflict=excluded_conflict)
 
     # ── Decision de entrega (la ejecuta el processor leyendo _DELIVERY.json) ──
     #   portal   : hay Factura_LR* -> no adjuntar; notificar para subir al portal
@@ -427,13 +462,15 @@ Ejemplos:
         "download_name": download_name,
         "n_included": len(sequence),
         "n_discarded": len(discarded),
+        "n_excluded_conflict": len(excluded_conflict),
         "compress_note": compress_note,
     }
     (output_dir / "_DELIVERY.json").write_text(
         json.dumps(delivery, ensure_ascii=False, indent=2), encoding="utf-8")
 
     total_pages = sum(n for _, n in pages_per_file)
-    print(f"OK -> {out_pdf}  ({len(sequence)} PDFs incluidos / {len(discarded)} descartados, "
+    print(f"OK -> {out_pdf}  ({len(sequence)} PDFs incluidos / {len(discarded)} descartados"
+          f"{f' / {len(excluded_conflict)} excluidos por conflicto' if excluded_conflict else ''}, "
           f"{total_pages} paginas, {final_mb:.1f} MB)")
     print(f"Reglas: {origin} · match_mode={match_mode} · case_sensitive={case_sensitive}")
     print(f"Compresion: {compress_note}")
@@ -441,6 +478,8 @@ Ejemplos:
     print(f"Nombre descarga/cliente: {download_name}")
     for i, (p, order) in enumerate(sequence, 1):
         print(f"  {i:>2}. [#{order}] {p.name}")
+    for p in excluded_conflict:
+        print(f"   !  [excluido-conflicto] {p.name}")
     for p in discarded:
         print(f"   x  [descartado] {p.name}")
 

@@ -29,28 +29,6 @@ USO:
 """
 
 from __future__ import annotations
-SCRIPT_VERSION = "2026-05-27.v1"
-SCRIPT_CHANGELOG = """
-## 2026-05-27.v1
-
-### Lógica general
-Convierte el Excel exportado de Visual (8 columnas DUA) en el CSV plano AEAT.
-Replica byte a byte la salida del modelo Excel del cliente.
-
-### Entradas
-- `.xlsx`, `.ods` o `.csv` con 8 columnas (País destino, Cond. entrega,
-  Naturaleza, Partida estadística, País origen, Masa neta, Precio, Valor).
-
-### Transformaciones
-- Constantes fijas: `11`, `1`, `1131`, NIF declarante.
-- Partida estadística truncada a 8 caracteres (CASILLA 33).
-- País origen: `MA` si extracomunitario, `PL` en otro caso (régimen 2 vs 4).
-- Masa neta convertida de gramos a kg (`F/1000`).
-- Valor estadístico: `G` si distinto de 0, si no `H`.
-
-### Salida
-CSV separado por `;`, CRLF, UTF-8 sin BOM, sin terminador final.
-"""
 
 import argparse
 import sys
@@ -67,10 +45,62 @@ DATO_FIJO_2 = "11"
 DATO_FIJO_5 = "1"
 DATO_FIJO_6 = "1131"
 
+# Umbral (kg) para detectar automáticamente la unidad de la masa neta:
+# - Si la mediana de la columna F supera este umbral, asumimos que viene en
+#   GRAMOS y hay que dividir entre 1000 (formato antiguo del programa Visual).
+# - Si es menor, asumimos que ya viene en KILOS (formato actual del CSV
+#   exportado directamente por Visual).
+UMBRAL_UNIDAD_MASA = 100_000
+
 
 # ---------------------------------------------------------------------------
 # Lectura del archivo VEA (xlsx / ods / csv)
 # ---------------------------------------------------------------------------
+def _cargar_csv_robusto(ruta: Path) -> pd.DataFrame:
+    """
+    Autodetecta encoding y separador probando combinaciones y quedándose
+    con la que produzca más columnas (idealmente >= 8).
+    """
+    encodings = ["utf-8-sig", "utf-8", "cp1252", "latin-1"]
+    separadores = [";", "\t", ",", "|"]
+
+    mejor: tuple[pd.DataFrame, str, str] | None = None  # (df, enc, sep)
+
+    for enc in encodings:
+        for sep in separadores:
+            try:
+                df = pd.read_csv(
+                    ruta, sep=sep, header=None, dtype=object,
+                    encoding=enc, engine="python",
+                    on_bad_lines="skip",
+                )
+            except (UnicodeDecodeError, pd.errors.ParserError, pd.errors.EmptyDataError):
+                continue
+            except Exception:
+                continue
+
+            n_cols = df.shape[1]
+            if n_cols < 2:
+                continue
+            # Preferimos la combinación con más columnas; empate → primera
+            if mejor is None or n_cols > mejor[0].shape[1]:
+                mejor = (df, enc, sep)
+                if n_cols >= 8:
+                    # Ya tenemos lo esperado, no seguimos probando
+                    return df
+
+    if mejor is None:
+        raise ValueError(
+            f"No he podido leer el CSV con ningún encoding/separador conocido. "
+            f"Prueba: {encodings} × {separadores}"
+        )
+
+    df, enc_usado, sep_usado = mejor
+    print(f"  [csv] leído con encoding={enc_usado!r} sep={sep_usado!r} "
+          f"cols={df.shape[1]}", file=sys.stderr)
+    return df
+
+
 def cargar_vea(ruta: Path) -> pd.DataFrame:
     """
     Carga el archivo exportado del programa Visual.
@@ -82,12 +112,7 @@ def cargar_vea(ruta: Path) -> pd.DataFrame:
     ext = ruta.suffix.lower()
 
     if ext == ".csv":
-        try:
-            df = pd.read_csv(ruta, sep=";", header=None, dtype=object, encoding="utf-8")
-            if df.shape[1] < 8:
-                df = pd.read_csv(ruta, sep=",", header=None, dtype=object, encoding="utf-8")
-        except UnicodeDecodeError:
-            df = pd.read_csv(ruta, sep=";", header=None, dtype=object, encoding="latin-1")
+        df = _cargar_csv_robusto(ruta)
     elif ext == ".xlsx":
         df = pd.read_excel(ruta, header=None, dtype=object, engine="openpyxl")
     elif ext == ".ods":
@@ -96,11 +121,14 @@ def cargar_vea(ruta: Path) -> pd.DataFrame:
         raise ValueError(f"Extensión no soportada: {ext}. Usa .xlsx, .ods o .csv")
 
     if df.shape[1] < 8:
+        # Muestra las primeras filas para facilitar el diagnóstico
+        preview = df.head(3).to_string(index=False, header=False)
         raise ValueError(
             f"El archivo debe tener al menos 8 columnas (tiene {df.shape[1]}). "
             f"Columnas esperadas: País destino, Condición entrega, Naturaleza "
             f"transacción, Partida estadística, País origen, Masa neta, Precio "
-            f"en divisas, Valor estadístico."
+            f"en divisas, Valor estadístico.\n"
+            f"Primeras filas leídas:\n{preview}"
         )
 
     # Quedarse con las 8 primeras columnas y re-nombrarlas A..H por posición
@@ -165,6 +193,38 @@ def fmt_num(valor) -> str:
     return s.replace(".", ",")
 
 
+def detectar_unidad_masa(df: pd.DataFrame, override: str = "auto") -> str:
+    """
+    Determina si la columna F (masa neta) viene en 'kg' o 'gramos'.
+
+    override='kg' o 'gramos' fuerza el resultado. Si es 'auto' (default),
+    se decide por la mediana de la columna: >UMBRAL → gramos, si no → kg.
+    """
+    if override in ("kg", "gramos"):
+        print(f"  [masa] unidad forzada por CLI: {override}", file=sys.stderr)
+        return override
+
+    valores = []
+    for v in df["F"]:
+        f = _safe_float(v)
+        if f > 0:
+            valores.append(f)
+    if not valores:
+        print("  [masa] no hay valores válidos; asumo 'kg' por defecto",
+              file=sys.stderr)
+        return "kg"
+
+    valores.sort()
+    mediana = valores[len(valores) // 2]
+    if mediana > UMBRAL_UNIDAD_MASA:
+        unidad = "gramos"
+    else:
+        unidad = "kg"
+    print(f"  [masa] mediana={mediana:.1f} → detectada unidad '{unidad}' "
+          f"(umbral {UMBRAL_UNIDAD_MASA:,})", file=sys.stderr)
+    return unidad
+
+
 def _safe_float(valor, default: float = 0.0) -> float:
     if valor is None:
         return default
@@ -186,7 +246,7 @@ def _safe_float(valor, default: float = 0.0) -> float:
 # ---------------------------------------------------------------------------
 # Lógica de transformación por fila (replica las fórmulas del Excel modelo)
 # ---------------------------------------------------------------------------
-def construir_linea(fila: pd.Series, nif: str) -> str:
+def construir_linea(fila: pd.Series, nif: str, unidad_masa: str = "gramos") -> str:
     pais_destino = str(fila["A"]).strip() if pd.notna(fila["A"]) else ""
     entrega = str(fila["B"]).strip() if pd.notna(fila["B"]) else ""
     transaccion = str(fila["C"]).strip()
@@ -218,9 +278,12 @@ def construir_linea(fila: pd.Series, nif: str) -> str:
         origen = "PL"
         regimen = "4"
 
-    # CASILLA 38 = F / 1000  (masa neta de gramos a kilos)
-    masa_gramos = _safe_float(fila["F"])
-    casilla_38 = fmt_num(masa_gramos / 1000.0)
+    # CASILLA 38 = masa en kilos.
+    # - Si el VEA viene en gramos (formato antiguo del Visual), dividimos /1000
+    # - Si ya viene en kg (formato actual del Visual), lo dejamos tal cual
+    masa_raw = _safe_float(fila["F"])
+    masa_kg = masa_raw / 1000.0 if unidad_masa == "gramos" else masa_raw
+    casilla_38 = fmt_num(masa_kg)
 
     # CASILLA 42 = IF(G<>0, G, H)  (si no hay precio en divisas, usar valor)
     precio_divisas = _safe_float(fila["G"])
@@ -253,9 +316,11 @@ def construir_linea(fila: pd.Series, nif: str) -> str:
 # ---------------------------------------------------------------------------
 # Punto de entrada
 # ---------------------------------------------------------------------------
-def generar(ruta_entrada: Path, ruta_salida: Path, nif: str) -> int:
+def generar(ruta_entrada: Path, ruta_salida: Path, nif: str,
+            unidad_masa_override: str = "auto") -> int:
     df = cargar_vea(ruta_entrada)
-    lineas = [construir_linea(fila, nif) for _, fila in df.iterrows()]
+    unidad = detectar_unidad_masa(df, override=unidad_masa_override)
+    lineas = [construir_linea(fila, nif, unidad) for _, fila in df.iterrows()]
 
     # Formato AEAT: CRLF entre líneas, sin terminador final, UTF-8 sin BOM
     contenido = "\r\n".join(lineas)
@@ -273,6 +338,9 @@ def main() -> None:
                         help="Ruta del CSV de salida (por defecto: intrastat.csv junto al de entrada)")
     parser.add_argument("-n", "--nif", default=NIF_DEFECTO,
                         help=f"NIF del declarante (por defecto: {NIF_DEFECTO})")
+    parser.add_argument("--masa-unidad", choices=["auto", "kg", "gramos"], default="auto",
+                        help="Unidad de la columna 'Masa neta' en el archivo de entrada. "
+                             "'auto' (default) decide por la mediana: >100.000→gramos, si no→kg.")
     args = parser.parse_args()
 
     if not args.entrada.exists():
@@ -282,7 +350,8 @@ def main() -> None:
     salida = args.output or args.entrada.with_name("intrastat.csv")
 
     try:
-        n = generar(args.entrada, salida, args.nif)
+        n = generar(args.entrada, salida, args.nif,
+                    unidad_masa_override=args.masa_unidad)
     except Exception as e:
         print(f"ERROR: {e}", file=sys.stderr)
         sys.exit(2)

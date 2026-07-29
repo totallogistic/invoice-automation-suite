@@ -1,0 +1,14 @@
+[Unit]
+Description=merge_pdf Inbox Watcher (Samba -> batch para unified_processor)
+After=network.target
+
+[Service]
+Type=simple
+User={{USER}}
+ExecStart={{PYTHON}} {{SCRIPT}} --inbox {{INBOX}} --quiet {{QUIET}} --poll {{POLL}}
+Restart=on-failure
+RestartSec=5
+# El watcher solo mueve ficheros y crea carpetas; no necesita mas privilegios.
+
+[Install]
+WantedBy=multi-user.target
