@@ -29,6 +29,13 @@ USO:
 """
 
 from __future__ import annotations
+SCRIPT_VERSION = "2026-07-11.v2"
+SCRIPT_CHANGELOG = """
+## 2026-07-11.v2
+- Autodetección robusta de encoding (utf-8-sig / utf-8 / cp1252 / latin-1) y separador (; / TAB / , / |) para CSV.
+- Autodetección de la unidad de la masa neta (kg vs gramos) por mediana; parámetro CLI --masa-unidad {auto,kg,gramos} para forzar.
+- Mensaje de error muestra las primeras filas leídas cuando el archivo no tiene 8 columnas.
+"""
 
 import argparse
 import sys

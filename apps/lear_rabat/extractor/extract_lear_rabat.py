@@ -58,7 +58,9 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Dict, List, Optional
 
-SCRIPT_VERSION = "2026-03-07.v31"
+# NOTA: SCRIPT_VERSION se define una sola vez arriba (cabecera del módulo).
+# El duplicado que había aquí ("2026-03-07.v31") sobrescribía en runtime la
+# versión real y contradecía a la API; eliminado para tener una única fuente.
 
 try:
     import pdfplumber

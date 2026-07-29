@@ -1,5 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "version": "1.0.0",
   "title": "Liquidación de Gastos de Viaje",
   "description": "Registro de gastos de desplazamiento por empleado",
   "category": "📋 RRHH",

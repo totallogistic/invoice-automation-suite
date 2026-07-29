@@ -59,10 +59,21 @@ EXCEL_STORAGE_DIR = Path(__file__).parent / "excel_storage"
 EXCEL_STORAGE_DIR.mkdir(exist_ok=True)
 
 # Email configuration (read from env)
-SMTP_HOST = os.getenv("SMTP_HOST", "")
-SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
-SMTP_USER = os.getenv("SMTP_USER", "")
-SMTP_PASS = os.getenv("SMTP_PASS", "")
+def _resolve_smtp(mode=None):
+    """Transporte SMTP segun MODO DE ENVIO: postfix (relay local, sin auth) |
+    custom (SMTP externo autenticado). None -> MAIL_SEND_MODE (def postfix).
+    Retrocompat: cae a SMTP_HOST/PORT/USER/PASS planos."""
+    mode = (mode or os.getenv("MAIL_SEND_MODE", "postfix") or "postfix").lower()
+    if mode == "custom":
+        return (os.getenv("SMTP_CUSTOM_HOST") or os.getenv("SMTP_HOST", ""),
+                int(os.getenv("SMTP_CUSTOM_PORT") or os.getenv("SMTP_PORT") or "587"),
+                os.getenv("SMTP_CUSTOM_USER") or os.getenv("SMTP_USER", ""),
+                os.getenv("SMTP_CUSTOM_PASS") or os.getenv("SMTP_PASS", ""))
+    return (os.getenv("SMTP_POSTFIX_HOST") or os.getenv("SMTP_HOST", "") or "172.18.0.1",
+            int(os.getenv("SMTP_POSTFIX_PORT") or os.getenv("SMTP_PORT") or "25"),
+            os.getenv("SMTP_POSTFIX_USER", ""), os.getenv("SMTP_POSTFIX_PASS", ""))
+
+SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS = _resolve_smtp()
 MAIL_FROM = os.getenv("MAIL_FROM", "")
 
 # Ensure directories exist
@@ -628,6 +639,88 @@ async def health():
         "status": "ok",
         "schemas_available": len(list(SCHEMAS_DIR.glob("*.json"))) if SCHEMAS_DIR.exists() else 0
     }
+
+
+# ─────────────────────────────────────────────────────────────────────────
+# Versión / validación / estado ("up") por formulario
+# ─────────────────────────────────────────────────────────────────────────
+def _form_meta(schema_name: str) -> dict:
+    """Metadatos + estado de un formulario: version, description y si está 'up'.
+
+    up = el schema existe, es un JSON Schema bien formado y su template existe.
+    Análogo a /api/<tool>/version de los procesos, pero la versión y la
+    descripción viven en el propio schema JSON (campos 'version' y 'description').
+    """
+    meta = {
+        "name": schema_name,
+        "title": schema_name,
+        "version": "unknown",
+        "description": "",
+        "category": "",
+        "template": None,
+        "schema_ok": False,
+        "template_ok": False,
+        "up": False,
+        "errors": [],
+    }
+    schema_file = SCHEMAS_DIR / f"{schema_name}.json"
+    if not schema_file.exists():
+        meta["errors"].append("schema no encontrado")
+        return meta
+    try:
+        schema = json.loads(schema_file.read_text(encoding="utf-8"))
+    except Exception as e:
+        meta["errors"].append(f"JSON inválido: {e}")
+        return meta
+
+    meta["title"] = schema.get("title", schema_name)
+    meta["version"] = schema.get("version", "1.0.0")
+    meta["description"] = schema.get("description", "")
+    meta["category"] = schema.get("category", "")
+
+    # ¿Es un JSON Schema bien formado?
+    try:
+        Draft202012Validator.check_schema(schema)
+        meta["schema_ok"] = True
+    except Exception as e:
+        meta["errors"].append(f"schema inválido: {e}")
+
+    # ¿Existe el template que renderiza el form?
+    template_name = schema.get("custom_template", "form.html")
+    meta["template"] = template_name
+    meta["template_ok"] = (TEMPLATES_DIR / template_name).exists()
+    if not meta["template_ok"]:
+        meta["errors"].append(f"template no encontrado: {template_name}")
+
+    meta["up"] = meta["schema_ok"] and meta["template_ok"]
+    return meta
+
+
+@app.get("/api/form/{schema_name}/version")
+async def form_version(schema_name: str):
+    """Versión + descripción + estado 'up' de un formulario concreto."""
+    meta = _form_meta(schema_name)
+    if not meta["schema_ok"] and meta["version"] == "unknown":
+        raise HTTPException(404, f"Formulario no encontrado o inválido: {schema_name}")
+    return JSONResponse(meta)
+
+
+@app.get("/api/forms/status")
+async def forms_status():
+    """Agregador: versión, descripción y estado 'up' de todos los formularios."""
+    forms = []
+    if SCHEMAS_DIR.exists():
+        for schema_file in sorted(SCHEMAS_DIR.glob("*.json")):
+            forms.append(_form_meta(schema_file.stem))
+    up = sum(1 for f in forms if f["up"])
+    return JSONResponse({
+        "service": "form_generator",
+        "status": "ok",
+        "total": len(forms),
+        "up": up,
+        "down": len(forms) - up,
+        "forms": forms,
+    })
 
 # ========================================
 # MODIFICAR ENDPOINT EXISTENTE: /api/save-estanterias-completo
@@ -2320,6 +2413,76 @@ async def save_hoja_control_expedientes(request: Request):
         "subject":    subject,
         "email_sent": email_sent,
     })
+
+# ── DeCA · operativa (patrón hoja-control) ───────────────────────────────────
+import base64
+from deca.models import DecaInput
+from deca.pdf import qr_png_bytes
+from deca.service import DecaService
+
+_deca_svc = DecaService()
+
+@app.post("/api/save-deca")
+async def save_deca(request: Request):
+    """Genera el DeCA (PDF nativo + QR), lo sube al bucket y devuelve URL + QR."""
+    payload = await request.json()
+    try:
+        data = DecaInput(**payload)
+    except Exception as e:
+        raise HTTPException(400, f"Datos del DeCA inválidos: {e}")
+    try:
+        rec = _deca_svc.create(data)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    qr_b64 = base64.b64encode(qr_png_bytes(rec.url_publica)).decode()
+    return JSONResponse({
+        "success": True, "uuid": rec.uuid, "url": rec.url_publica,
+        "qr_data_uri": f"data:image/png;base64,{qr_b64}",
+        "url_activa_hasta": rec.url_activa_hasta.isoformat() if rec.url_activa_hasta else None,
+        "message": "DeCA generado y subido. Envía el QR o el enlace al conductor.",
+    })
+
+# ── Dispatcher config-driven + carta de porte / CMR (emisión múltiple) ───────
+import form_actions
+form_actions.configure(output_dir=OUTPUT_DIR, excel_dir=EXCEL_STORAGE_DIR,
+                       get_form_output_dir=get_form_output_dir, load_schema=load_schema)
+
+@form_actions.register_handler("deca")
+def _deca_pipeline_handler(ctx):
+    payload = ctx["payload"]
+    data = DecaInput(**payload)
+    tipos = payload.get("documentos")            # lista → emisión múltiple (DeCA + carta de porte + CMR)
+    if tipos:
+        recs = _deca_svc.create_many(data, tipos)
+        docs = []
+        for r in recs:
+            t = r.datos.tipo_documento
+            if r.url_publica:  # DeCA: publico (bucket) -> QR + enlace (va al camionero)
+                docs.append({"tipo": t, "uuid": r.uuid, "url": r.url_publica,
+                             "qr_data_uri": "data:image/png;base64," + base64.b64encode(qr_png_bytes(r.url_publica)).decode()})
+            else:  # carta de porte: interna -> descarga directa del PDF, sin QR ni bucket
+                docs.append({"tipo": t, "uuid": r.uuid, "interno": True,
+                             "pdf_base64": base64.b64encode(r.pdf_bytes).decode()})
+        return {"documentos": docs, "message": f"{len(docs)} documento(s) generado(s)."}
+    rec = _deca_svc.create(data)                 # un solo documento
+    qr_b64 = base64.b64encode(qr_png_bytes(rec.url_publica)).decode()
+    return {"uuid": rec.uuid, "url": rec.url_publica,
+            "qr_data_uri": f"data:image/png;base64,{qr_b64}",
+            "url_activa_hasta": rec.url_activa_hasta.isoformat() if rec.url_activa_hasta else None,
+            "message": "DeCA generado y subido."}
+
+@app.post("/api/submit/{schema_name}")
+async def submit_pipeline(schema_name: str, request: Request):
+    """Ejecuta el pipeline de acciones declarado en tools.yaml (sección forms)."""
+    payload = await request.json()
+    try:
+        return JSONResponse(form_actions.run_pipeline(schema_name, payload, FORMS_CONFIG))
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        raise HTTPException(500, f"Error en pipeline '{schema_name}': {type(e).__name__}: {e}")
+
 
 if __name__ == "__main__":
     print("=" * 60)
