@@ -87,7 +87,7 @@ async def generate_bancos(history: list[dict] = None, filename: str = None) -> P
 
     today = datetime.now()
     if not filename:
-        filename = f"bancos_{today.strftime('%Y%m%d')}.xlsx"
+        filename = f"situacion_{today.strftime('%Y%m%d')}.xlsx"
     output_path = BASE_DIR / "data" / filename
 
     # Índice IBAN → saldo del sync
@@ -141,7 +141,7 @@ async def generate_bancos(history: list[dict] = None, filename: str = None) -> P
         _header_cell(ws.cell(row=1, column=c), h)
     ws.row_dimensions[1].height = 18
 
-    cuentas_con_api = [c for c in cuentas_cfg if _iban_key(c.get("iban")) in iban_index]
+    cuentas_con_api = [c for c in cuentas_cfg if _iban_key(c.get("iban")) in iban_index and not c.get("no_traer")]
     total_valid = 0.0
     flat_row = 2
 

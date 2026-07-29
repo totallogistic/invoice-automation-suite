@@ -47,6 +47,17 @@ async def lifespan(app: FastAPI):
         id="daily_sync",
         replace_existing=True,
     )
+    # Euribor: actualiza cada lunes a las 12:00 desde API oficial del BCE
+    from scheduler import update_euribor
+    scheduler.add_job(
+        update_euribor,
+        trigger="cron",
+        day_of_week="mon",
+        hour=12,
+        minute=0,
+        id="weekly_euribor",
+        replace_existing=True,
+    )
     scheduler.start()
     logger.info("Scheduler started — daily sync at %s:00", os.environ.get("SYNC_HOUR", "7"))
     yield
@@ -155,15 +166,20 @@ async def manual_sync():
     result = await sync_all_banks()
     return JSONResponse(result)
 
-
+@app.post("/update-euribor")
+async def manual_euribor_update():
+    from scheduler import update_euribor
+    try:
+        await update_euribor()
+        return JSONResponse({"status": "ok", "message": "Euribor actualizado en bancos_config.yaml"})
+    except Exception as e:
+        raise HTTPException(500, str(e))
 # ------------------------------------------------------------------
 # Export Situación Financiera
 # ------------------------------------------------------------------
-
 @app.get("/export/situacion")
 async def export_situacion():
     from bancos_export import generate_bancos
-    from db import get_history_per_bank
     try:
         path = await generate_bancos(history=None)
     except FileNotFoundError as e:
@@ -174,7 +190,7 @@ async def export_situacion():
     return FileResponse(
         path=str(path),
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        filename=f"situacion_financiera_{today}.xlsx",
+        filename=f"situacion_{today}.xlsx",
     )
 
 

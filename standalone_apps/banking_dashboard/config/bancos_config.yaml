@@ -1,337 +1,274 @@
-# ============================================================
-# BANCOS CONFIG — Mapeo completo de todas las cuentas
-# ============================================================
-# Para cada cuenta:
-#   iban:         IBAN completo (tal como devuelve la API)
-#   titular:      empresa propietaria de la cuenta
-#   banco:        entidad bancaria
-#   tipo:         POLIZA / CTA_CTE / CTA_CTE_USD / LINEA / ANTIC
-#   cta_auxiliar: número de cuenta contable (opcional)
-#   no_traer:     true = excluir del total y del análisis
-#   Para POLIZAs/LINEAs: euribor_tipo, diferencial, nd, importe
-#
-# Orden de titulares (se respeta en el Excel generado):
-#   1. TOTAL LOGISTIC SERVICES SL
-#   2. TOTAL ENGINEERING S.L.
-#   3. ASOCIACION MELILLA INTEGRA
-#   4. COMERCIAL ANDALUZA DE SALDOS S.L.
-#   5. CARMELO MARTINEZ RODRIGUEZ S.L.
-# ============================================================
-
-euribor:
-  "Euribor 3":  0.02079
-  "Euribor 6":  0.02475
-  "Euribor 12": 0.02870
-
-orden_titulares:
-  - "TOTAL LOGISTIC SERVICES SL"
-  - "TOTAL ENGINEERING S.L."
-  - "ASOCIACION MELILLA INTEGRA"
-  - "COMERCIAL ANDALUZA DE SALDOS S.L."
-  - "CARMELO MARTINEZ RODRIGUEZ S.L."
-
 cuentas:
-
-  # ── BBVA ───────────────────────────────────────────────────
-  - iban: "ES2101827674260201645558"
-    titular: "TOTAL ENGINEERING S.L."
-    banco: "BBVA"
-    tipo: CTA_CTE
-    cta_auxiliar: "572.006001"
-    no_traer: false
-
-  - iban: "ES2301824220860208655431"
-    titular: "COMERCIAL ANDALUZA DE SALDOS S.L."
-    banco: "BBVA"
-    tipo: CTA_CTE
-    cta_auxiliar: null
-    no_traer: false
-
-  - iban: "ES5101827674220100001727"
-    titular: "TOTAL LOGISTIC SERVICES SL"
-    banco: "BBVA"
-    tipo: CTA_CTE
-    cta_auxiliar: null
-    no_traer: true   # NO TRAER
-
-  - iban: "ES5201827674260200009968"
-    titular: "CARMELO MARTINEZ RODRIGUEZ S.L."
-    banco: "BBVA"
-    tipo: CTA_CTE
-    cta_auxiliar: null
-    no_traer: false
-
-  - iban: "ES5901824220890101512413"
-    titular: "TOTAL LOGISTIC SERVICES SL"
-    banco: "BBVA"
-    tipo: POLIZA
-    cta_auxiliar: "520.1.000021"
-    euribor_tipo: "Euribor 3"
-    diferencial: 0.0095
-    nd: 0.0015
-    importe: 800000
-    no_traer: false
-
-  - iban: "ES7701827674290200015288"
-    titular: "TOTAL LOGISTIC SERVICES SL"
-    banco: "BBVA"
-    tipo: CTA_CTE
-    cta_auxiliar: "572.00005"
-    no_traer: false
-
-  - iban: "ES8601827674260201667280"
-    titular: "CARMELO MARTINEZ RODRIGUEZ S.L."
-    banco: "BBVA"
-    tipo: CTA_CTE
-    cta_auxiliar: null
-    no_traer: false
-
-  # ── BANCA MARCH ────────────────────────────────────────────
-  - iban: "ES2200610253156357503011"
-    titular: "TOTAL LOGISTIC SERVICES SL"
-    banco: "Banca March"
-    tipo: CTA_CTE_USD
-    cta_auxiliar: "573.000002"
-    no_traer: false
-
-  - iban: "ES4500610338380045840110"
-    titular: "TOTAL LOGISTIC SERVICES SL"
-    banco: "Banca March"
-    tipo: CTA_CTE
-    cta_auxiliar: "572.00008"
-    no_traer: false
-
-  # ── BANCO SANTANDER ────────────────────────────────────────
-  - iban: "ES6500750595181570023126"
-    titular: "TOTAL LOGISTIC SERVICES SL"
-    banco: "Banco Santander"
-    tipo: CTA_CTE
-    cta_auxiliar: null
-    no_traer: true   # NO TRAER
-
-  - iban: "ES7500490132592811605056"
-    titular: "TOTAL LOGISTIC SERVICES SL"
-    banco: "Banco Santander"
-    tipo: CTA_CTE
-    cta_auxiliar: "572.00003"
-    no_traer: false
-
-  - iban: "ES8100304312160200012278"
-    titular: "TOTAL LOGISTIC SERVICES SL"
-    banco: "Banco Santander"
-    tipo: CTA_CTE_USD
-    cta_auxiliar: "573.000001"
-    no_traer: false
-
-  - iban: "ES0900492548812214052636"
-    titular: "TOTAL ENGINEERING S.L."
-    banco: "Banco Santander"
-    tipo: CTA_CTE
-    cta_auxiliar: "572.010000"
-    no_traer: false
-    dispuesto_manual: 3237.11   # no devuelto por API actualmente
-
-  - iban: "ES8200496770802316119011"
-    titular: "ASOCIACION MELILLA INTEGRA"
-    banco: "Banco Santander"
-    tipo: CTA_CTE
-    cta_auxiliar: "572.010006"
-    no_traer: false
-    dispuesto_manual: 174337.0  # no devuelto por API actualmente
-
-  # ── BANKINTER ──────────────────────────────────────────────
-  - iban: "ES0201287727610500010384"
-    titular: "TOTAL LOGISTIC SERVICES SL"
-    banco: "Bankinter"
-    tipo: CTA_CTE
-    cta_auxiliar: null
-    no_traer: true   # NO TRAER
-
-  - iban: "ES2701287727620500008333"
-    titular: "CARMELO MARTINEZ RODRIGUEZ S.L."
-    banco: "Bankinter"
-    tipo: CTA_CTE
-    cta_auxiliar: "572.006009"
-    no_traer: false
-
-  - iban: "ES4301287727610500003244"
-    titular: "TOTAL ENGINEERING S.L."
-    banco: "Bankinter"
-    tipo: POLIZA
-    cta_auxiliar: "520.006011"
-    euribor_tipo: "Euribor 12"
-    diferencial: 0.0175
-    nd: 0.006
-    importe: 83333.34
-    no_traer: false
-
-  - iban: "ES4501287727620500009852"
-    titular: "TOTAL ENGINEERING S.L."
-    banco: "Bankinter"
-    tipo: POLIZA
-    cta_auxiliar: "520.006010"
-    euribor_tipo: "Euribor 12"
-    diferencial: 0.015
-    nd: 0.004
-    importe: 50000
-    no_traer: false
-
-  - iban: "ES6801287727650500003762"
-    titular: "TOTAL LOGISTIC SERVICES SL"
-    banco: "Bankinter"
-    tipo: POLIZA
-    cta_auxiliar: "520.1.000024"
-    euribor_tipo: "Euribor 12"
-    diferencial: 0.0095
-    nd: 0.0005
-    importe: 150000
-    no_traer: false
-
-  - iban: "ES7801287727680500002271"
-    titular: "TOTAL ENGINEERING S.L."
-    banco: "Bankinter"
-    tipo: CTA_CTE
-    cta_auxiliar: "520.006007"
-    no_traer: false
-
-  - iban: "ES7901287727600500002257"
-    titular: "TOTAL LOGISTIC SERVICES SL"
-    banco: "Bankinter"
-    tipo: POLIZA
-    cta_auxiliar: "520.1.000019"
-    euribor_tipo: "Euribor 12"
-    diferencial: 0.0125
-    nd: 0.0005
-    importe: 300000
-    no_traer: false
-
-  # ── CAIXABANK ──────────────────────────────────────────────
-  - iban: "ES8221008860301300107933"
-    titular: "TOTAL LOGISTIC SERVICES SL"
-    banco: "CaixaBank"
-    tipo: POLIZA
-    cta_auxiliar: "520.1.000023"
-    euribor_tipo: "Euribor 3"
-    diferencial: 0.01
-    nd: 0.0015
-    importe: 400000
-    no_traer: false
-
-  - iban: "ES1421005786620200140445"
-    titular: "ASOCIACION MELILLA INTEGRA"
-    banco: "CaixaBank"
-    tipo: CTA_CTE
-    cta_auxiliar: "572.010005"
-    no_traer: false
-    dispuesto_manual: 0         # sin saldo / no devuelto por API
-
-  # ── CAJA RURAL DEL SUR ─────────────────────────────────────
-  - iban: "ES7631870422025905784426"
-    titular: "TOTAL LOGISTIC SERVICES SL"
-    banco: "Caja Rural del Sur"
-    tipo: POLIZA
-    cta_auxiliar: "572. 10008"
-    euribor_tipo: "Euribor 3"
-    diferencial: 0.007
-    nd: 0.0002
-    importe: 150000
-    no_traer: false
-
-  # ── CAJA RURAL DE GRANADA (no devuelto por API aún) ───────
-  - iban: "ES3730230602436963950206"
-    titular: "TOTAL LOGISTIC SERVICES SL"
-    banco: "Caja Rural de Granada"
-    tipo: POLIZA
-    cta_auxiliar: "520.1.00022"
-    euribor_tipo: "Euribor 12"
-    diferencial: 0.0075
-    nd: 0.0002
-    importe: 300000
-    no_traer: false
-    dispuesto_manual: 0         # actualizar manualmente hasta conectar API
-
-  # ── UNICAJA (API no disponible) ────────────────────────────
-  - iban: "ES3221034002590550008275"
-    titular: "TOTAL LOGISTIC SERVICES SL"
-    banco: "Unicaja"
-    tipo: POLIZA
-    cta_auxiliar: "520.1.00028"
-    euribor_tipo: "Euribor 3"
-    diferencial: 0.008
-    nd: 0.002
-    importe: 100000
-    no_traer: false
-    dispuesto_manual: 0         # actualizar manualmente
-
-  # ── LÍNEAS TOTAL LOGISTIC (sin IBAN de API) ────────────────
-  - iban: null
-    titular: "TOTAL LOGISTIC SERVICES SL"
-    banco: "CAJA RURAL SUR"
-    tipo: LINEA
-    producto: "LINEA FINANCIACION PAGOS"
-    cta_auxiliar: null
-    euribor_tipo: "Euribor 3"
-    diferencial: 0.007
-    importe: 150000
-    no_traer: false
-    dispuesto_manual: 0
-
-  - iban: null
-    titular: "TOTAL LOGISTIC SERVICES SL"
-    banco: "SANTANDER"
-    tipo: LINEA
-    producto: "LINEA ANTICIPO FACTURAS"
-    cta_auxiliar: "520.8.000002"
-    euribor_tipo: "Euribor 3"
-    diferencial: 0.0075
-    importe: 700000
-    no_traer: false
-    dispuesto_manual: 0
-
-  - iban: null
-    titular: "TOTAL LOGISTIC SERVICES SL"
-    banco: "CAIXA"
-    tipo: LINEA
-    producto: "LINEA FINANCIACION PAGOS"
-    cta_auxiliar: "520.1.000026"
-    euribor_tipo: "Euribor 3"
-    diferencial: 0.0095
-    importe: 200000
-    no_traer: false
-    dispuesto_manual: 0
-
-  - iban: null
-    titular: "TOTAL LOGISTIC SERVICES SL"
-    banco: "SANTANDER"
-    tipo: LINEA
-    producto: "LINEA FINANCIACION PAGOS"
-    cta_auxiliar: "520.8.000002"
-    euribor_tipo: "Euribor 6"
-    diferencial: 0.0075
-    importe: 300000
-    no_traer: false
-    dispuesto_manual: 0
-
-  - iban: null
-    titular: "TOTAL LOGISTIC SERVICES SL"
-    banco: "CAJA RURAL GR"
-    tipo: LINEA
-    producto: "LINEA IMPORTACION 180 DIAS"
-    cta_auxiliar: "520.1.000025"
-    euribor_tipo: "Euribor 3"
-    diferencial: 0.0105
-    importe: 100000
-    no_traer: false
-    dispuesto_manual: 0
-
-  - iban: null
-    titular: "TOTAL LOGISTIC SERVICES SL"
-    banco: "Banca March"
-    tipo: LINEA
-    producto: "LINEA ANTICIPO / DESCUENTO"
-    cta_auxiliar: "572 00008"
-    euribor_tipo: "Euribor 3"
-    diferencial: 0.012
-    importe: 250000
-    no_traer: false
-    dispuesto_manual: 0
+- banco: BBVA
+  cta_auxiliar: '572.006001'
+  iban: ES2101827674260201645558
+  no_traer: false
+  tipo: CTA_CTE
+  titular: TOTAL ENGINEERING S.L.
+- banco: BBVA
+  cta_auxiliar: null
+  iban: ES2301824220860208655431
+  no_traer: false
+  tipo: CTA_CTE
+  titular: COMERCIAL ANDALUZA DE SALDOS S.L.
+- banco: BBVA
+  cta_auxiliar: null
+  iban: ES5101827674220100001727
+  no_traer: true
+  tipo: CTA_CTE
+  titular: TOTAL LOGISTIC SERVICES SL
+- banco: BBVA
+  cta_auxiliar: null
+  iban: ES5201827674260200009968
+  no_traer: false
+  tipo: CTA_CTE
+  titular: CARMELO MARTINEZ RODRIGUEZ S.L.
+- banco: BBVA
+  cta_auxiliar: 520.1.000021
+  diferencial: 0.0095
+  euribor_tipo: Euribor 3
+  iban: ES5901824220890101512413
+  importe: 800000
+  nd: 0.0015
+  no_traer: false
+  tipo: POLIZA
+  titular: TOTAL LOGISTIC SERVICES SL
+- banco: BBVA
+  cta_auxiliar: '572.00005'
+  iban: ES7701827674290200015288
+  no_traer: false
+  tipo: CTA_CTE
+  titular: TOTAL LOGISTIC SERVICES SL
+- banco: BBVA
+  cta_auxiliar: null
+  iban: ES8601827674260201667280
+  no_traer: false
+  tipo: CTA_CTE
+  titular: CARMELO MARTINEZ RODRIGUEZ S.L.
+- banco: Banca March
+  cta_auxiliar: '573.000002'
+  iban: ES2200610253156357503011
+  no_traer: false
+  tipo: CTA_CTE_USD
+  titular: TOTAL LOGISTIC SERVICES SL
+- banco: Banca March
+  cta_auxiliar: '572.00008'
+  iban: ES4500610338380045840110
+  no_traer: false
+  tipo: CTA_CTE
+  titular: TOTAL LOGISTIC SERVICES SL
+- banco: Banco Santander
+  cta_auxiliar: null
+  iban: ES6500750595181570023126
+  no_traer: true
+  tipo: CTA_CTE
+  titular: TOTAL LOGISTIC SERVICES SL
+- banco: Banco Santander
+  cta_auxiliar: '572.00003'
+  iban: ES7500490132592811605056
+  no_traer: false
+  tipo: CTA_CTE
+  titular: TOTAL LOGISTIC SERVICES SL
+- banco: Banco Santander
+  cta_auxiliar: '573.000001'
+  iban: ES8100304312160200012278
+  no_traer: false
+  tipo: CTA_CTE_USD
+  titular: TOTAL LOGISTIC SERVICES SL
+- banco: Banco Santander
+  cta_auxiliar: '572.010000'
+  dispuesto_manual: 3237.11
+  iban: ES0900492548812214052636
+  no_traer: false
+  tipo: CTA_CTE
+  titular: TOTAL ENGINEERING S.L.
+- banco: Banco Santander
+  cta_auxiliar: '572.010006'
+  dispuesto_manual: 174337.0
+  iban: ES8200496770802316119011
+  no_traer: false
+  tipo: CTA_CTE
+  titular: ASOCIACION MELILLA INTEGRA
+- banco: Bankinter
+  cta_auxiliar: null
+  iban: ES0201287727610500010384
+  no_traer: true
+  tipo: CTA_CTE
+  titular: TOTAL LOGISTIC SERVICES SL
+- banco: Bankinter
+  cta_auxiliar: '572.006009'
+  iban: ES2701287727620500008333
+  no_traer: false
+  tipo: CTA_CTE
+  titular: CARMELO MARTINEZ RODRIGUEZ S.L.
+- banco: Bankinter
+  cta_auxiliar: '520.006011'
+  diferencial: 0.0175
+  euribor_tipo: Euribor 12
+  iban: ES4301287727610500003244
+  importe: 83333.34
+  nd: 0.006
+  no_traer: false
+  tipo: POLIZA
+  titular: TOTAL ENGINEERING S.L.
+- banco: Bankinter
+  cta_auxiliar: '520.006010'
+  diferencial: 0.015
+  euribor_tipo: Euribor 12
+  iban: ES4501287727620500009852
+  importe: 50000
+  nd: 0.004
+  no_traer: false
+  tipo: POLIZA
+  titular: TOTAL ENGINEERING S.L.
+- banco: Bankinter
+  cta_auxiliar: 520.1.000024
+  diferencial: 0.0095
+  euribor_tipo: Euribor 12
+  iban: ES6801287727650500003762
+  importe: 150000
+  nd: 0.0005
+  no_traer: false
+  tipo: POLIZA
+  titular: TOTAL LOGISTIC SERVICES SL
+- banco: Bankinter
+  cta_auxiliar: '520.006007'
+  iban: ES7801287727680500002271
+  no_traer: false
+  tipo: CTA_CTE
+  titular: TOTAL ENGINEERING S.L.
+- banco: Bankinter
+  cta_auxiliar: 520.1.000019
+  diferencial: 0.0125
+  euribor_tipo: Euribor 12
+  iban: ES7901287727600500002257
+  importe: 300000
+  nd: 0.0005
+  no_traer: false
+  tipo: POLIZA
+  titular: TOTAL LOGISTIC SERVICES SL
+- banco: CaixaBank
+  cta_auxiliar: 520.1.000023
+  diferencial: 0.01
+  euribor_tipo: Euribor 3
+  iban: ES8221008860301300107933
+  importe: 400000
+  nd: 0.0015
+  no_traer: false
+  tipo: POLIZA
+  titular: TOTAL LOGISTIC SERVICES SL
+- banco: CaixaBank
+  cta_auxiliar: '572.010005'
+  dispuesto_manual: 0
+  iban: ES1421005786620200140445
+  no_traer: false
+  tipo: CTA_CTE
+  titular: ASOCIACION MELILLA INTEGRA
+- banco: Caja Rural del Sur
+  cta_auxiliar: 572. 10008
+  diferencial: 0.007
+  euribor_tipo: Euribor 3
+  iban: ES7631870422025905784426
+  importe: 150000
+  nd: 0.0002
+  no_traer: false
+  tipo: POLIZA
+  titular: TOTAL LOGISTIC SERVICES SL
+- banco: Caja Rural de Granada
+  cta_auxiliar: 520.1.00022
+  diferencial: 0.0075
+  dispuesto_manual: 0
+  euribor_tipo: Euribor 12
+  iban: ES3730230602436963950206
+  importe: 300000
+  nd: 0.0002
+  no_traer: false
+  tipo: POLIZA
+  titular: TOTAL LOGISTIC SERVICES SL
+- banco: Unicaja
+  cta_auxiliar: 520.1.00028
+  diferencial: 0.008
+  dispuesto_manual: 0
+  euribor_tipo: Euribor 3
+  iban: ES3221034002590550008275
+  importe: 100000
+  nd: 0.002
+  no_traer: false
+  tipo: POLIZA
+  titular: TOTAL LOGISTIC SERVICES SL
+- banco: CAJA RURAL SUR
+  cta_auxiliar: null
+  diferencial: 0.007
+  dispuesto_manual: 0
+  euribor_tipo: Euribor 3
+  iban: null
+  importe: 150000
+  no_traer: false
+  producto: LINEA FINANCIACION PAGOS
+  tipo: LINEA
+  titular: TOTAL LOGISTIC SERVICES SL
+- banco: SANTANDER
+  cta_auxiliar: 520.8.000002
+  diferencial: 0.0075
+  dispuesto_manual: 0
+  euribor_tipo: Euribor 3
+  iban: null
+  importe: 700000
+  no_traer: false
+  producto: LINEA ANTICIPO FACTURAS
+  tipo: LINEA
+  titular: TOTAL LOGISTIC SERVICES SL
+- banco: CAIXA
+  cta_auxiliar: 520.1.000026
+  diferencial: 0.0095
+  dispuesto_manual: 0
+  euribor_tipo: Euribor 3
+  iban: null
+  importe: 200000
+  no_traer: false
+  producto: LINEA FINANCIACION PAGOS
+  tipo: LINEA
+  titular: TOTAL LOGISTIC SERVICES SL
+- banco: SANTANDER
+  cta_auxiliar: 520.8.000002
+  diferencial: 0.0075
+  dispuesto_manual: 0
+  euribor_tipo: Euribor 6
+  iban: null
+  importe: 300000
+  no_traer: false
+  producto: LINEA FINANCIACION PAGOS
+  tipo: LINEA
+  titular: TOTAL LOGISTIC SERVICES SL
+- banco: CAJA RURAL GR
+  cta_auxiliar: 520.1.000025
+  diferencial: 0.0105
+  dispuesto_manual: 0
+  euribor_tipo: Euribor 3
+  iban: null
+  importe: 100000
+  no_traer: false
+  producto: LINEA IMPORTACION 180 DIAS
+  tipo: LINEA
+  titular: TOTAL LOGISTIC SERVICES SL
+- banco: Banca March
+  cta_auxiliar: 572 00008
+  diferencial: 0.012
+  dispuesto_manual: 0
+  euribor_tipo: Euribor 3
+  iban: null
+  importe: 250000
+  no_traer: false
+  producto: LINEA ANTICIPO / DESCUENTO
+  tipo: LINEA
+  titular: TOTAL LOGISTIC SERVICES SL
+euribor:
+  Euribor 12: 0.02798
+  Euribor 3: 0.02339
+  Euribor 6: 0.02595
+orden_titulares:
+- TOTAL LOGISTIC SERVICES SL
+- TOTAL ENGINEERING S.L.
+- ASOCIACION MELILLA INTEGRA
+- COMERCIAL ANDALUZA DE SALDOS S.L.
+- CARMELO MARTINEZ RODRIGUEZ S.L.

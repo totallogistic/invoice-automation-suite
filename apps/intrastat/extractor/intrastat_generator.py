@@ -35,10 +35,8 @@ SCRIPT_CHANGELOG = """
 - Autodetección robusta de encoding (utf-8-sig / utf-8 / cp1252 / latin-1) y separador (; / TAB / , / |) para CSV.
 - Autodetección de la unidad de la masa neta (kg vs gramos) por mediana; parámetro CLI --masa-unidad {auto,kg,gramos} para forzar.
 - Mensaje de error muestra las primeras filas leídas cuando el archivo no tiene 8 columnas.
-
-## 2026-05-27.v1
-- Versión inicial. Genera CSV AEAT desde archivo VEA del programa Visual.
 """
+
 import argparse
 import sys
 from pathlib import Path
