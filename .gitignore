@@ -61,3 +61,7 @@ standalone_apps/form_generator/excel_storage/
 standalone_apps/form_generator/backups/
 
 
+
+# banking_dashboard: secretos y estado local (NO versionar)
+standalone_apps/banking_dashboard/keys/
+standalone_apps/banking_dashboard/data/

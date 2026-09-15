@@ -17,9 +17,32 @@ from decimal import Decimal, ROUND_HALF_UP
 from pathlib import Path
 from typing import Iterable, Optional
 
-SCRIPT_VERSION = "2026-05-24.v2"
+SCRIPT_VERSION = "2026-07-28.v3"
 
 SCRIPT_CHANGELOG = """
+## 2026-07-28.v3
+
+### Fix: pallets/boxes con valor de UN SOLO DIGITO devolvia 1/n en vez del real
+Reportado en 02360632.pdf: la factura decia "Pallets: 11" pero el extractor
+devolvia 1. Causa: pypdf renderiza los labels + valores repetidos 4 veces
+por el layout bilingue en/fr:
+    "Pallets:Pallets:Pallets:Pallets:\\n11111111\\nBoxes:..."
+Mi `reduce_repetition("11111111")` colapsaba a "1" porque "1"*8 encaja
+(k=1 es la primera divisibilidad que prueba), aunque tambien "11"*4 lo hace.
+Para "27272727" no habia ambiguedad porque "2"*8 != "27272727", asi que el
+bug solo se manifestaba con valores cuyos digitos son todos iguales
+(1, 11, 111, 2, 22, ...).
+
+Fix (`_find_int_after_label`, portado del extractor de lear_cable):
+Nueva pasada previa que reconoce runs de labels contiguos
+`((?:Label\\s*:\\s*)+)` y usa el conteo real de labels para trocear el valor
+(len/n en vez de reduce_repetition). Si no encuentra ese patron, cae al
+fallback perezoso `.{0,300}?` como antes. Los pesos (decimales) no
+necesitan el fix porque nunca colapsan por ambiguedad.
+
+Verificado con 5 PDFs (02360632, DS307699, DS307499, DS307500, DS307501)
+sin regresiones.
+
 ## 2026-05-24.v2
 
 ### Fix: extraccion vacia en entornos con pypdf distinto
@@ -276,15 +299,43 @@ def find_invoice_no(text: str, filename_stem: Optional[str] = None) -> Optional[
 def _find_int_after_label(text: str, label_regex: str) -> Optional[int]:
     """Busca un entero PURO (sin punto decimal) tras `label_regex`.
 
-    Permite hasta ~300 chars de basura entre el label y el valor: pypdf
-    puede insertar otras celdas (Boxes, Quantity, Devise...) o renderizar
-    label y valor en lineas distintas con bastante separacion. La busqueda
-    es perezosa para coger el PRIMER entero valido.
+    Estrategia en dos pasadas:
+
+    1) Run de labels contiguos (`Label:Label:Label:Label:` + valor). Es el
+       caso mas frecuente en Kenitra por la duplicidad en/fr + fantasma del
+       template: cuenta cuantas veces se repite el label pegado y trocea el
+       valor por ese N. Esto resuelve el caso "11111111" con 4 labels: si
+       partieramos con `reduce_repetition` obtendriamos "1" (porque "1"*8
+       == "11111111"), pero sabiendo que hay 4 labels tomamos len/4 = 2
+       caracteres -> "11". Es el fix del bug del PDF 02360632.
+
+    2) Fallback perezoso `.{0,300}?` con `re.DOTALL` para tolerar que pypdf
+       inserte otras celdas (Boxes, Quantity, Devise...) o renderice label
+       y valor en lineas distintas con separacion. Ancla `(?<!\\d)` para no
+       arrancar a mitad de otro numero (falsos positivos tipo '65/19/2026').
 
     La condicion `(?![\\d.])` evita capturar la parte entera de un decimal
     como '5255' de '5255.98329' (un valor de Gross Weight que a veces se
     cuela entre el label Pallets: y su valor real).
     """
+    # Estrategia 1: labels contiguos + valor (usa el count real de labels)
+    m = re.search(
+        rf"((?:{label_regex}\s*)+)(?<!\d)([0-9]+)(?![\d.])",
+        text, flags=re.IGNORECASE,
+    )
+    if m:
+        prefix, raw = m.group(1), m.group(2)
+        n = len(re.findall(label_regex, prefix, flags=re.IGNORECASE)) or 1
+        if n > 1 and len(raw) % n == 0:
+            raw = raw[: len(raw) // n]
+        else:
+            raw = reduce_repetition(raw)
+        try:
+            return int(raw)
+        except ValueError:
+            pass
+
+    # Estrategia 2: ventana perezosa amplia
     m = re.search(
         rf"{label_regex}.{{0,300}}?(?<!\d)([0-9]+)(?![\d.])",
         text, flags=re.IGNORECASE | re.DOTALL,
