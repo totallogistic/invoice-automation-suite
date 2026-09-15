@@ -70,17 +70,17 @@
     </div>
 
     <div class="section">
-      <div class="sec-head"><h2>Expedidor</h2><button type="button" class="btn-sm btn-ghost" onclick="fillTL('e')">Somos Total Logistic</button></div>
+      <div class="sec-head"><h2>Expedidor</h2><button type="button" class="btn-sm btn-ghost" onclick="fillTL('e')">Somos Total Logistic</button> <button type="button" class="btn-sm btn-ghost" onclick="fillCM('e')">Somos Carmelo Martínez</button></div>
       <div class="form-grid">
         <div class="form-group full"><label>Nombre / razón social</label><input id="e_nombre"></div>
         <div class="form-group"><label>NIF</label><input id="e_nif"></div>
         <div class="form-group"><label>Domicilio</label><input id="e_domicilio"></div>
       </div>
-      <p style="font-size:.75rem;color:#9ca3af;margin-top:.5rem">Quien entrega la mercancía al transportista. Sois vosotros cuando la carga sale de vuestro almacén (se rellena por defecto).</p>
+      <p style="font-size:.75rem;color:#9ca3af;margin-top:.5rem">Quien entrega la mercancía al transportista. Usa los botones «Somos…» para rellenar la empresa que corresponda.</p>
     </div>
 
     <div class="section">
-      <div class="sec-head"><h2 id="lbl-remitente">Cargador contractual</h2><button type="button" class="btn-sm btn-ghost" onclick="fillTL('c')">Somos Total Logistic</button></div>
+      <div class="sec-head"><h2 id="lbl-remitente">Cargador contractual</h2><button type="button" class="btn-sm btn-ghost" onclick="fillTL('c')">Somos Total Logistic</button> <button type="button" class="btn-sm btn-ghost" onclick="fillCM('c')">Somos Carmelo Martínez</button></div>
       <div class="form-grid">
         <div class="form-group full"><label>Nombre / razón social *</label><input id="c_nombre" required></div>
         <div class="form-group"><label>NIF *</label><input id="c_nif" required></div>
@@ -89,7 +89,7 @@
     </div>
 
     <div class="section">
-      <div class="sec-head"><h2>Transportista efectivo</h2><button type="button" class="btn-sm btn-ghost" onclick="fillTL('t')">Somos Total Logistic</button></div>
+      <div class="sec-head"><h2>Transportista efectivo</h2><button type="button" class="btn-sm btn-ghost" onclick="fillTL('t')">Somos Total Logistic</button> <button type="button" class="btn-sm btn-ghost" onclick="fillCM('t')">Somos Carmelo Martínez</button></div>
       <div class="form-grid">
         <div class="form-group full"><label>Nombre / razón social *</label><input id="t_nombre" required></div>
         <div class="form-group"><label>NIF *</label><input id="t_nif" required></div>
@@ -178,10 +178,14 @@ El trincaje de la carga lo realiza el conductor, siendo a su criterio idóneo.</
 
   const TL = { nombre: 'Total Logistic Services, S.L.', nif: 'B29961059',
                domicilio: 'Avda. del Estrecho, parcela 5.15, Pol. Ind. La Menacha, 11204 Algeciras (Cádiz)' };
-  function fillTL(prefix){
+  const CM = { nombre: 'CARMELO MARTINEZ RODRIGUEZ, S.L.', nif: 'B29905940',
+               domicilio: 'P.I. Sepes - C/ Dalia nave 25, 52006 Melilla' };
+  function fillCo(co, prefix){
     const setv = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
-    setv(prefix + '_nombre', TL.nombre); setv(prefix + '_nif', TL.nif); setv(prefix + '_domicilio', TL.domicilio);
+    setv(prefix + '_nombre', co.nombre); setv(prefix + '_nif', co.nif); setv(prefix + '_domicilio', co.domicilio);
   }
+  function fillTL(prefix){ fillCo(TL, prefix); }
+  function fillCM(prefix){ fillCo(CM, prefix); }
 
   function upd(){
     const cp = checked('doc_cp');   // el DeCA es FIJO (obligatorio); la carta de porte es opcional
@@ -189,7 +193,7 @@ El trincaje de la carga lo realiza el conductor, siendo a su criterio idóneo.</
     document.querySelectorAll('.docpick label').forEach(l => l.classList.toggle('on', l.querySelector('input').checked));
     if (cp && !cctx) setupCanvas();
   }
-  fillTL('e');  // el expedidor es Total Logistic por defecto
+  // sin empresa por defecto: el usuario elige con los botones «Somos…»
 
   // ── Canvas de firma ──
   let drawing = false, hasInk = false, cctx = null;
