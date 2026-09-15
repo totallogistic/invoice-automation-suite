@@ -1,0 +1,11 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "version": "1.0.0",
+  "title": "CMR (Carta de Porte Internacional)",
+  "description": "Carta de porte internacional (Convenio CMR) en formato electrónico (e-CMR). Datos del Convenio + firma simple opcional.",
+  "category": "🚚 Transporte",
+  "custom_template": "carta-porte-cmr.html",
+  "doc_tipo": "cmr",
+  "type": "object",
+  "properties": {}
+}

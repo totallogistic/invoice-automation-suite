@@ -1,5 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "version": "1.0.0",
   "title": "Revisión de Estanterías",
   "description": "Registro de revisión trimestral de estanterías - Delegación Algeciras",
   "category": "📊 Sede Algeciras",

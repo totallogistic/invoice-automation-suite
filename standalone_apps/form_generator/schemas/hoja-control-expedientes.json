@@ -1,5 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "version": "1.0.0",
   "title": "Hoja Control Expedientes",
   "description": "Generación y envío al ERP de la hoja de control correspondiente al expediente",
   "category": "📁 Procesos",

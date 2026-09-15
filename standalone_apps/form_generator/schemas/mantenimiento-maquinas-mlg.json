@@ -1,5 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "version": "1.0.0",
   "title": "Mantenimiento de Maquinaria de Almacén",
   "description": "Registro mensual de mantenimiento de máquinas - Delegación Málaga",
   "category": "📊 Sede Málaga",

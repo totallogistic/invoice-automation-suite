@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Documento de transporte</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+         background: linear-gradient(135deg,#2563a8 0%,#1a4d7e 100%); min-height: 100vh; padding: 2rem 1rem; }
+  .container { max-width: 780px; margin: 0 auto; background: #fff; border-radius: 16px; box-shadow: 0 20px 60px rgba(0,0,0,.3); overflow: hidden; }
+  header { background: linear-gradient(135deg,#2563a8 0%,#1a4d7e 100%); color: #fff; padding: 2rem; text-align: center; }
+  header h1 { font-size: 1.55rem; margin-bottom: .3rem; }
+  header p { opacity: .85; font-size: .85rem; }
+  .back-link { display: inline-block; color: #fff; text-decoration: none; padding: .4rem .9rem; background: rgba(255,255,255,.2); border-radius: 6px; margin-bottom: 1rem; font-size: .875rem; }
+  .section { padding: 1.4rem 2rem; border-bottom: 1px solid #e5e7eb; }
+  .section h2 { font-size: .75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: #9ca3af; margin-bottom: 1rem; }
+  .sec-head { display: flex; justify-content: space-between; align-items: center; gap: .5rem; }
+  .sec-head h2 { margin-bottom: 1rem; }
+  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+  .form-group { display: flex; flex-direction: column; gap: .3rem; }
+  .form-group.full { grid-column: 1 / -1; }
+  .form-group label { font-weight: 600; font-size: .82rem; color: #374151; }
+  .form-group input, .form-group textarea, .form-group select { padding: .6rem .75rem; font-size: .92rem; border: 1px solid #d1d5db; border-radius: 6px; font-family: inherit; background: #fff; }
+  .form-group input:focus, .form-group textarea:focus, .form-group select:focus { outline: none; border-color: #2563a8; box-shadow: 0 0 0 3px rgba(37,99,168,.15); }
+  .docpick { display: flex; gap: .6rem; flex-wrap: wrap; }
+  .docpick label { flex: 1; min-width: 180px; display: flex; gap: .6rem; align-items: flex-start; border: 1.5px solid #d1d5db; border-radius: 10px; padding: .8rem 1rem; cursor: pointer; }
+  .docpick label.on { border-color: #2563a8; background: #f0f6fc; }
+  .docpick input { margin-top: .2rem; }
+  .docpick .t { font-weight: 700; color: #1a4d7e; font-size: .9rem; }
+  .docpick .d { font-size: .74rem; color: #6b7280; }
+  .actions { padding: 1.5rem 2rem 2rem; display: flex; justify-content: center; }
+  .btn-docx { padding: .95rem 2.2rem; background: linear-gradient(135deg,#2563a8,#1a4d7e); color: #fff; border: none; border-radius: 8px; font-size: 1rem; font-weight: 600; cursor: pointer; transition: transform .15s, box-shadow .15s; font-family: inherit; }
+  .btn-docx:hover { transform: translateY(-2px); box-shadow: 0 6px 16px rgba(37,99,168,.35); }
+  .btn-docx:disabled { background: #9ca3af; cursor: not-allowed; transform: none; box-shadow: none; }
+  .btn-sm { padding: .5rem .9rem; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; font-family: inherit; font-size: .82rem; }
+  .btn-blue { background: #2563a8; color: #fff; } .btn-ghost { background: #e5edf7; color: #1a4d7e; text-decoration: none; display: inline-block; }
+  .message { padding: 1rem 1.5rem; border-radius: 8px; font-weight: 600; display: none; margin: 0 2rem 1rem; }
+  .message.success { background: #d1fae5; color: #065f46; border: 1px solid #6ee7b7; }
+  .message.error { background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; }
+  canvas#sig { border: 1px dashed #b0bcc9; border-radius: 8px; width: 100%; height: 140px; background: #fff; touch-action: none; }
+  .firma-chip { display: inline-flex; align-items: center; gap: .5rem; background: #f0f7f4; border: 1px solid #bfe0d3; border-radius: 8px; padding: .35rem .6rem; margin: .25rem .25rem 0 0; font-size: .8rem; }
+  .firma-chip img { height: 26px; border-right: 1px solid #cfe3d8; padding-right: .5rem; }
+  .firma-chip button { border: none; background: none; color: #a4342a; cursor: pointer; font-weight: 700; }
+  .result { display: none; padding: 2rem; text-align: center; }
+  .result h2 { color: #065f46; font-size: 1.2rem; margin-bottom: .3rem; }
+  .result p.sub { color: #6b7280; font-size: .9rem; margin-bottom: 1.2rem; }
+  .doccard { border: 1px solid #e4e7eb; border-radius: 10px; padding: 1rem; margin: 0 auto 1rem; max-width: 420px; }
+  .doccard .t { font-weight: 700; color: #1a4d7e; margin-bottom: .5rem; }
+  .doccard img { width: 150px; height: 150px; border: 1px solid #e5e7eb; border-radius: 8px; padding: 6px; }
+  .doccard .u { display: flex; gap: .4rem; margin-top: .6rem; }
+  .doccard .u input { flex: 1; padding: .5rem; border: 1px solid #d1d5db; border-radius: 6px; font-size: .72rem; color: #374151; background: #f9fafb; }
+</style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <a href="/" class="back-link">← Volver al inicio</a>
+    <h1>Documento de transporte</h1>
+    <p>Mete los datos una vez y genera los documentos que necesites</p>
+  </header>
+
+  <div id="formWrap">
+    <div class="section">
+      <h2>¿Qué documentos necesitas?</h2>
+      <div class="docpick" id="docpick">
+        <label class="on"><input type="checkbox" id="doc_deca" checked disabled><span><span class="t">DeCA</span><br><span class="d">Documento de control · <b>obligatorio</b> (siempre se genera)</span></span></label>
+        <label><input type="checkbox" id="doc_cp" onchange="upd()"><span><span class="t">Carta de porte</span><br><span class="d">Contrato · interno, 1 hoja con el QR del DeCA arriba</span></span></label>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="sec-head"><h2>Expedidor</h2><button type="button" class="btn-sm btn-ghost" onclick="fillTL('e')">Somos Total Logistic</button></div>
+      <div class="form-grid">
+        <div class="form-group full"><label>Nombre / razón social</label><input id="e_nombre"></div>
+        <div class="form-group"><label>NIF</label><input id="e_nif"></div>
+        <div class="form-group"><label>Domicilio</label><input id="e_domicilio"></div>
+      </div>
+      <p style="font-size:.75rem;color:#9ca3af;margin-top:.5rem">Quien entrega la mercancía al transportista. Sois vosotros cuando la carga sale de vuestro almacén (se rellena por defecto).</p>
+    </div>
+
+    <div class="section">
+      <div class="sec-head"><h2 id="lbl-remitente">Cargador contractual</h2><button type="button" class="btn-sm btn-ghost" onclick="fillTL('c')">Somos Total Logistic</button></div>
+      <div class="form-grid">
+        <div class="form-group full"><label>Nombre / razón social *</label><input id="c_nombre" required></div>
+        <div class="form-group"><label>NIF *</label><input id="c_nif" required></div>
+        <div class="form-group"><label>Domicilio *</label><input id="c_domicilio" required></div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="sec-head"><h2>Transportista efectivo</h2><button type="button" class="btn-sm btn-ghost" onclick="fillTL('t')">Somos Total Logistic</button></div>
+      <div class="form-grid">
+        <div class="form-group full"><label>Nombre / razón social *</label><input id="t_nombre" required></div>
+        <div class="form-group"><label>NIF *</label><input id="t_nif" required></div>
+      </div>
+    </div>
+
+    <div class="section" id="sec-destinatario">
+      <h2>Destinatario / consignatario</h2>
+      <div class="form-grid">
+        <div class="form-group full"><label>Nombre / razón social</label><input id="d_nombre"></div>
+        <div class="form-group"><label>NIF</label><input id="d_nif"></div>
+        <div class="form-group"><label>Domicilio</label><input id="d_domicilio"></div>
+      </div>
+      <p style="font-size:.75rem;color:#9ca3af;margin-top:.5rem">Opcional en el DeCA; recomendado. Obligatorio si generas carta de porte / CMR.</p>
+    </div>
+
+    <div class="section">
+      <h2>Datos del transporte</h2>
+      <div class="form-grid">
+        <div class="form-group"><label id="lbl-origen">Origen *</label><input id="origen" required></div>
+        <div class="form-group"><label id="lbl-destino">Destino *</label><input id="destino" required></div>
+        <div class="form-group"><label>Fecha del transporte *</label><input id="fecha" type="date" required></div>
+        <div class="form-group"><label>Hora del transporte</label><input id="hora" type="time"></div>
+        <div class="form-group"><label>Matrícula tractora *</label><input id="mat_tractora" required></div>
+        <div class="form-group"><label>Matrícula remolque / semirremolque</label><input id="mat_remolque"></div>
+        <div class="form-group"><label>Teléfono del conductor</label><input id="tel_conductor"></div>
+        <div class="form-group"><label>Naturaleza de la mercancía *</label><input id="m_naturaleza" required></div>
+        <div class="form-group"><label>Peso (kg) *</label><input id="m_peso" type="number" min="0" step="1" required></div>
+        <div class="form-group"><label>Bultos y marcas</label><input id="m_bultos"></div>
+        <div class="form-group full"><label>Autorizaciones especiales</label><input id="autorizaciones"></div>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2>Observaciones y reservas</h2>
+      <div class="form-group full"><textarea id="observaciones" rows="4">Comprobada la documentación del vehículo/remolque, siendo correctas.
+Carga y estiba realizadas según indicaciones del conductor / vehículo.
+El trincaje de la carga lo realiza el conductor, siendo a su criterio idóneo.</textarea></div>
+      <p style="font-size:.75rem;color:#9ca3af;margin-top:.4rem">Notas estándar pre-rellenadas. Edítalas o añade lo que necesites.</p>
+    </div>
+
+    <div class="section" id="sec-firmas" style="display:none">
+      <h2>Firmas (opcional · firma simple)</h2>
+      <p style="font-size:.78rem;color:#6b7280;margin:-.5rem 0 .8rem">El sello de <b>Total Logistic</b> se añade automáticamente a la carta de porte. Aquí firma el <b>camionero</b> en la pantalla táctil. (La carta de porte es interna; el DeCA no lleva firma.)</p>
+      <div class="form-grid" style="margin-bottom:.6rem">
+        <div class="form-group"><label>Rol</label><select id="sigRol"><option value="conductor">Conductor / camionero</option><option value="cargador">Cargador / Remitente</option><option value="transportista">Transportista</option><option value="destinatario">Destinatario</option></select></div>
+        <div class="form-group"><label>Nombre del firmante</label><input id="sigNombre"></div>
+        <div class="form-group full"><label>DNI del firmante</label><input id="sigDni" placeholder="Opcional"></div>
+      </div>
+      <canvas id="sig"></canvas>
+      <div style="display:flex;gap:.5rem;margin-top:.4rem">
+        <button type="button" class="btn-sm btn-ghost" onclick="clearSig()">Borrar trazo</button>
+        <button type="button" class="btn-sm btn-blue" onclick="addFirma()">Añadir firma</button>
+      </div>
+      <div id="firmasList"></div>
+    </div>
+
+    <div class="section">
+      <h2>Enviar al camionero (opcional)</h2>
+      <label style="display:flex;gap:.6rem;align-items:center;font-size:.9rem;color:#374151;cursor:pointer">
+        <input type="checkbox" id="send_email" onchange="document.getElementById('email-row').style.display=this.checked?'grid':'none'">
+        Enviar el QR / enlace por email
+      </label>
+      <div class="form-grid" id="email-row" style="display:none;margin-top:.8rem">
+        <div class="form-group full"><label>Email del camionero</label><input id="email_camionero" type="email" placeholder="conductor@ejemplo.com"></div>
+      </div>
+      <p style="font-size:.75rem;color:#9ca3af;margin-top:.5rem"><b>Opcional.</b> El camionero se lleva la <b>carta de porte impresa</b>, que ya trae el QR del DeCA arriba. Marca esto solo si además quieres enviarle el enlace del DeCA por email, desde <b>almacenalgeciras@totallogistic.es</b>.</p>
+    </div>
+
+    <div id="message" class="message"></div>
+    <div class="actions"><button id="btnGen" class="btn-docx" onclick="generar()">🧾 Generar documentos</button></div>
+  </div>
+
+  <div id="result" class="result">
+    <h2>✅ Documentos generados</h2>
+    <p class="sub">DeCA: QR + enlace para el camionero. Carta de porte: descarga interna (sin QR).</p>
+    <div id="docsList"></div>
+    <div style="margin-top:1rem"><button class="btn-docx" onclick="location.reload()">Generar otros</button></div>
+  </div>
+</div>
+
+<script>
+  const firmas = [];
+  function val(id){ return document.getElementById(id).value.trim(); }
+  function checked(id){ return document.getElementById(id).checked; }
+
+  const TL = { nombre: 'Total Logistic Services, S.L.', nif: 'B29961059',
+               domicilio: 'Avda. del Estrecho, parcela 5.15, Pol. Ind. La Menacha, 11204 Algeciras (Cádiz)' };
+  function fillTL(prefix){
+    const setv = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
+    setv(prefix + '_nombre', TL.nombre); setv(prefix + '_nif', TL.nif); setv(prefix + '_domicilio', TL.domicilio);
+  }
+
+  function upd(){
+    const cp = checked('doc_cp');   // el DeCA es FIJO (obligatorio); la carta de porte es opcional
+    document.getElementById('sec-firmas').style.display = cp ? 'block' : 'none';
+    document.querySelectorAll('.docpick label').forEach(l => l.classList.toggle('on', l.querySelector('input').checked));
+    if (cp && !cctx) setupCanvas();
+  }
+  fillTL('e');  // el expedidor es Total Logistic por defecto
+
+  // ── Canvas de firma ──
+  let drawing = false, hasInk = false, cctx = null;
+  function setupCanvas(){
+    const c = document.getElementById('sig');
+    c.width = c.offsetWidth || 500; c.height = 140;
+    cctx = c.getContext('2d'); cctx.lineWidth = 2; cctx.lineJoin = 'round'; cctx.lineCap = 'round'; cctx.strokeStyle = '#12356e';
+    const p = e => { const r = c.getBoundingClientRect(); const t = e.touches ? e.touches[0] : e; return {x: t.clientX - r.left, y: t.clientY - r.top}; };
+    const start = e => { drawing = true; const q = p(e); cctx.beginPath(); cctx.moveTo(q.x, q.y); e.preventDefault(); };
+    const move = e => { if (!drawing) return; const q = p(e); cctx.lineTo(q.x, q.y); cctx.stroke(); hasInk = true; e.preventDefault(); };
+    const end = () => { drawing = false; };
+    c.addEventListener('mousedown', start); c.addEventListener('mousemove', move); window.addEventListener('mouseup', end);
+    c.addEventListener('touchstart', start, {passive:false}); c.addEventListener('touchmove', move, {passive:false}); c.addEventListener('touchend', end);
+  }
+  function clearSig(){ if (cctx){ cctx.clearRect(0,0,document.getElementById('sig').width,140); hasInk = false; } }
+  function addFirma(){
+    const rol = document.getElementById('sigRol').value, nombre = val('sigNombre'), dni = val('sigDni');
+    if (!nombre) { alert('Indica el nombre del firmante'); return; }
+    if (!hasInk) { alert('Dibuja la firma en el recuadro'); return; }
+    firmas.push({ rol, nombre, dni: dni || null, firma_png: document.getElementById('sig').toDataURL('image/png'), firmado_en: new Date().toISOString() });
+    renderFirmas(); clearSig(); document.getElementById('sigNombre').value = ''; document.getElementById('sigDni').value = '';
+  }
+  function renderFirmas(){ document.getElementById('firmasList').innerHTML = firmas.map((f,i) =>
+    `<span class="firma-chip"><img src="${f.firma_png}"><b>${f.rol}</b> · ${f.nombre}${f.dni ? ' · DNI '+f.dni : ''}<button onclick="delFirma(${i})">✕</button></span>`).join(''); }
+  function delFirma(i){ firmas.splice(i,1); renderFirmas(); }
+
+  function collectData(){
+    const documentos = ['deca'];   // DeCA siempre (obligatorio en transporte nacional)
+    if (checked('doc_cp')) documentos.push('carta_porte');
+    const d = {
+      documentos,
+      cargador_contractual: { nombre: val('c_nombre'), nif: val('c_nif'), domicilio: val('c_domicilio') },
+      transportista_efectivo: { nombre: val('t_nombre'), nif: val('t_nif') },
+      origen: val('origen'), destino: val('destino'),
+      mercancia: { naturaleza: val('m_naturaleza'), peso_kg: parseFloat(val('m_peso') || '0'), bultos: val('m_bultos') || null },
+      fecha_transporte: val('fecha'), matricula_tractora: val('mat_tractora'),
+      firmas: firmas,
+    };
+    if (val('hora')) d.hora_transporte = val('hora');
+    if (val('mat_remolque')) d.matricula_remolque = val('mat_remolque');
+    if (val('tel_conductor')) d.telefono_conductor = val('tel_conductor');
+    if (val('autorizaciones')) d.autorizaciones_especiales = val('autorizaciones');
+    if (val('observaciones')) d.observaciones = val('observaciones');
+    // Expedidor (todos los documentos): sólo si está completo (nombre/NIF/domicilio)
+    if (val('e_nombre') && val('e_nif') && val('e_domicilio'))
+      d.expedidor = { nombre: val('e_nombre'), nif: val('e_nif'), domicilio: val('e_domicilio') };
+    // Destinatario (opcional en DeCA; obligatorio en carta de porte)
+    if (val('d_nombre'))
+      d.destinatario = { nombre: val('d_nombre'), nif: val('d_nif') || null, domicilio: val('d_domicilio') || null };
+    d.enviar_email = checked('send_email');
+    if (d.enviar_email) d.email_camionero = val('email_camionero');
+    return d;
+  }
+  function validate(d){
+    if (!d.documentos.length) return 'Marca al menos un documento a generar';
+    if (!d.cargador_contractual.nombre || !d.cargador_contractual.nif || !d.cargador_contractual.domicilio) return 'Completa el cargador / remitente';
+    if (!d.transportista_efectivo.nombre || !d.transportista_efectivo.nif) return 'Completa el transportista';
+    if (!d.origen || !d.destino) return 'Indica origen y destino';
+    if (!d.mercancia.naturaleza || !d.mercancia.peso_kg) return 'Indica naturaleza y peso de la mercancía';
+    if (!d.fecha_transporte) return 'Indica la fecha';
+    if (!d.matricula_tractora) return 'Indica la matrícula de la tractora';
+    if (checked('doc_cp') && !d.destinatario) return 'Indica el destinatario (obligatorio en la carta de porte)';
+    if (checked('send_email') && !val('email_camionero')) return 'Indica el email del camionero o desmarca el envío';
+    if (checked('send_email') && !checked('doc_deca')) return 'El envío al camionero es del DeCA; marca DeCA o desmarca el envío';
+    return null;
+  }
+  const LBL = { deca: 'DeCA', carta_porte: 'Carta de porte' };
+  async function generar(){
+    const d = collectData(); const err = validate(d);
+    if (err) { showMsg(err, 'error'); return; }
+    const btn = document.getElementById('btnGen'); btn.disabled = true;
+    showMsg('Generando ' + d.documentos.length + ' documento(s)…', 'info');
+    try {
+      const res = await fetch('/api/submit/documento-transporte', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(d) });
+      const r = await res.json();
+      if (!res.ok) throw new Error(r.detail || r.message || 'Error');
+      document.getElementById('docsList').innerHTML = (r.documentos || []).map(doc => {
+        if (doc.interno) {  // carta de porte: interna, sin QR → descarga directa del PDF
+          const href = 'data:application/pdf;base64,' + doc.pdf_base64;
+          return `<div class="doccard"><div class="t">${LBL[doc.tipo] || doc.tipo} · interno</div>
+            <a class="btn-docx" style="display:inline-block;text-decoration:none" href="${href}" download="carta-porte-${doc.uuid}.pdf">⬇ Descargar carta de porte (PDF)</a>
+            <div style="font-size:.72rem;color:#9ca3af;margin-top:.5rem">Sin QR · uso interno (imprimir / archivar). No se envía al camionero.</div>
+            <div style="font-size:.7rem;color:#9ca3af;margin-top:.3rem">${doc.uuid}</div></div>`;
+        }
+        return `<div class="doccard"><div class="t">${LBL[doc.tipo] || doc.tipo}</div>
+          <img src="${doc.qr_data_uri}"><div class="u"><input readonly value="${doc.url}">
+          <a class="btn-sm btn-ghost" href="${doc.url}" target="_blank" rel="noopener">Abrir</a></div>
+          <div style="font-size:.7rem;color:#9ca3af;margin-top:.3rem">${doc.uuid}</div></div>`;
+      }).join('');
+      if (r.email_qr_sent) { const s = document.querySelector('#result .sub'); s.innerHTML += `<br><span style="color:#065f46">✉️ Enviado por email a ${r.email_qr_to}</span>`; }
+      else if (d.enviar_email) { const s = document.querySelector('#result .sub'); s.innerHTML += `<br><span style="color:#b45309">⚠️ No se pudo enviar el email (revisa SMTP)</span>`; }
+      document.getElementById('formWrap').style.display = 'none';
+      document.getElementById('result').style.display = 'block';
+    } catch(e) { showMsg('❌ ' + e.message, 'error'); } finally { btn.disabled = false; }
+  }
+  function showMsg(t, type){ const el = document.getElementById('message'); el.textContent = t; el.className = 'message ' + (type === 'info' ? 'success' : type); el.style.opacity = type === 'info' ? '.6' : '1'; el.style.display = 'block'; }
+  upd();
+</script>
+</body>
+</html>

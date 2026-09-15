@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "version": "1.0.0",
+  "title": "Documento Electrónico de Control Administrativo (DeCA)",
+  "description": "Documento de control de transporte público de mercancías por carretera (art. 6 Orden FOM/2861/2012). Obligatorio en formato digital desde el 5-oct-2026.",
+  "category": "🚚 Transporte",
+  "custom_template": "deca-transporte-mercancias.html",
+  "type": "object",
+  "properties": {
+    "cargador_contractual": {
+      "type": "object",
+      "title": "Cargador contractual",
+      "properties": {
+        "nombre": { "type": "string", "title": "Nombre o razón social" },
+        "nif": { "type": "string", "title": "NIF" },
+        "domicilio": { "type": "string", "title": "Domicilio" }
+      },
+      "required": ["nombre", "nif", "domicilio"]
+    },
+    "transportista_efectivo": {
+      "type": "object",
+      "title": "Transportista efectivo",
+      "properties": {
+        "nombre": { "type": "string", "title": "Nombre o razón social" },
+        "nif": { "type": "string", "title": "NIF" }
+      },
+      "required": ["nombre", "nif"]
+    },
+    "origen": { "type": "string", "title": "Origen" },
+    "destino": { "type": "string", "title": "Destino" },
+    "mercancia": {
+      "type": "object",
+      "title": "Mercancía",
+      "properties": {
+        "naturaleza": { "type": "string", "title": "Naturaleza de la mercancía" },
+        "peso_kg": { "type": "number", "title": "Peso (kg)", "minimum": 0 }
+      },
+      "required": ["naturaleza", "peso_kg"]
+    },
+    "fecha_transporte": { "type": "string", "format": "date", "title": "Fecha del transporte" },
+    "matricula_tractora": { "type": "string", "title": "Matrícula tractora / vehículo" },
+    "matricula_remolque": { "type": "string", "title": "Matrícula remolque" },
+    "autorizaciones_especiales": { "type": "string", "title": "Autorizaciones especiales" },
+    "observaciones": { "type": "string", "title": "Observaciones" }
+  },
+  "required": [
+    "cargador_contractual",
+    "transportista_efectivo",
+    "origen",
+    "destino",
+    "mercancia",
+    "fecha_transporte",
+    "matricula_tractora"
+  ]
+}
