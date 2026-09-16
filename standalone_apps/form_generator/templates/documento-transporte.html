@@ -148,7 +148,7 @@ El trincaje de la carga lo realiza el conductor, siendo a su criterio idóneo.</
       <div id="firmasList"></div>
     </div>
 
-    <div class="section">
+    <div class="section" hidden data-feature="email-camionero"><!-- OCULTO a petición del cliente: quita 'hidden' para reactivar el envío por email -->
       <h2>Enviar al camionero (opcional)</h2>
       <label style="display:flex;gap:.6rem;align-items:center;font-size:.9rem;color:#374151;cursor:pointer">
         <input type="checkbox" id="send_email" onchange="document.getElementById('email-row').style.display=this.checked?'grid':'none'">
