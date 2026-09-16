@@ -2460,8 +2460,9 @@ def _deca_pipeline_handler(ctx):
             if r.url_publica:  # DeCA: publico (bucket) -> QR + enlace (va al camionero)
                 docs.append({"tipo": t, "uuid": r.uuid, "url": r.url_publica,
                              "qr_data_uri": "data:image/png;base64," + base64.b64encode(qr_png_bytes(r.url_publica)).decode()})
-            else:  # carta de porte: interna -> descarga directa del PDF, sin QR ni bucket
+            else:  # carta de porte: interna -> descarga directa del PDF; con_qr marca la variante
                 docs.append({"tipo": t, "uuid": r.uuid, "interno": True,
+                             "con_qr": bool(getattr(r, "con_qr", False)),
                              "pdf_base64": base64.b64encode(r.pdf_bytes).decode()})
         return {"documentos": docs, "message": f"{len(docs)} documento(s) generado(s)."}
     rec = _deca_svc.create(data)                 # un solo documento
@@ -2470,6 +2471,14 @@ def _deca_pipeline_handler(ctx):
             "qr_data_uri": f"data:image/png;base64,{qr_b64}",
             "url_activa_hasta": rec.url_activa_hasta.isoformat() if rec.url_activa_hasta else None,
             "message": "DeCA generado y subido."}
+
+@app.get("/api/deca/sugerencias")
+async def deca_sugerencias():
+    """Valores ya usados (para autocompletar el form documento-transporte)."""
+    try:
+        return JSONResponse(_deca_svc.repo.suggestions())
+    except Exception:
+        return JSONResponse({})
 
 @app.post("/api/submit/{schema_name}")
 async def submit_pipeline(schema_name: str, request: Request):

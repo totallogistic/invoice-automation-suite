@@ -119,6 +119,8 @@ class DecaRecord(BaseModel):
     # Bytes del PDF generado (para descarga interna de la carta de porte).
     # Excluido de la serialización.
     pdf_bytes: Optional[bytes] = Field(default=None, exclude=True, repr=False)
+    # Variante de la carta de porte: True=con banda QR del DeCA, False=sin. Transitorio.
+    con_qr: Optional[bool] = Field(default=None, exclude=True, repr=False)
 
     def object_key(self) -> str:
         return f"d/{self.uuid}.pdf"

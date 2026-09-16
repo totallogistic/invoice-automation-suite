@@ -19,6 +19,14 @@ from .storage import Storage
 
 MAX_PDF_BYTES = 5 * 1024 * 1024  # 5 MB (límite de la norma)
 
+# Tokens de documento del formulario → (tipo_documento, lleva_banda_QR_del_DeCA)
+_DOC_SPEC = {
+    "deca": ("deca", False),
+    "carta_porte_con_qr": ("carta_porte", True),
+    "carta_porte_sin_qr": ("carta_porte", False),
+    "carta_porte": ("carta_porte", True),  # compat con el token antiguo (= con QR)
+}
+
 # ── Firma corporativa de Total Logistic (sello/imagen) ────────────────────────
 # Se inyecta SOLA en carta de porte / CMR (nunca en el DeCA, que no lleva firma).
 # La imagen vive en una ruta del host (config), NO se sube desde el navegador:
@@ -90,25 +98,37 @@ class DecaService:
         return record
 
     def create_many(self, data: DecaInput, tipos):
-        """Emite varios documentos desde los MISMOS datos. El DeCA es público
-        (bucket + QR); la carta de porte es INTERNA (sin bucket) pero lleva ARRIBA el
-        QR del DeCA → el camionero se lleva UNA sola hoja. Por eso el DeCA se genera
-        primero (para conocer su URL). El DeCA no lleva firma."""
-        # Generar el DeCA primero para tener su URL/QR y embeberlo en la carta de porte.
-        orden = ([t for t in tipos if t == "deca"] + [t for t in tipos if t != "deca"])
-        recs_by_tipo = {}
+        """Emite varios documentos desde los MISMOS datos, según los tokens de `tipos`:
+          - "deca"               → DeCA (público: bucket + QR).
+          - "carta_porte_con_qr" → carta de porte interna CON la banda del QR del DeCA
+                                    (necesita un DeCA → se genera y sube aunque no se pida
+                                    explícitamente).
+          - "carta_porte_sin_qr" → carta de porte interna SIN QR (documento suelto, para
+                                    sustituir el modelo manual de impresión).
+          - "carta_porte"        → compat: equivale a CON QR.
+        El DeCA (si hace falta) se genera primero para conocer su URL. No lleva firma."""
+        want = [t for t in tipos if t in _DOC_SPEC]
+        deca_pedido = any(_DOC_SPEC[t][0] == "deca" for t in want)
+        con_qr_pedido = any(_DOC_SPEC[t] == ("carta_porte", True) for t in want)
+        out = []
         deca_url = None
-        for t in orden:
-            firmas = [] if t == "deca" else data.firmas
-            publico = (t == "deca")
-            dd = data.model_copy(update={"tipo_documento": t, "firmas": firmas})
-            rec = self.create(dd, publico=publico,
-                              deca_qr_url=(deca_url if t != "deca" else None))
-            if t == "deca":
-                deca_url = rec.url_publica
-            recs_by_tipo[t] = rec
-        # Devolver en el orden en que los pidió el usuario.
-        return [recs_by_tipo[t] for t in tipos if t in recs_by_tipo]
+        # 1) DeCA primero si se pide, o si alguna carta lleva el QR (necesita su URL).
+        if deca_pedido or con_qr_pedido:
+            dd = data.model_copy(update={"tipo_documento": "deca", "firmas": []})
+            deca_rec = self.create(dd, publico=True, deca_qr_url=None)
+            deca_url = deca_rec.url_publica
+            if deca_pedido:
+                out.append(deca_rec)
+        # 2) Cartas de porte (internas); la variante decide si lleva la banda del QR.
+        for t in want:
+            tipo, con_qr = _DOC_SPEC[t]
+            if tipo == "deca":
+                continue
+            dd = data.model_copy(update={"tipo_documento": "carta_porte", "firmas": data.firmas})
+            rec = self.create(dd, publico=False, deca_qr_url=(deca_url if con_qr else None))
+            rec.con_qr = con_qr
+            out.append(rec)
+        return out
 
     def modify(self, uuid: str):
         return self.repo.register_modification(uuid)

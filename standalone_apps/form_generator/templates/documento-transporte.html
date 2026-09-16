@@ -64,13 +64,14 @@
     <div class="section">
       <h2>¿Qué documentos necesitas?</h2>
       <div class="docpick" id="docpick">
-        <label class="on"><input type="checkbox" id="doc_deca" checked disabled><span><span class="t">DeCA</span><br><span class="d">Documento de control · <b>obligatorio</b> (siempre se genera)</span></span></label>
-        <label><input type="checkbox" id="doc_cp" onchange="upd()"><span><span class="t">Carta de porte</span><br><span class="d">Contrato · interno, 1 hoja con el QR del DeCA arriba</span></span></label>
+        <label><input type="checkbox" id="doc_deca" onchange="updDocs()"><span><span class="t">DeCA</span><br><span class="d">Documento de control · público (con QR). Obligatorio en transporte nacional.</span></span></label>
+        <label><input type="checkbox" id="doc_cp_qr" onchange="onCpQr()"><span><span class="t">Carta de porte · CON QR</span><br><span class="d">Interna · 1 hoja con el QR del DeCA arriba (incluye el DeCA)</span></span></label>
+        <label><input type="checkbox" id="doc_cp_sin" onchange="onCpSin()"><span><span class="t">Carta de porte · SIN QR</span><br><span class="d">Interna · sin QR (sustituye al modelo manual de impresión)</span></span></label>
       </div>
     </div>
 
     <div class="section">
-      <div class="sec-head"><h2>Expedidor</h2><button type="button" class="btn-sm btn-ghost" onclick="fillTL('e')">Somos Total Logistic</button> <button type="button" class="btn-sm btn-ghost" onclick="fillCM('e')">Somos Carmelo Martínez</button></div>
+      <div class="sec-head"><h2>Expedidor</h2><select class="btn-sm" onchange="fillCo(this.value,'e')"><option value="">Rellenar empresa…</option><option value="tl_alg">Total Logistic · Algeciras</option><option value="tl_mlg">Total Logistic · Málaga</option><option value="tl_pr">Total Logistic · Puerto Real</option><option value="cm_mel">Carmelo Martínez · Melilla</option></select></div>
       <div class="form-grid">
         <div class="form-group full"><label>Nombre / razón social</label><input id="e_nombre"></div>
         <div class="form-group"><label>NIF</label><input id="e_nif"></div>
@@ -80,18 +81,18 @@
     </div>
 
     <div class="section">
-      <div class="sec-head"><h2 id="lbl-remitente">Cargador contractual</h2><button type="button" class="btn-sm btn-ghost" onclick="fillTL('c')">Somos Total Logistic</button> <button type="button" class="btn-sm btn-ghost" onclick="fillCM('c')">Somos Carmelo Martínez</button></div>
+      <div class="sec-head"><h2 id="lbl-remitente">Cargador contractual</h2><select class="btn-sm" onchange="fillCo(this.value,'c')"><option value="">Rellenar empresa…</option><option value="tl_alg">Total Logistic · Algeciras</option><option value="tl_mlg">Total Logistic · Málaga</option><option value="tl_pr">Total Logistic · Puerto Real</option><option value="cm_mel">Carmelo Martínez · Melilla</option></select></div>
       <div class="form-grid">
-        <div class="form-group full"><label>Nombre / razón social *</label><input id="c_nombre" required></div>
+        <div class="form-group full"><label>Nombre / razón social *</label><input id="c_nombre" required list="dl_carg"><datalist id="dl_carg"></datalist></div>
         <div class="form-group"><label>NIF *</label><input id="c_nif" required></div>
         <div class="form-group"><label>Domicilio *</label><input id="c_domicilio" required></div>
       </div>
     </div>
 
     <div class="section">
-      <div class="sec-head"><h2>Transportista efectivo</h2><button type="button" class="btn-sm btn-ghost" onclick="fillTL('t')">Somos Total Logistic</button> <button type="button" class="btn-sm btn-ghost" onclick="fillCM('t')">Somos Carmelo Martínez</button></div>
+      <div class="sec-head"><h2>Transportista efectivo</h2><select class="btn-sm" onchange="fillCo(this.value,'t')"><option value="">Rellenar empresa…</option><option value="tl_alg">Total Logistic · Algeciras</option><option value="tl_mlg">Total Logistic · Málaga</option><option value="tl_pr">Total Logistic · Puerto Real</option><option value="cm_mel">Carmelo Martínez · Melilla</option></select></div>
       <div class="form-grid">
-        <div class="form-group full"><label>Nombre / razón social *</label><input id="t_nombre" required></div>
+        <div class="form-group full"><label>Nombre / razón social *</label><input id="t_nombre" required list="dl_trans"><datalist id="dl_trans"></datalist></div>
         <div class="form-group"><label>NIF *</label><input id="t_nif" required></div>
       </div>
     </div>
@@ -99,7 +100,7 @@
     <div class="section" id="sec-destinatario">
       <h2>Destinatario / consignatario</h2>
       <div class="form-grid">
-        <div class="form-group full"><label>Nombre / razón social</label><input id="d_nombre"></div>
+        <div class="form-group full"><label>Nombre / razón social</label><input id="d_nombre" list="dl_dest"><datalist id="dl_dest"></datalist></div>
         <div class="form-group"><label>NIF</label><input id="d_nif"></div>
         <div class="form-group"><label>Domicilio</label><input id="d_domicilio"></div>
       </div>
@@ -109,14 +110,14 @@
     <div class="section">
       <h2>Datos del transporte</h2>
       <div class="form-grid">
-        <div class="form-group"><label id="lbl-origen">Origen *</label><input id="origen" required></div>
-        <div class="form-group"><label id="lbl-destino">Destino *</label><input id="destino" required></div>
+        <div class="form-group"><label id="lbl-origen">Origen *</label><input id="origen" required list="dl_origen"><datalist id="dl_origen"></datalist></div>
+        <div class="form-group"><label id="lbl-destino">Destino *</label><input id="destino" required list="dl_destino"><datalist id="dl_destino"></datalist></div>
         <div class="form-group"><label>Fecha del transporte *</label><input id="fecha" type="date" required></div>
         <div class="form-group"><label>Hora del transporte</label><input id="hora" type="time"></div>
         <div class="form-group"><label>Matrícula tractora *</label><input id="mat_tractora" required></div>
         <div class="form-group"><label>Matrícula remolque / semirremolque</label><input id="mat_remolque"></div>
         <div class="form-group"><label>Teléfono del conductor</label><input id="tel_conductor"></div>
-        <div class="form-group"><label>Naturaleza de la mercancía *</label><input id="m_naturaleza" required></div>
+        <div class="form-group"><label>Naturaleza de la mercancía *</label><input id="m_naturaleza" required list="dl_merc"><datalist id="dl_merc"></datalist></div>
         <div class="form-group"><label>Peso (kg) *</label><input id="m_peso" type="number" min="0" step="1" required></div>
         <div class="form-group"><label>Bultos y marcas</label><input id="m_bultos"></div>
         <div class="form-group full"><label>Autorizaciones especiales</label><input id="autorizaciones"></div>
@@ -176,24 +177,52 @@ El trincaje de la carga lo realiza el conductor, siendo a su criterio idóneo.</
   function val(id){ return document.getElementById(id).value.trim(); }
   function checked(id){ return document.getElementById(id).checked; }
 
-  const TL = { nombre: 'Total Logistic Services, S.L.', nif: 'B29961059',
-               domicilio: 'Avda. del Estrecho, parcela 5.15, Pol. Ind. La Menacha, 11204 Algeciras (Cádiz)' };
-  const CM = { nombre: 'CARMELO MARTINEZ RODRIGUEZ, S.L.', nif: 'B29905940',
-               domicilio: 'P.I. Sepes - C/ Dalia nave 25, 52006 Melilla' };
-  function fillCo(co, prefix){
-    const setv = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
+  const EMPRESAS = {
+    tl_alg: { nombre: 'Total Logistic Services, S.L.', nif: 'B29961059', domicilio: 'Avda. del Estrecho, parcela 5.15, Pol. Ind. La Menacha, 11204 Algeciras (Cádiz)' },
+    tl_mlg: { nombre: 'Total Logistic Services, S.L.', nif: 'B29961059', domicilio: 'CTM Centro de Transporte de Mercancías, C/ Gluck s/n módulo 4, 29590 Campanillas (Málaga)' },
+    tl_pr:  { nombre: 'Total Logistic Services, S.L.', nif: 'B29961059', domicilio: 'C/ Chile s/n, Parcela I-4 nave B6, Bajo de la Cabezuela, 11519 Puerto Real (Cádiz)' },
+    cm_mel: { nombre: 'CARMELO MARTINEZ RODRIGUEZ, S.L.', nif: 'B29905940', domicilio: 'P.I. Sepes - C/ Dalia nave 25, 52006 Melilla' },
+  };
+  function fillCo(id, prefix){
+    const co = EMPRESAS[id]; if (!co) return;
+    const setv = (i, v) => { const el = document.getElementById(i); if (el) el.value = v; };
     setv(prefix + '_nombre', co.nombre); setv(prefix + '_nif', co.nif); setv(prefix + '_domicilio', co.domicilio);
   }
-  function fillTL(prefix){ fillCo(TL, prefix); }
-  function fillCM(prefix){ fillCo(CM, prefix); }
 
-  function upd(){
-    const cp = checked('doc_cp');   // el DeCA es FIJO (obligatorio); la carta de porte es opcional
-    document.getElementById('sec-firmas').style.display = cp ? 'block' : 'none';
+  function updDocs(){
+    const deca = document.getElementById('doc_deca');
+    const qr   = document.getElementById('doc_cp_qr');
+    const anyCp = qr.checked || document.getElementById('doc_cp_sin').checked;
+    if (qr.checked){ deca.checked = true; deca.disabled = true; }  // carta CON QR obliga a DeCA
+    else { deca.disabled = false; }
+    document.getElementById('sec-firmas').style.display = anyCp ? 'block' : 'none';
+    if (anyCp && !cctx) setupCanvas();
     document.querySelectorAll('.docpick label').forEach(l => l.classList.toggle('on', l.querySelector('input').checked));
-    if (cp && !cctx) setupCanvas();
   }
-  // sin empresa por defecto: el usuario elige con los botones «Somos…»
+  function onCpQr(){ if (document.getElementById('doc_cp_qr').checked) document.getElementById('doc_cp_sin').checked = false; updDocs(); }
+  function onCpSin(){ if (document.getElementById('doc_cp_sin').checked) document.getElementById('doc_cp_qr').checked = false; updDocs(); }
+  // sin empresa por defecto: el usuario elige con el desplegable «Rellenar empresa…»
+  // fecha por defecto = hoy (día de generación del documento); editable
+  (function(){ const f = document.getElementById('fecha'); if (f && !f.value){ const t = new Date(); f.value = t.getFullYear() + '-' + String(t.getMonth()+1).padStart(2,'0') + '-' + String(t.getDate()).padStart(2,'0'); } })();
+
+  // ── Autocompletado desde datos ya guardados (sugerencias del backend) ──
+  const SUG = { d:{}, c:{}, t:{} };
+  function _dl(id, vals){ const dl = document.getElementById(id); if (dl) dl.innerHTML = (vals||[]).map(v => '<option value="' + String(v).replace(/"/g,'&quot;') + '">').join(''); }
+  function _autofill(prefix, map){
+    const nom = document.getElementById(prefix + '_nombre'); if (!nom) return;
+    nom.addEventListener('change', () => { const p = map[nom.value]; if (!p) return;
+      const setv = (i, v) => { const el = document.getElementById(i); if (el && !el.value && v) el.value = v; };
+      setv(prefix + '_nif', p.nif); setv(prefix + '_domicilio', p.domicilio); });
+  }
+  (async function(){ try {
+    const r = await fetch('/api/deca/sugerencias'); if (!r.ok) return; const s = await r.json();
+    _dl('dl_origen', s.origenes); _dl('dl_destino', s.destinos); _dl('dl_merc', s.mercancias);
+    (s.destinatarios||[]).forEach(p => SUG.d[p.nombre] = p);
+    (s.cargadores||[]).forEach(p => SUG.c[p.nombre] = p);
+    (s.transportistas||[]).forEach(p => SUG.t[p.nombre] = p);
+    _dl('dl_dest', Object.keys(SUG.d)); _dl('dl_carg', Object.keys(SUG.c)); _dl('dl_trans', Object.keys(SUG.t));
+    _autofill('d', SUG.d); _autofill('c', SUG.c); _autofill('t', SUG.t);
+  } catch(e){} })();
 
   // ── Canvas de firma ──
   let drawing = false, hasInk = false, cctx = null;
@@ -221,8 +250,10 @@ El trincaje de la carga lo realiza el conductor, siendo a su criterio idóneo.</
   function delFirma(i){ firmas.splice(i,1); renderFirmas(); }
 
   function collectData(){
-    const documentos = ['deca'];   // DeCA siempre (obligatorio en transporte nacional)
-    if (checked('doc_cp')) documentos.push('carta_porte');
+    const documentos = [];
+    if (checked('doc_deca')) documentos.push('deca');
+    if (checked('doc_cp_qr')) documentos.push('carta_porte_con_qr');
+    if (checked('doc_cp_sin')) documentos.push('carta_porte_sin_qr');
     const d = {
       documentos,
       cargador_contractual: { nombre: val('c_nombre'), nif: val('c_nif'), domicilio: val('c_domicilio') },
@@ -255,7 +286,7 @@ El trincaje de la carga lo realiza el conductor, siendo a su criterio idóneo.</
     if (!d.mercancia.naturaleza || !d.mercancia.peso_kg) return 'Indica naturaleza y peso de la mercancía';
     if (!d.fecha_transporte) return 'Indica la fecha';
     if (!d.matricula_tractora) return 'Indica la matrícula de la tractora';
-    if (checked('doc_cp') && !d.destinatario) return 'Indica el destinatario (obligatorio en la carta de porte)';
+    if ((checked('doc_cp_qr') || checked('doc_cp_sin')) && !d.destinatario) return 'Indica el destinatario (obligatorio en la carta de porte)';
     if (checked('send_email') && !val('email_camionero')) return 'Indica el email del camionero o desmarca el envío';
     if (checked('send_email') && !checked('doc_deca')) return 'El envío al camionero es del DeCA; marca DeCA o desmarca el envío';
     return null;
@@ -275,7 +306,7 @@ El trincaje de la carga lo realiza el conductor, siendo a su criterio idóneo.</
           const href = 'data:application/pdf;base64,' + doc.pdf_base64;
           return `<div class="doccard"><div class="t">${LBL[doc.tipo] || doc.tipo} · interno</div>
             <a class="btn-docx" style="display:inline-block;text-decoration:none" href="${href}" download="carta-porte-${doc.uuid}.pdf">⬇ Descargar carta de porte (PDF)</a>
-            <div style="font-size:.72rem;color:#9ca3af;margin-top:.5rem">Sin QR · uso interno (imprimir / archivar). No se envía al camionero.</div>
+            <div style="font-size:.72rem;color:#9ca3af;margin-top:.5rem">${doc.con_qr ? 'Con QR del DeCA' : 'Sin QR'} · uso interno (imprimir / archivar). No se envía al camionero.</div>
             <div style="font-size:.7rem;color:#9ca3af;margin-top:.3rem">${doc.uuid}</div></div>`;
         }
         return `<div class="doccard"><div class="t">${LBL[doc.tipo] || doc.tipo}</div>
@@ -290,7 +321,7 @@ El trincaje de la carga lo realiza el conductor, siendo a su criterio idóneo.</
     } catch(e) { showMsg('❌ ' + e.message, 'error'); } finally { btn.disabled = false; }
   }
   function showMsg(t, type){ const el = document.getElementById('message'); el.textContent = t; el.className = 'message ' + (type === 'info' ? 'success' : type); el.style.opacity = type === 'info' ? '.6' : '1'; el.style.display = 'block'; }
-  upd();
+  updDocs();
 </script>
 </body>
 </html>

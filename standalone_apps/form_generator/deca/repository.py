@@ -97,6 +97,44 @@ class Repository:
         rec["payload"] = json.loads(rec.pop("payload_json"))
         return rec
 
+    def suggestions(self, limit: int = 800) -> dict:
+        """Valores ya usados (para autocompletar el formulario). Partes con
+        nombre→NIF/domicilio; origen/destino/mercancía como listas simples."""
+        rows = self.conn.execute(
+            "SELECT payload_json FROM deca ORDER BY creado_en DESC LIMIT ?", (limit,)
+        ).fetchall()
+        dest, carg, trans = {}, {}, {}
+        orig, des, merc = set(), set(), set()
+
+        def _party(dic, obj):
+            nombre = ((obj or {}).get("nombre") or "").strip()
+            if nombre and nombre not in dic:
+                dic[nombre] = {"nombre": nombre,
+                               "nif": ((obj or {}).get("nif") or "").strip(),
+                               "domicilio": ((obj or {}).get("domicilio") or "").strip()}
+
+        for (pj,) in rows:
+            try:
+                d = json.loads(pj)
+            except Exception:
+                continue
+            _party(dest, d.get("destinatario"))
+            _party(carg, d.get("cargador_contractual"))
+            _party(trans, d.get("transportista_efectivo"))
+            if (d.get("origen") or "").strip():
+                orig.add(d["origen"].strip())
+            if (d.get("destino") or "").strip():
+                des.add(d["destino"].strip())
+            nat = ((d.get("mercancia") or {}).get("naturaleza") or "").strip()
+            if nat:
+                merc.add(nat)
+        return {
+            "destinatarios": list(dest.values()),
+            "cargadores": list(carg.values()),
+            "transportistas": list(trans.values()),
+            "origenes": sorted(orig), "destinos": sorted(des), "mercancias": sorted(merc),
+        }
+
     def stats(self) -> dict:
         total = self.conn.execute("SELECT COUNT(*) FROM deca").fetchone()[0]
         return {"total": total}
