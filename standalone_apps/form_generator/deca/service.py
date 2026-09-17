@@ -41,10 +41,26 @@ _FIRMA_TL_ROL = os.getenv("DECA_FIRMA_TL_ROL", "Expedidor")
 _FIRMA_TL_NOMBRE = os.getenv("DECA_FIRMA_TL_NOMBRE", "Total Logistic Services, S.L.")
 
 
-@functools.lru_cache(maxsize=1)
-def _firma_tl_datauri():
-    """Carga la imagen de la firma corporativa como data URI (o None si no existe)."""
-    path = _FIRMA_TL_PATH or str(Path(__file__).with_name("assets") / "firma_totallogistic.png")
+# Empresas del grupo con sello propio, por NIF (normalizado) → (nombre, fichero en assets/).
+# El sello que se estampa en la carta de porte se elige según el Expedidor.
+_SELLOS = {
+    "B29961059": ("Total Logistic Services, S.L.", "firma_totallogistic.png"),
+    "B29905940": ("CARMELO MARTINEZ RODRIGUEZ, S.L.", "firma_carmelo.png"),
+}
+
+
+def _norm_nif(nif) -> str:
+    return (nif or "").strip().upper().replace(" ", "").replace("-", "").replace(".", "")
+
+
+@functools.lru_cache(maxsize=8)
+def _firma_datauri(filename: str):
+    """Carga un sello de assets/ como data URI (o None si no existe). Para el sello de
+    Total Logistic respeta el override de ruta por env (DECA_FIRMA_TOTALLOGISTIC)."""
+    if filename == "firma_totallogistic.png" and _FIRMA_TL_PATH:
+        path = _FIRMA_TL_PATH
+    else:
+        path = str(Path(__file__).with_name("assets") / filename)
     p = Path(path)
     if not p.exists():
         return None
@@ -59,17 +75,20 @@ class DecaService:
         self.repo = Repository()
 
     def _with_org_firma(self, data: DecaInput) -> DecaInput:
-        """Añade la firma corporativa de Total Logistic a carta de porte / CMR.
-        El DeCA no lleva firma. La del camionero (canvas manual) ya viene en
-        data.firmas; la corporativa se antepone (emisor/almacén primero)."""
+        """Añade el sello corporativo a carta de porte / CMR (el DeCA no lleva firma).
+        El sello se elige según el Expedidor (por NIF): Total Logistic o Carmelo
+        Martínez; por defecto Total Logistic. La firma del camionero (canvas manual)
+        ya viene en data.firmas; el sello se antepone (emisor/almacén primero)."""
         if data.tipo_documento == "deca":
             return data
-        datauri = _firma_tl_datauri()
+        exp_nif = _norm_nif(data.expedidor.nif if data.expedidor else None)
+        nombre, fichero = _SELLOS.get(exp_nif, (_FIRMA_TL_NOMBRE, "firma_totallogistic.png"))
+        datauri = _firma_datauri(fichero)
         if not datauri:
-            return data  # sin imagen configurada -> no se inyecta nada
-        if any((f.nombre or "").strip() == _FIRMA_TL_NOMBRE for f in data.firmas):
+            return data  # sin imagen -> no se inyecta nada
+        if any((f.nombre or "").strip() == nombre for f in data.firmas):
             return data  # ya presente (evita duplicar)
-        firma = Firma(rol=_FIRMA_TL_ROL, nombre=_FIRMA_TL_NOMBRE, firma_png=datauri,
+        firma = Firma(rol=_FIRMA_TL_ROL, nombre=nombre, firma_png=datauri,
                       firmado_en=dt.datetime.now(dt.timezone.utc))
         return data.model_copy(update={"firmas": [firma, *data.firmas]})
 
