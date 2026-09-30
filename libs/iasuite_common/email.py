@@ -3,6 +3,7 @@ import smtplib
 import ssl
 from dataclasses import dataclass
 from email.message import EmailMessage
+from email.utils import formatdate, make_msgid
 from pathlib import Path
 from typing import List, Optional
 import logging
@@ -137,8 +138,28 @@ class EmailService:
 
             return msg
 
+    def _stamp_headers(self, msg):
+        """Añade Message-ID y Date si faltan.
+
+        Obligatorias por RFC 5322. Al enviar por un servidor de submission
+        autenticado (dinaserver) las ponía el proveedor; un relay local
+        (Postfix :25) reenvía el mensaje tal cual, así que salían sin ellas
+        y Google las rechaza con
+        '550-5.7.1 Messages missing a valid Message-ID header are not accepted'.
+        Se hace aquí, en el punto por el que pasan todas las ramas de
+        _build_message, para que no dependa de recordar parchear cada una.
+        """
+        if not msg.get("Message-ID"):
+            domain = "totallogistic.es"
+            if self.config.mail_from and "@" in self.config.mail_from:
+                domain = self.config.mail_from.rsplit("@", 1)[-1].strip(" >")
+            msg["Message-ID"] = make_msgid(domain=domain)
+        if not msg.get("Date"):
+            msg["Date"] = formatdate(localtime=True)
+
     def _send_message(self, msg: EmailMessage, recipients: List[str]):
         """Send via SMTP."""
+        self._stamp_headers(msg)
         ctx = ssl.create_default_context()
         
         if self.config.use_ssl:
