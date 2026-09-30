@@ -120,6 +120,16 @@ _FIRMA_SLOTS = [
 ]
 
 
+def _fmt_peso(v) -> str:
+    """Peso en kg con separador de miles ESPAÑOL (el punto): 1119 -> '1.119'.
+    Se usaba '{:,.0f}' (coma de miles, estilo inglés) que en España se lee como
+    decimal; se corrige aquí para los tres documentos."""
+    try:
+        return f"{float(v):,.0f}".replace(",", ".")
+    except (TypeError, ValueError):
+        return str(v)
+
+
 def _fmt_local(dtobj) -> str:
     """Formatea un datetime en hora local de España (Europe/Madrid). Un datetime
     naíve se asume en UTC (así se corrige el sello que salía en UTC, p. ej. 06:38,
@@ -250,7 +260,7 @@ def render_pdf(record: DecaRecord, deca_qr_url: str | None = None) -> bytes:
         [_field(ss, "Fecha y hora del transporte", fecha_txt),
          _field(ss, "Matrículas (tractora / remolque)", mats)],
         [_field(ss, "Naturaleza de la mercancía", d.mercancia.naturaleza),
-         _field(ss, "Peso (kg)", f"{d.mercancia.peso_kg:,.0f}")],
+         _field(ss, "Peso (kg)", _fmt_peso(d.mercancia.peso_kg))],
         [_field(ss, "Bultos y marcas", d.mercancia.bultos),
          _field(ss, "Teléfono del conductor", d.telefono_conductor)],
         [_field(ss, "Autorizaciones especiales", d.autorizaciones_especiales), ""],

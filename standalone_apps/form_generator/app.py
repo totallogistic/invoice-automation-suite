@@ -18,7 +18,7 @@ from typing import Any, Dict
 import csv as _csv
 import glob as _glob
 
-from fastapi import FastAPI, Request, HTTPException
+from fastapi import FastAPI, Request, HTTPException, UploadFile, File
 from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -2419,6 +2419,7 @@ import base64
 from deca.models import DecaInput
 from deca.pdf import qr_png_bytes
 from deca.service import DecaService
+from deca.bulk import generar_desde_csv
 
 _deca_svc = DecaService()
 
@@ -2479,6 +2480,30 @@ async def deca_sugerencias():
         return JSONResponse(_deca_svc.repo.suggestions())
     except Exception:
         return JSONResponse({})
+
+@app.get("/deca/importar", response_class=HTMLResponse)
+async def deca_importar_page(request: Request):
+    """Página de importación masiva: subir CSV de repartos → descargar ZIP de DeCA."""
+    return templates.TemplateResponse("importar-deca.html", {"request": request})
+
+@app.post("/api/deca/importar-csv")
+async def deca_importar_csv(archivo: UploadFile = File(...)):
+    """Importación masiva: CSV de repartos → un DeCA por línea (salvo Caja/Cajas o
+    sin matrícula). Devuelve resumen + ZIP (PDFs + índice) en base64."""
+    contenido = await archivo.read()
+    if not contenido:
+        raise HTTPException(400, "El fichero está vacío.")
+    try:
+        res = generar_desde_csv(contenido, _deca_svc)
+    except Exception as e:
+        raise HTTPException(400, f"No se pudo procesar el CSV: {e}")
+    return JSONResponse({
+        "success": True,
+        "total": res["total"], "generados": res["generados"], "omitidos": res["omitidos"],
+        "filas": res["filas"], "nombre_zip": res["nombre_zip"],
+        "zip_base64": base64.b64encode(res["zip_bytes"]).decode(),
+        "message": f"{res['generados']} DeCA generado(s), {res['omitidos']} omitido(s).",
+    })
 
 @app.post("/api/submit/{schema_name}")
 async def submit_pipeline(schema_name: str, request: Request):

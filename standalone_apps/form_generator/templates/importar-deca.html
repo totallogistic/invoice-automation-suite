@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Importar repartos (CSV) · DeCA</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+         background: linear-gradient(135deg,#2563a8 0%,#1a4d7e 100%); min-height: 100vh; padding: 2rem 1rem; }
+  .container { max-width: 900px; margin: 0 auto; background: #fff; border-radius: 16px; box-shadow: 0 20px 60px rgba(0,0,0,.3); overflow: hidden; }
+  header { background: linear-gradient(135deg,#2563a8 0%,#1a4d7e 100%); color: #fff; padding: 2rem; text-align: center; }
+  header h1 { font-size: 1.55rem; margin-bottom: .3rem; }
+  header p { opacity: .85; font-size: .85rem; }
+  .back-link { display: inline-block; color: #fff; text-decoration: none; padding: .4rem .9rem; background: rgba(255,255,255,.2); border-radius: 6px; margin-bottom: 1rem; font-size: .875rem; }
+  .section { padding: 1.4rem 2rem; border-bottom: 1px solid #e5e7eb; }
+  .section h2 { font-size: .75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: #9ca3af; margin-bottom: 1rem; }
+  .rules { list-style: none; font-size: .88rem; color: #374151; }
+  .rules li { padding: .3rem 0 .3rem 1.6rem; position: relative; }
+  .rules li::before { content: "•"; position: absolute; left: .4rem; color: #2563a8; font-weight: 700; }
+  .rules b { color: #1a4d7e; }
+  .drop { border: 2px dashed #b0bcc9; border-radius: 12px; padding: 2rem 1rem; text-align: center; color: #6b7280; cursor: pointer; transition: border-color .15s, background .15s; }
+  .drop.on { border-color: #2563a8; background: #f0f6fc; }
+  .drop .big { font-size: 1rem; color: #374151; font-weight: 600; margin-bottom: .3rem; }
+  .drop .fname { margin-top: .6rem; font-weight: 700; color: #1a4d7e; }
+  .actions { padding: 1.5rem 2rem 2rem; display: flex; justify-content: center; gap: 1rem; flex-wrap: wrap; }
+  .btn-docx { padding: .95rem 2.2rem; background: linear-gradient(135deg,#2563a8,#1a4d7e); color: #fff; border: none; border-radius: 8px; font-size: 1rem; font-weight: 600; cursor: pointer; transition: transform .15s, box-shadow .15s; font-family: inherit; }
+  .btn-docx:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 6px 16px rgba(37,99,168,.35); }
+  .btn-docx:disabled { background: #9ca3af; cursor: not-allowed; }
+  .btn-green { background: linear-gradient(135deg,#059669,#047857); }
+  .message { padding: 1rem 1.5rem; border-radius: 8px; font-weight: 600; display: none; margin: 0 2rem 1rem; }
+  .message.success { background: #d1fae5; color: #065f46; border: 1px solid #6ee7b7; }
+  .message.error { background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; }
+  .message.info { background: #dbeafe; color: #1e40af; border: 1px solid #93c5fd; }
+  .cards { display: flex; gap: 1rem; justify-content: center; margin-bottom: 1.2rem; flex-wrap: wrap; }
+  .card { border-radius: 10px; padding: 1rem 1.4rem; min-width: 120px; text-align: center; }
+  .card .n { font-size: 1.8rem; font-weight: 800; line-height: 1; }
+  .card .l { font-size: .74rem; text-transform: uppercase; letter-spacing: .5px; margin-top: .3rem; }
+  .card.gen { background: #d1fae5; color: #065f46; }
+  .card.omit { background: #fef3c7; color: #92400e; }
+  .card.tot { background: #e5edf7; color: #1a4d7e; }
+  table.res { width: 100%; border-collapse: collapse; font-size: .82rem; }
+  table.res th { text-align: left; padding: .5rem .6rem; background: #f3f4f6; color: #374151; font-size: .72rem; text-transform: uppercase; letter-spacing: .5px; position: sticky; top: 0; }
+  table.res td { padding: .5rem .6rem; border-bottom: 1px solid #eef0f2; vertical-align: top; }
+  .tbl-wrap { max-height: 420px; overflow: auto; border: 1px solid #e5e7eb; border-radius: 8px; }
+  .badge { display: inline-block; padding: .12rem .5rem; border-radius: 20px; font-weight: 700; font-size: .72rem; }
+  .badge.gen { background: #d1fae5; color: #065f46; }
+  .badge.omit { background: #fef3c7; color: #92400e; }
+  .spin { display: inline-block; width: 18px; height: 18px; border: 3px solid rgba(255,255,255,.4); border-top-color: #fff; border-radius: 50%; animation: sp .7s linear infinite; vertical-align: -3px; margin-right: .5rem; }
+  @keyframes sp { to { transform: rotate(360deg); } }
+  #result { display: none; padding: 1.4rem 2rem 2rem; }
+</style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <a href="/" class="back-link">← Volver al inicio</a>
+    <h1>Importar repartos (CSV)</h1>
+    <p>Sube el fichero de repartos y genera un DeCA por línea, en un solo ZIP</p>
+  </header>
+
+  <div class="section">
+    <h2>Cómo funciona</h2>
+    <ul class="rules">
+      <li>Se genera <b>un DeCA por cada línea</b> del CSV.</li>
+      <li>Se <b>omite</b> la línea cuyo embalaje sea <b>Caja</b> o <b>Cajas</b>.</li>
+      <li>Se <b>omite</b> la línea <b>sin matrícula</b> (vacía o «0»), igual que el formulario.</li>
+      <li>La <b>fecha</b> del transporte es el <b>día de emisión</b> (hoy).</li>
+      <li>Descargas un <b>ZIP</b> con un PDF por DeCA + <b>00_indice.csv</b> (control de todas las líneas: generadas y omitidas con su motivo).</li>
+    </ul>
+  </div>
+
+  <div class="section" id="pickSection">
+    <h2>Fichero de repartos</h2>
+    <div class="drop" id="drop">
+      <div class="big">Arrastra el CSV aquí o haz clic para elegirlo</div>
+      <div>Formato de exportación de Visual Trans (delimitador «;»)</div>
+      <div class="fname" id="fname"></div>
+    </div>
+    <input type="file" id="file" accept=".csv,text/csv" hidden>
+  </div>
+
+  <div class="message" id="msg"></div>
+
+  <div class="actions" id="actions">
+    <button class="btn-docx" id="btnGen" disabled onclick="generar()">Generar DeCA</button>
+  </div>
+
+  <div id="result">
+    <div class="cards">
+      <div class="card tot"><div class="n" id="cTot">0</div><div class="l">Líneas</div></div>
+      <div class="card gen"><div class="n" id="cGen">0</div><div class="l">Generados</div></div>
+      <div class="card omit"><div class="n" id="cOmit">0</div><div class="l">Omitidos</div></div>
+    </div>
+    <div class="actions" style="padding-top:0">
+      <button class="btn-docx btn-green" id="btnZip" onclick="descargarZip()">⬇ Descargar ZIP</button>
+    </div>
+    <div class="tbl-wrap">
+      <table class="res">
+        <thead><tr><th>#</th><th>Estado</th><th>Destinatario</th><th>Embalaje</th><th>Matrícula</th><th>Motivo / UUID</th></tr></thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script>
+  let _file = null, _zipB64 = null, _zipName = "deca_lote.zip";
+  const $ = id => document.getElementById(id);
+  const drop = $('drop'), fileInput = $('file');
+
+  drop.onclick = () => fileInput.click();
+  ['dragover','dragenter'].forEach(e => drop.addEventListener(e, ev => { ev.preventDefault(); drop.classList.add('on'); }));
+  ['dragleave','drop'].forEach(e => drop.addEventListener(e, ev => { ev.preventDefault(); drop.classList.remove('on'); }));
+  drop.addEventListener('drop', ev => { if (ev.dataTransfer.files.length) setFile(ev.dataTransfer.files[0]); });
+  fileInput.onchange = () => { if (fileInput.files.length) setFile(fileInput.files[0]); };
+
+  function setFile(f) {
+    _file = f;
+    $('fname').textContent = '📄 ' + f.name;
+    $('btnGen').disabled = false;
+    hideMsg();
+  }
+  function showMsg(t, cls) { const m = $('msg'); m.textContent = t; m.className = 'message ' + cls; m.style.display = 'block'; }
+  function hideMsg() { $('msg').style.display = 'none'; }
+
+  async function generar() {
+    if (!_file) return;
+    const btn = $('btnGen');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spin"></span>Generando…';
+    $('result').style.display = 'none';
+    showMsg('Procesando el fichero y generando los DeCA…', 'info');
+    try {
+      const fd = new FormData();
+      fd.append('archivo', _file);
+      const r = await fetch('/api/deca/importar-csv', { method: 'POST', body: fd });
+      const data = await r.json();
+      if (!r.ok || !data.success) throw new Error((data && data.detail) || 'Error al procesar el CSV');
+      render(data);
+      showMsg(data.message, 'success');
+    } catch (e) {
+      showMsg('❌ ' + e.message, 'error');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Generar DeCA';
+    }
+  }
+
+  function render(data) {
+    $('cTot').textContent = data.total;
+    $('cGen').textContent = data.generados;
+    $('cOmit').textContent = data.omitidos;
+    _zipB64 = data.zip_base64;
+    _zipName = data.nombre_zip || 'deca_lote.zip';
+    const tb = $('rows');
+    tb.innerHTML = '';
+    (data.filas || []).forEach(f => {
+      const tr = document.createElement('tr');
+      const gen = f.estado === 'GENERADO';
+      const cells = [
+        f.fila,
+        `<span class="badge ${gen ? 'gen' : 'omit'}">${gen ? 'Generado' : 'Omitido'}</span>`,
+        esc(f.destinatario),
+        esc(f.embalaje),
+        esc(f.matricula),
+        gen ? `<code style="font-size:.72rem;color:#6b7280">${esc((f.uuid||'').slice(0,8))}</code>` : esc(f.motivo)
+      ];
+      cells.forEach((c, i) => { const td = document.createElement('td'); if (i===0||i===2||i===3||i===4) td.textContent = c; else td.innerHTML = c; tr.appendChild(td); });
+      tb.appendChild(tr);
+    });
+    $('result').style.display = 'block';
+    $('btnZip').disabled = !_zipB64 || data.generados === 0;
+  }
+
+  function esc(s) { return (s == null ? '' : String(s)); }
+
+  function descargarZip() {
+    if (!_zipB64) return;
+    const bin = atob(_zipB64), len = bin.length, u8 = new Uint8Array(len);
+    for (let i = 0; i < len; i++) u8[i] = bin.charCodeAt(i);
+    const blob = new Blob([u8], { type: 'application/zip' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = _zipName;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+  }
+</script>
+</body>
+</html>
