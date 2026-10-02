@@ -82,6 +82,13 @@ def _parse_peso(s) -> float:
         return float(t2) if t2 else 0.0
 
 
+def _norm_dir(s) -> str:
+    """Normaliza una dirección: colapsa espacios, tabulaciones y saltos de línea
+    a un solo espacio (las direcciones del CSV vienen con sangría y a veces en
+    varias líneas dentro del mismo campo entrecomillado)."""
+    return re.sub(r"\s+", " ", (s or "").strip())
+
+
 def _col(row: dict, *candidatos) -> str:
     """Lee una columna por nombre de cabecera, tolerante a acentos/espacios."""
     for c in candidatos:
@@ -127,6 +134,9 @@ def generar_desde_csv(file_bytes: bytes, svc, fecha: dt.date | None = None,
     for i, row in enumerate(reader, start=1):
         expedidor_raw = _col(row, "EXPEDIDOR")
         dest_raw = _col(row, "DESTINATARIO/CONSIGNATARIO", "DESTINATARIO", "CONSIGNATARIO")
+        dest_cif = _col(row, "DESTINATARIO CIF", "CIF DESTINATARIO", "CIF/NIF DESTINATARIO", "NIF DESTINATARIO")
+        dest_dir = _norm_dir(_col(row, "DESTINATARIO DIRECCION", "DIRECCION DESTINATARIO",
+                                  "DOMICILIO DESTINATARIO", "DIRECCION/DOMICILIO DESTINATARIO"))
         cargador_raw = _col(row, "CARGADOR CONTRACTUAL", "CARGADOR")
         transp_raw = _col(row, "TRANSPORTISTA EFECTIVO", "TRANSPORTISTA")
         origen = _col(row, "ORIGEN")
@@ -144,7 +154,8 @@ def generar_desde_csv(file_bytes: bytes, svc, fecha: dt.date | None = None,
             continue
 
         base = {
-            "fila": i, "destinatario": dest_raw, "naturaleza": naturaleza,
+            "fila": i, "destinatario": dest_raw, "cif_dest": dest_cif,
+            "dir_dest": dest_dir, "naturaleza": naturaleza,
             "embalaje": embalaje, "matricula": matricula, "peso": peso_raw,
             "bultos": bultos, "origen": origen, "destino": destino,
         }
@@ -187,7 +198,8 @@ def generar_desde_csv(file_bytes: bytes, svc, fecha: dt.date | None = None,
             fecha_transporte=fecha,
             matricula_tractora=matricula,
             telefono_conductor=telefono or None,
-            destinatario={"nombre": dest_raw} if dest_raw else None,
+            destinatario=({"nombre": dest_raw, "nif": dest_cif or None,
+                           "domicilio": dest_dir or None} if dest_raw else None),
         )
 
         # 4) Generar (público: bucket + QR), tolerando errores por fila.
@@ -207,11 +219,12 @@ def generar_desde_csv(file_bytes: bytes, svc, fecha: dt.date | None = None,
     idx = io.StringIO()
     idx.write("﻿")
     w = csv.writer(idx, delimiter=";", lineterminator="\r\n")
-    w.writerow(["Fila", "Estado", "Motivo", "Destinatario", "Naturaleza", "Embalaje",
-                "Matrícula", "Peso (kg)", "Bultos", "Origen", "Destino",
+    w.writerow(["Fila", "Estado", "Motivo", "Destinatario", "CIF dest.", "Dirección dest.",
+                "Naturaleza", "Embalaje", "Matrícula", "Peso (kg)", "Bultos", "Origen", "Destino",
                 "UUID", "URL pública", "Archivo PDF"])
     for f in filas:
-        w.writerow([f["fila"], f["estado"], f["motivo"], f["destinatario"], f["naturaleza"],
+        w.writerow([f["fila"], f["estado"], f["motivo"], f["destinatario"],
+                    f.get("cif_dest", ""), f.get("dir_dest", ""), f["naturaleza"],
                     f["embalaje"], f["matricula"], f["peso"], f["bultos"], f["origen"],
                     f["destino"], f["uuid"], f["url_publica"], f["archivo"]])
     indice_bytes = idx.getvalue().encode("utf-8")
