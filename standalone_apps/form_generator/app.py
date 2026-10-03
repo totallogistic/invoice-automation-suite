@@ -90,9 +90,32 @@ app = FastAPI(title="JSON Schema Form Generator", version="1.0")
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 templates = Jinja2Templates(directory=TEMPLATES_DIR)
 
+# ── Perfil de formularios habilitados (allow-list por despliegue) ────────────
+# FORMS_ENABLED (env) = lista de schemas, p. ej. "documento-transporte".
+# Vacío/no definido → TODOS (comportamiento actual). Ver forms_profile.py.
+import forms_profile as _profile
+FORMS_ENABLED = _profile.enabled_set()
+print(f"✅ [forms-profile] FORMS_ENABLED={sorted(FORMS_ENABLED) if FORMS_ENABLED else 'TODOS'}")
+
+def _form_enabled(name: str) -> bool:
+    return _profile.form_enabled(name, FORMS_ENABLED)
+
+@app.middleware("http")
+async def _forms_gate(request: Request, call_next):
+    """En modo restringido, 404 a cualquier ruta de formulario no habilitada
+    (cierra la ruta, no solo oculta la ficha de la landing)."""
+    if not _profile.path_allowed(request.url.path, FORMS_ENABLED):
+        return JSONResponse(
+            {"detail": "Formulario no disponible en este despliegue."},
+            status_code=404,
+        )
+    return await call_next(request)
+
 from app_extintores import router_extintores
 from app_epis_v2 import save_entrega_epis_v2
-app.include_router(router_extintores)
+# El router de extintores solo se monta si la familia está habilitada.
+if _profile.feature_enabled("revision-extintores", FORMS_ENABLED):
+    app.include_router(router_extintores)
 
 # ─────────────────────────────────────────────────────────────────────────
 # Resolución de output_dir por formulario desde tools.yaml
@@ -325,6 +348,8 @@ async def index(request: Request):
     schemas = []
     if SCHEMAS_DIR.exists():
         for schema_file in SCHEMAS_DIR.glob("*.json"):
+            if not _form_enabled(schema_file.stem):
+                continue  # perfil restringido: solo los habilitados
             try:
                 schema = load_schema(schema_file.stem)
                 schemas.append({
