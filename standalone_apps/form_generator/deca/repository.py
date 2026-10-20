@@ -105,6 +105,7 @@ class Repository:
         ).fetchall()
         dest, carg, trans = {}, {}, {}
         orig, des, merc = set(), set(), set()
+        exped = {}
 
         def _party(dic, obj):
             nombre = ((obj or {}).get("nombre") or "").strip()
@@ -121,6 +122,7 @@ class Repository:
             _party(dest, d.get("destinatario"))
             _party(carg, d.get("cargador_contractual"))
             _party(trans, d.get("transportista_efectivo"))
+            _party(exped, d.get("expedidor"))
             if (d.get("origen") or "").strip():
                 orig.add(d["origen"].strip())
             if (d.get("destino") or "").strip():
@@ -132,6 +134,7 @@ class Repository:
             "destinatarios": list(dest.values()),
             "cargadores": list(carg.values()),
             "transportistas": list(trans.values()),
+            "expedidores": list(exped.values()),
             "origenes": sorted(orig), "destinos": sorted(des), "mercancias": sorted(merc),
         }
 

@@ -74,7 +74,7 @@
     <div class="section">
       <div class="sec-head"><h2>Expedidor</h2><select class="btn-sm" onchange="fillCo(this.value,'e')"><option value="">Rellenar empresa…</option><option value="tl_alg">Total Logistic · Algeciras</option><option value="tl_mlg">Total Logistic · Málaga</option><option value="tl_pr">Total Logistic · Puerto Real</option><option value="cm_mel">Carmelo Martínez · Melilla</option></select></div>
       <div class="form-grid">
-        <div class="form-group full"><label>Nombre / razón social</label><input id="e_nombre"></div>
+        <div class="form-group full"><label>Nombre / razón social</label><input id="e_nombre" list="dl_exp"><datalist id="dl_exp"></datalist></div>
         <div class="form-group"><label>NIF</label><input id="e_nif"></div>
         <div class="form-group"><label>Domicilio</label><input id="e_domicilio"></div>
       </div>
@@ -207,7 +207,7 @@ El trincaje de la carga lo realiza el conductor, siendo a su criterio idóneo.</
   (function(){ const f = document.getElementById('fecha'); if (f && !f.value){ const t = new Date(); f.value = t.getFullYear() + '-' + String(t.getMonth()+1).padStart(2,'0') + '-' + String(t.getDate()).padStart(2,'0'); } })();
 
   // ── Autocompletado desde datos ya guardados (sugerencias del backend) ──
-  const SUG = { d:{}, c:{}, t:{} };
+  const SUG = { d:{}, c:{}, t:{}, e:{} };
   function _dl(id, vals){ const dl = document.getElementById(id); if (dl) dl.innerHTML = (vals||[]).map(v => '<option value="' + String(v).replace(/"/g,'&quot;') + '">').join(''); }
   function _autofill(prefix, map){
     const nom = document.getElementById(prefix + '_nombre'); if (!nom) return;
@@ -221,8 +221,11 @@ El trincaje de la carga lo realiza el conductor, siendo a su criterio idóneo.</
     (s.destinatarios||[]).forEach(p => SUG.d[p.nombre] = p);
     (s.cargadores||[]).forEach(p => SUG.c[p.nombre] = p);
     (s.transportistas||[]).forEach(p => SUG.t[p.nombre] = p);
+    (s.expedidores||[]).forEach(p => SUG.e[p.nombre] = p);
     _dl('dl_dest', Object.keys(SUG.d)); _dl('dl_carg', Object.keys(SUG.c)); _dl('dl_trans', Object.keys(SUG.t));
+    _dl('dl_exp', Object.keys(SUG.e));
     _autofill('d', SUG.d); _autofill('c', SUG.c); _autofill('t', SUG.t);
+    _autofill('e', SUG.e);
   } catch(e){} })();
 
   // ── Canvas de firma ──
