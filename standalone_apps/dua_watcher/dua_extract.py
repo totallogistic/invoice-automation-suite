@@ -49,6 +49,38 @@ DUA_FIND_RE = re.compile(r"\d{2}ES[0-9A-Z]{14,}")
 OCR_LANG = "eng"   # el DUA es alfanumerico; no necesita diccionario español
 OCR_DPI = 300
 
+# ── Validacion por digito de control (ISO 6346, igual que contenedores) ───────
+# El nº DUA (MRN) lleva un check-digit oficial. Permite validar MATEMATICAMENTE
+# si un numero esta bien leido, sin adivinar estructura. Verificado con DUAs
+# reales y el vector oficial 22ITZXBZYUTJFLJXK6.
+_ISO6346_LETTER = {
+    "A": 10, "B": 12, "C": 13, "D": 14, "E": 15, "F": 16, "G": 17, "H": 18,
+    "I": 19, "J": 20, "K": 21, "L": 23, "M": 24, "N": 25, "O": 26, "P": 27,
+    "Q": 28, "R": 29, "S": 30, "T": 31, "U": 32, "V": 34, "W": 35, "X": 36,
+    "Y": 37, "Z": 38,
+}
+
+
+def _char_value(c):
+    c = c.upper()
+    if "0" <= c <= "9":
+        return int(c)
+    if c in _ISO6346_LETTER:
+        return _ISO6346_LETTER[c]
+    raise ValueError(f"caracter no alfanumerico: {c!r}")
+
+
+def mrn_check_ok(mrn):
+    """True si el MRN/DUA de 18 chars tiene un digito de control valido."""
+    if not mrn or len(mrn) != DUA_LEN:
+        return False
+    try:
+        body = mrn[:-1]
+        total = sum(_char_value(c) * (2 ** i) for i, c in enumerate(body))
+        return (total % 11) % 10 == int(mrn[-1])
+    except (ValueError, IndexError):
+        return False
+
 # Caracteres que el OCR confunde en escaneos (para marcar ambiguedad).
 AMBIGUOUS = {"I": "1", "1": "I", "O": "0", "0": "O", "B": "8", "8": "B"}
 
@@ -132,34 +164,56 @@ def extract_dua(pdf_path, dpi=OCR_DPI):
     dua = "".join(recon)
 
     # ── Nivel de confianza ──
-    motivos = []
-    es_formato = bool(DUA_CORE_RE.fullmatch(dua))
-    if not es_formato:
-        motivos.append(f"formato no exacto (len={len(dua)}, esperado {DUA_LEN})")
-    if ambiguas:
-        motivos.append(f"paginas discrepan en posiciones {ambiguas}")
-    if paginas_con_dua < 2:
-        motivos.append("DUA visto en una sola pagina (sin validacion cruzada)")
-    # caracteres intrinsecamente ambiguos en el resultado (riesgo de sesgo)
-    chars_ambiguos = [i for i, ch in enumerate(dua) if ch in AMBIGUOUS]
-    if chars_ambiguos:
-        motivos.append(f"contiene caracteres ambiguos I/1,O/0,B/8 en {chars_ambiguos}")
+    # El criterio PRINCIPAL es el digito de control (check-digit ISO 6346): si el
+    # numero valida, es correcto con certeza matematica (salvo colision de 1/11,
+    # despreciable). Si no valida, el OCR erro y va a revision.
+    #
+    # Importante (trampa detectada): en el PDF hay VARIOS MRN validos (el DUA
+    # principal Y el "documento precedente" de la casilla 40). Por eso NO basta
+    # "cualquier MRN que valide": nos quedamos con el reconstruido del grupo
+    # ganador (el que mas se repite entre paginas = el principal). Si ese valida,
+    # alta; si no, probamos si alguna LECTURA del grupo ganador valida (por si el
+    # voto por posicion mezclo paginas), y si no, dudoso.
 
-    # ALTA solo si: formato exacto + sin discrepancia + >=2 paginas + sin ambiguos.
-    # NOTA: por el sesgo sistematico del OCR en estos escaneos, en la practica casi
-    # siempre habra algun caracter ambiguo -> casi todo cae en DUDOSO. Es DELIBERADO:
-    # para compliance preferimos revision humana a un nombre incorrecto.
-    if es_formato and not ambiguas and paginas_con_dua >= 2 and not chars_ambiguos:
+    es_formato = bool(DUA_CORE_RE.fullmatch(dua))
+    check_recon = es_formato and mrn_check_ok(dua)
+
+    dua_final = dua
+    via = None
+    if check_recon:
+        dua_final = dua
+        via = "reconstruido valida check-digit"
+    else:
+        # ¿alguna lectura concreta del grupo ganador valida el check-digit?
+        validas = [c for _, c in variants
+                   if DUA_CORE_RE.fullmatch(c) and mrn_check_ok(c)]
+        # todas deben ser el MISMO numero para fiarnos (si discrepan, dudoso)
+        if validas and len(set(validas)) == 1:
+            dua_final = validas[0]
+            via = "lectura de pagina valida check-digit"
+
+    if via:
         confianza = "alta"
-        motivo = "formato exacto, confirmado en varias paginas, sin caracteres ambiguos"
+        motivo = f"digito de control valido ({via})"
     else:
         confianza = "dudoso"
-        motivo = "; ".join(motivos) if motivos else "revision recomendada"
+        motivos = []
+        if not es_formato:
+            motivos.append(f"formato no exacto (len={len(dua)})")
+        else:
+            motivos.append("digito de control NO valido (OCR erro algun caracter)")
+        if ambiguas:
+            motivos.append(f"paginas discrepan en posiciones {ambiguas}")
+        chars_ambiguos = [i for i, ch in enumerate(dua) if ch in AMBIGUOUS]
+        if chars_ambiguos:
+            motivos.append(f"caracteres ambiguos I/1,O/0,B/8 en {chars_ambiguos}")
+        motivo = "; ".join(motivos)
 
     return {
-        "dua": dua,
+        "dua": dua_final,
         "confianza": confianza,
         "motivo": motivo,
+        "check_digit_ok": bool(via),
         "n_paginas": n_paginas,
         "paginas_con_dua": paginas_con_dua,
         "lecturas": lecturas,
