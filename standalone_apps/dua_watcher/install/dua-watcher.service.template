@@ -1,0 +1,17 @@
+[Unit]
+Description=DUA Inbox Watcher (OCR -> renombrado -> SharePoint via OneDrive)
+After=network.target
+
+[Service]
+Type=simple
+User={{USER}}
+WorkingDirectory={{APPDIR}}
+# Las credenciales SMTP y el destinatario de revision se leen del entorno.
+# Rellena este EnvironmentFile o exporta las variables por otro medio.
+EnvironmentFile=-{{APPDIR}}/dua.env
+ExecStart={{PYTHON}} {{SCRIPT}} --inbox {{INBOX}} --quiet {{QUIET}} --poll {{POLL}}
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

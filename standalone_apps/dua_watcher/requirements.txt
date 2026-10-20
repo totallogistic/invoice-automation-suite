@@ -1,0 +1,6 @@
+# dua_watcher — OCR de DUAs escaneados + renombrado + entrega a SharePoint (via OneDrive sync).
+# Requiere ademas binarios del sistema: tesseract-ocr y poppler-utils (ver README / instalador).
+pytesseract>=0.3.10
+pdf2image>=1.17.0
+pillow>=10.0.0
+pypdf>=4.0.0
