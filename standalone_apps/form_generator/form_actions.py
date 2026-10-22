@@ -258,7 +258,7 @@ def _load_store(path: Path) -> dict:
     if not path.exists():
         return {}
     try:
-        with open(path) as f:
+        with open(path, encoding='utf-8-sig') as f:
             fcntl.flock(f.fileno(), fcntl.LOCK_SH)
             try:
                 return json.load(f) or {}
@@ -269,18 +269,27 @@ def _load_store(path: Path) -> dict:
 
 
 def _append_store(path: Path, key: str, entry: dict) -> None:
+    import shutil, time
     path.parent.mkdir(parents=True, exist_ok=True)
     mode = "r+" if path.exists() else "w+"
-    with open(path, mode) as f:
+    with open(path, mode, encoding='utf-8-sig') as f:
         fcntl.flock(f.fileno(), fcntl.LOCK_EX)
         try:
-            data = {}
             if mode == "r+":
                 f.seek(0)
-                try:
-                    data = json.load(f) or {}
-                except json.JSONDecodeError:
+                raw = f.read()
+                if raw.strip():
+                    try:
+                        data = json.loads(raw) or {}
+                    except json.JSONDecodeError:
+                        bak = f"{path}.corrupt.{int(time.time())}"
+                        shutil.copy2(path, bak)
+                        raise RuntimeError(
+                            f"{path} ilegible → copia en {bak}, abortado para NO perder datos")
+                else:
                     data = {}
+            else:
+                data = {}
             data[key] = entry
             f.seek(0)
             f.truncate()

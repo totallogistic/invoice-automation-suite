@@ -2180,12 +2180,12 @@ def _processed_file() -> Path:
 
 
 def _load_processed() -> dict:
-    """Lee el JSON con shared lock. Devuelve {} si no existe o está corrupto."""
+    """Lee el JSON con shared lock. Devuelve {} si no existe. utf-8-sig tolera BOM."""
     path = _processed_file()
     if not path.exists():
         return {}
     try:
-        with open(path, 'r', encoding='utf-8') as f:
+        with open(path, 'r', encoding='utf-8-sig') as f:
             fcntl.flock(f.fileno(), fcntl.LOCK_SH)
             try:
                 return json.load(f) or {}
@@ -2197,19 +2197,28 @@ def _load_processed() -> dict:
 
 
 def _append_processed(ref: str, entry: dict):
-    """Añade entrada al JSON con exclusive lock (atomic read-modify-write)."""
+    """Añade entrada con exclusive lock. NUNCA resetea si el JSON está corrupto."""
+    import shutil, time
     path = _processed_file()
     path.parent.mkdir(parents=True, exist_ok=True)
     mode = 'r+' if path.exists() else 'w+'
     try:
-        with open(path, mode, encoding='utf-8') as f:
+        with open(path, mode, encoding='utf-8-sig') as f:
             fcntl.flock(f.fileno(), fcntl.LOCK_EX)
             try:
                 if mode == 'r+':
                     f.seek(0)
-                    try:
-                        data = json.load(f) or {}
-                    except json.JSONDecodeError:
+                    raw = f.read()
+                    if raw.strip():
+                        try:
+                            data = json.loads(raw) or {}
+                        except json.JSONDecodeError:
+                            bak = f"{path}.corrupt.{int(time.time())}"
+                            shutil.copy2(path, bak)
+                            raise RuntimeError(
+                                f"_processed.json ilegible → copia en {bak}, "
+                                f"abortado para NO perder histórico")
+                    else:
                         data = {}
                 else:
                     data = {}
