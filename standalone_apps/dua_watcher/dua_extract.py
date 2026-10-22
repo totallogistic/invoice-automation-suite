@@ -94,10 +94,38 @@ def _ocr_pages(pdf_path, dpi=OCR_DPI):
     return out
 
 
+# El "documento precedente" (casilla 40 del DUA) es OTRO MRN real que tambien
+# valida el check-digit, pero NO es el DUA de este despacho. Hay que EXCLUIRLO.
+# Pistas de que un MRN es el precedente (casilla 40): va seguido de "/00009/" o
+# similar (contador de partidas), o aparece pegado a un "40", "N337", "precedente".
+_PRECEDENTE_CONTEXT_RE = re.compile(
+    r"(precedent|anterior|\bN\d{3}\d{2}ES|40\s*[/|])", re.IGNORECASE)
+# Un MRN seguido de "/numeros/" es casi seguro el precedente (cadena de casilla 40).
+_PRECEDENTE_TRAIL_RE = re.compile(r"\d{2}ES[0-9A-Z]{14}/\d")
+
+
 def _candidates(txt):
-    """Candidatos a DUA en un texto OCR, recortados a 18 chars."""
+    """Candidatos a DUA (18 chars) en un texto OCR, EXCLUYENDO el documento
+    precedente de la casilla 40 (que tambien es un MRN valido pero no es este DUA).
+
+    Devuelve lista de (candidato, es_precedente_bool)."""
+    out = []
+    # 1) sobre el texto SIN colapsar espacios, para ver el contexto (barras, N337)
+    raw = txt.replace("\n", " ")
     flat = txt.replace(" ", "").replace("\n", "")
-    return [m.group(0)[:DUA_LEN] for m in DUA_FIND_RE.finditer(flat)]
+
+    # Marcar las subcadenas que son precedente (van seguidas de /digito en el flat)
+    precedente_spans = set(m.group(0)[:DUA_LEN] for m in _PRECEDENTE_TRAIL_RE.finditer(flat))
+
+    for m in DUA_FIND_RE.finditer(flat):
+        cand = m.group(0)[:DUA_LEN]
+        # contexto alrededor (en el flat) para detectar N337.../precedente
+        ini = max(0, m.start() - 6)
+        contexto = flat[ini:m.start()]
+        es_prec = (cand in precedente_spans) or bool(
+            re.search(r"N\d{3}$|40[/|]$", contexto))
+        out.append((cand, es_prec))
+    return out
 
 
 def _skeleton(s):
@@ -121,28 +149,38 @@ def extract_dua(pdf_path, dpi=OCR_DPI):
     pages = _ocr_pages(pdf_path, dpi=dpi)
     n_paginas = len(pages)
 
-    lecturas = {}
-    todos = []
+    lecturas = {}            # {pagina: [candidatos crudos]} para auditoria
+    principales = []         # (pagina, candidato) EXCLUYENDO precedentes
+    precedentes = set()      # MRN detectados como documento precedente (casilla 40)
     for pg, txt in pages:
-        cands = _candidates(txt)
+        cands = _candidates(txt)   # [(cand, es_precedente)]
         if cands:
-            lecturas[pg] = cands
-            todos.extend((pg, c) for c in cands)
+            lecturas[pg] = [c for c, _ in cands]
+            for c, es_prec in cands:
+                if es_prec:
+                    precedentes.add(c)
+                else:
+                    principales.append((pg, c))
 
-    if not todos:
+    # Quitar de los principales cualquier MRN que en ALGUNA pagina fue precedente
+    # (el precedente puede aparecer suelto en otra pagina y colarse).
+    principales = [(pg, c) for pg, c in principales
+                   if _skeleton(c) not in {_skeleton(p) for p in precedentes}]
+
+    if not principales:
         return {
             "dua": None, "confianza": "dudoso",
-            "motivo": "No se detecto ningun patron de DUA por OCR",
+            "motivo": ("No se detecto el DUA principal por OCR "
+                       f"(precedentes descartados: {sorted(precedentes)})"),
             "n_paginas": n_paginas, "paginas_con_dua": 0,
             "lecturas": lecturas, "posiciones_ambiguas": [],
         }
 
     # Agrupar por esqueleto (mismo DUA pese a I/1, O/0)
     groups = {}
-    for pg, c in todos:
+    for pg, c in principales:
         groups.setdefault(_skeleton(c), []).append((pg, c))
 
-    # Grupo ganador = el que aparece en mas paginas distintas
     def paginas_distintas(variants):
         return len(set(pg for pg, _ in variants))
     best_k = max(groups, key=lambda k: paginas_distintas(groups[k]))
@@ -151,69 +189,54 @@ def extract_dua(pdf_path, dpi=OCR_DPI):
 
     # Reconstruccion por voto posicion-a-posicion
     L = max(len(c) for _, c in variants)
-    recon = []
-    ambiguas = []
+    recon, ambiguas = [], []
     for i in range(L):
         chars = [c[i] for _, c in variants if len(c) > i]
-        cnt = Counter(chars)
-        ganador = cnt.most_common(1)[0][0]
-        recon.append(ganador)
-        # discrepancia entre paginas en esta posicion
+        recon.append(Counter(chars).most_common(1)[0][0])
         if len(set(chars)) > 1:
             ambiguas.append(i)
     dua = "".join(recon)
 
-    # ── Nivel de confianza ──
-    # El criterio PRINCIPAL es el digito de control (check-digit ISO 6346): si el
-    # numero valida, es correcto con certeza matematica (salvo colision de 1/11,
-    # despreciable). Si no valida, el OCR erro y va a revision.
+    # ── Nivel de confianza (CONSERVADOR para compliance) ──
+    # ALTA solo si TODO lo siguiente se cumple sobre el DUA PRINCIPAL:
+    #   1. formato exacto (18 chars \d{2}ES...)
+    #   2. check-digit ISO 6346 valido  (certeza matematica)
+    #   3. sin discrepancia entre paginas  (ambiguas == [])
+    #   4. confirmado en >= 2 paginas  (no un OCR aislado)
+    # Cualquier otra cosa -> DUDOSO (revision humana). Preferimos SIEMPRE revisar
+    # antes que subir un nombre incorrecto a SharePoint de compliance.
     #
-    # Importante (trampa detectada): en el PDF hay VARIOS MRN validos (el DUA
-    # principal Y el "documento precedente" de la casilla 40). Por eso NO basta
-    # "cualquier MRN que valide": nos quedamos con el reconstruido del grupo
-    # ganador (el que mas se repite entre paginas = el principal). Si ese valida,
-    # alta; si no, probamos si alguna LECTURA del grupo ganador valida (por si el
-    # voto por posicion mezclo paginas), y si no, dudoso.
+    # NOTA: ya NO aceptamos "cualquier lectura que valide el check-digit" — ese era
+    # el agujero que colaba el documento precedente. El precedente queda excluido
+    # antes de llegar aqui, y ademas exigimos coincidencia entre paginas.
 
     es_formato = bool(DUA_CORE_RE.fullmatch(dua))
-    check_recon = es_formato and mrn_check_ok(dua)
+    check_ok = es_formato and mrn_check_ok(dua)
+    sin_discrepancia = not ambiguas
+    multipagina = paginas_con_dua >= 2
 
-    dua_final = dua
-    via = None
-    if check_recon:
-        dua_final = dua
-        via = "reconstruido valida check-digit"
-    else:
-        # ¿alguna lectura concreta del grupo ganador valida el check-digit?
-        validas = [c for _, c in variants
-                   if DUA_CORE_RE.fullmatch(c) and mrn_check_ok(c)]
-        # todas deben ser el MISMO numero para fiarnos (si discrepan, dudoso)
-        if validas and len(set(validas)) == 1:
-            dua_final = validas[0]
-            via = "lectura de pagina valida check-digit"
-
-    if via:
+    if es_formato and check_ok and sin_discrepancia and multipagina:
         confianza = "alta"
-        motivo = f"digito de control valido ({via})"
+        motivo = "check-digit valido, sin discrepancia entre paginas, confirmado en varias"
     else:
         confianza = "dudoso"
         motivos = []
         if not es_formato:
             motivos.append(f"formato no exacto (len={len(dua)})")
-        else:
-            motivos.append("digito de control NO valido (OCR erro algun caracter)")
+        elif not check_ok:
+            motivos.append("check-digit NO valido (OCR erro algun caracter)")
         if ambiguas:
             motivos.append(f"paginas discrepan en posiciones {ambiguas}")
-        chars_ambiguos = [i for i, ch in enumerate(dua) if ch in AMBIGUOUS]
-        if chars_ambiguos:
-            motivos.append(f"caracteres ambiguos I/1,O/0,B/8 en {chars_ambiguos}")
-        motivo = "; ".join(motivos)
+        if not multipagina:
+            motivos.append("visto en una sola pagina")
+        motivo = "; ".join(motivos) or "revision recomendada"
 
     return {
-        "dua": dua_final,
+        "dua": dua,
         "confianza": confianza,
         "motivo": motivo,
-        "check_digit_ok": bool(via),
+        "check_digit_ok": bool(check_ok),
+        "precedentes_descartados": sorted(precedentes),
         "n_paginas": n_paginas,
         "paginas_con_dua": paginas_con_dua,
         "lecturas": lecturas,
